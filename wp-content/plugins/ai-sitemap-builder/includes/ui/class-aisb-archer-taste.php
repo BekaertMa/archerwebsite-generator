@@ -146,15 +146,66 @@ class AISB_Archer_Taste {
    * een stap in toon), Dark: de tekst, Secondary: het contrastvlak (bv. een donkere footer).
    */
   public static function roles(array $p): array {
-    $field = $p['fields'][0]['bg'] ?? ($p['ink'] ?? '#111111');
+    // Lichte gronden: Light en Neutral zijn altijd licht, Dark altijd het donkerste. De sterke kleur gaat naar Secondary.
+    $accent = $p['accent'];
+    $bg = $p['bg'];
+    $surface = $p['surface'] ?? $bg;
+    $ink = $p['ink'];
+    $lbg = self::lum($bg);
+    $strong = $p['fields'][0]['bg'] ?? ($lbg < 0.72 ? $bg : $ink);
+    if ($lbg < 0.72 && ($lbg > 0.08 || ($lbg > 0.03 && self::sat($bg) > 0.5))) $strong = $bg; // het palet is zelf een kleurvlak
+    $dark = self::lum($ink) <= $lbg ? $ink : $bg;
+    if (self::lum($dark) > 0.05) $dark = self::tone($dark, 0.14, 0.5);
+    $src = $lbg >= 0.4 ? $bg : (self::lum($ink) >= 0.75 ? $ink : $accent);
+    $light = $lbg >= 0.75 ? $bg : self::tone($src, 0.965, 0.3);
+    $neutral = $lbg >= 0.75 && self::lum($surface) >= 0.62 ? $surface : self::tone($src, 0.925, 0.3);
+    $primary = $accent;
+    $ratio = fn($a, $b) => (max(self::lum($a), self::lum($b)) + 0.05) / (min(self::lum($a), self::lum($b)) + 0.05);
+    if ($ratio($accent, $light) < 3 && $ratio($strong, $light) >= 3) { $primary = $strong; $strong = $accent; }
     return [
-      ['name' => 'Primary', 'hex' => $p['accent']],
-      ['name' => 'Secondary', 'hex' => $field],
-      ['name' => 'Accent', 'hex' => $p['accent']],
-      ['name' => 'Dark', 'hex' => $p['ink']],
-      ['name' => 'Light', 'hex' => $p['bg']],
-      ['name' => 'Neutral', 'hex' => $p['surface'] ?? $p['bg']],
+      ['name' => 'Primary', 'hex' => $primary],
+      ['name' => 'Secondary', 'hex' => $strong],
+      ['name' => 'Accent', 'hex' => $accent],
+      ['name' => 'Dark', 'hex' => $dark],
+      ['name' => 'Light', 'hex' => $light],
+      ['name' => 'Neutral', 'hex' => $neutral],
     ];
+  }
+
+  private static function rgb(string $hex): array {
+    $h = ltrim($hex, '#');
+    if (strlen($h) === 3) $h = $h[0] . $h[0] . $h[1] . $h[1] . $h[2] . $h[2];
+    return [hexdec(substr($h, 0, 2)), hexdec(substr($h, 2, 2)), hexdec(substr($h, 4, 2))];
+  }
+
+  private static function sat(string $hex): float {
+    [$r, $g, $b] = array_map(fn($v) => $v / 255, self::rgb($hex));
+    $max = max($r, $g, $b); $min = min($r, $g, $b); $l = ($max + $min) / 2;
+    return $max === $min ? 0.0 : ($max - $min) / (1 - abs(2 * $l - 1));
+  }
+
+  public static function lum(string $hex): float {
+    $f = function ($c) { $c /= 255; return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4; };
+    [$r, $g, $b] = self::rgb($hex);
+    return 0.2126 * $f($r) + 0.7152 * $f($g) + 0.0722 * $f($b);
+  }
+
+  /** Zelfde tint, vaste lichtheid (HSL), verzadiging begrensd. */
+  public static function tone(string $hex, float $L, float $smax): string {
+    [$r, $g, $b] = array_map(fn($v) => $v / 255, self::rgb($hex));
+    $max = max($r, $g, $b); $min = min($r, $g, $b); $d = $max - $min; $l = ($max + $min) / 2;
+    $h = 0; $s = 0;
+    if ($d > 0) {
+      $s = $d / (1 - abs(2 * $l - 1));
+      if ($max === $r) $h = fmod(($g - $b) / $d, 6);
+      elseif ($max === $g) $h = ($b - $r) / $d + 2;
+      else $h = ($r - $g) / $d + 4;
+      $h *= 60; if ($h < 0) $h += 360;
+    }
+    $s = min($s, $smax);
+    $c = (1 - abs(2 * $L - 1)) * $s; $x = $c * (1 - abs(fmod($h / 60, 2) - 1)); $m = $L - $c / 2;
+    [$r, $g, $b] = $h < 60 ? [$c, $x, 0] : ($h < 120 ? [$x, $c, 0] : ($h < 180 ? [0, $c, $x] : ($h < 240 ? [0, $x, $c] : ($h < 300 ? [$x, 0, $c] : [$c, 0, $x]))));
+    return sprintf('#%02x%02x%02x', round(($r + $m) * 255), round(($g + $m) * 255), round(($b + $m) * 255));
   }
 
   /** Een ander palet of een andere lettertypeset binnen dezelfde richting (het andere blijft staan). */
