@@ -50,11 +50,9 @@
       listBtn.textContent = "Lijst";
       if (treeBtn) treeBtn.classList.add("archer-staff-only");
     }
+    // Alleen nog het canvas: de keuze Lijst / Boomstructuur verdwijnt.
     let currentView = "canvas";
-    try {
-      const saved = localStorage.getItem("archer_sitemap_view");
-      if (saved === "list" || saved === "canvas") currentView = saved;
-    } catch (e) {}
+    if (seg) seg.hidden = true;
 
     const setView = (v) => {
       currentView = v;
@@ -122,7 +120,18 @@
       view.ty = cy - wy * next;
       applyView();
     };
+    // Volle breedte van het venster, ongeacht waar de kaart staat.
+    const stretch = () => {
+      if (vp.hidden) return;
+      vp.style.marginLeft = "0px";
+      const left = listEl.getBoundingClientRect().left;
+      vp.style.width = document.documentElement.clientWidth + "px";
+      vp.style.marginLeft = -left + "px";
+    };
+    window.addEventListener("resize", stretch);
+
     const fit = () => {
+      stretch();
       const w = vp.clientWidth;
       const tw = treeBox.offsetWidth;
       if (!w || !tw) return false;
@@ -148,7 +157,7 @@
     let pan = null;
     vp.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
-      if (e.target.closest(".archer-page-card, .archer-add-page-card, .archer-smap-zoom, button, a, input, textarea, select, label, form")) return;
+      if (e.target.closest(".archer-page-card, .archer-add-page-card, .archer-smap-zoom, .archer-smap-panel, button, a, input, textarea, select, label, form")) return;
       pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, id: e.pointerId };
       vp.setPointerCapture(e.pointerId);
       vp.classList.add("is-panning");
@@ -172,6 +181,7 @@
     vp.addEventListener(
       "wheel",
       (e) => {
+        if (e.target.closest(".archer-smap-panel")) return; // het paneel scrolt zelf
         e.preventDefault();
         const r = vp.getBoundingClientRect();
         if (e.ctrlKey || e.metaKey) {
@@ -220,10 +230,184 @@
       return (
         `<div class="archer-smap-root">` +
         (home ? `<div class="archer-smap-node archer-smap-home">${pageCard(home)}</div>` : "") +
-        `<ul class="archer-smap-row">${cols}${rest}<li class="archer-smap-col archer-smap-col-add"><div class="archer-smap-node">${addPageCard()}</div></li></ul>` +
+        ((cols || rest) ? `<ul class="archer-smap-row">${cols}${rest}</ul>` : "") +
         `</div>`
       );
     };
+
+    /* ── Selectie en bewerkpaneel (zoals in de boomstructuur) ── */
+
+    let sel = null; // { kind: "section", slug, idx } of { kind: "page", slug }
+    const panel = document.createElement("aside");
+    panel.className = "archer-smap-panel";
+    panel.hidden = true;
+    panel.setAttribute("aria-label", "Bewerken");
+    vp.appendChild(panel);
+
+    const isHeadSec = (s) => s && (s.section_type === "Headers" || /^Megamenu/.test(s.section_type || ""));
+    const isFootSec = (s) => s && s.section_type === "Footers";
+    /** Header eerst, footer laatst. Geeft true als de volgorde veranderde. */
+    const normalizePage = (page) => {
+      if (!page || !Array.isArray(page.sections) || page.sections.length < 2) return false;
+      const before = page.sections;
+      const next = before.filter(isHeadSec).concat(before.filter((x) => !isHeadSec(x) && !isFootSec(x)), before.filter(isFootSec));
+      if (next.every((x, i) => x === before[i])) return false;
+      page.sections = next;
+      return true;
+    };
+
+    const typeOptions = (current) => {
+      const list = TYPES.slice();
+      if (current && !list.includes(current)) list.unshift(current);
+      return list.map((t) => `<option value="${esc(t)}"${t === current ? " selected" : ""}>${esc(typeLabel(t))}</option>`).join("");
+    };
+
+    const renderPanel = () => {
+      vp.classList.toggle("has-panel", !!sel);
+      const page = sel ? state.bySlug && state.bySlug[sel.slug] : null;
+      const sec = sel && sel.kind === "section" && page && Array.isArray(page.sections) ? page.sections[sel.idx] : null;
+      if (!page || (sel.kind === "section" && !sec)) {
+        sel = null;
+        vp.classList.remove("has-panel");
+        panel.hidden = true;
+        panel.innerHTML = "";
+        return;
+      }
+      panel.hidden = false;
+      const pageName = page.page_title || page.nav_label || page.slug;
+      if (sel.kind === "section") {
+        const g = isGlobal(sec);
+        const kc = Array.isArray(sec.key_content) ? sec.key_content.join("\n") : "";
+        const movable = page.sections.map((x, i) => (isGlobal(x) ? -1 : i)).filter((i) => i >= 0);
+        panel.innerHTML =
+          `<div class="archer-smap-panel-head"><div><span class="archer-smap-panel-eyebrow">Sectie op ${esc(pageName)}</span>` +
+          `<h3 data-panel-title>${esc(sec.section_name || typeLabel(sec.section_type))}</h3></div>` +
+          `<button type="button" class="archer-sec-tool" data-panel-close aria-label="Sluiten">${icon.x}</button></div>` +
+          `<label class="aisb-label" for="archer-p-name">Naam</label>` +
+          `<input id="archer-p-name" type="text" data-f="section_name" value="${esc(sec.section_name || "")}">` +
+          `<label class="aisb-label" for="archer-p-type">Soort sectie</label>` +
+          `<select id="archer-p-type" data-f="section_type"${g ? " disabled" : ""}>${typeOptions(sec.section_type)}</select>` +
+          (g ? `<span class="archer-small archer-muted">${isFootSec(sec) ? "De footer staat altijd onderaan, op elke pagina." : "De header staat altijd bovenaan, op elke pagina."}</span>` : "") +
+          `<label class="aisb-label" for="archer-p-purpose">Wat moet deze sectie doen?</label>` +
+          `<textarea id="archer-p-purpose" rows="5" data-f="purpose">${esc(sec.purpose || "")}</textarea>` +
+          `<label class="aisb-label" for="archer-p-kc">Belangrijke inhoud <span class="archer-muted">(één per regel)</span></label>` +
+          `<textarea id="archer-p-kc" rows="5" data-f="key_content">${esc(kc)}</textarea>` +
+          (g
+            ? ""
+            : `<div class="archer-form-row">` +
+              `<button type="button" class="archer-btn archer-btn-outline" data-panel-act="up"${sel.idx === movable[0] ? " disabled" : ""}>Naar boven</button>` +
+              `<button type="button" class="archer-btn archer-btn-outline" data-panel-act="down"${sel.idx === movable[movable.length - 1] ? " disabled" : ""}>Naar beneden</button>` +
+              `<button type="button" class="archer-btn archer-btn-ghost archer-danger-text" data-panel-act="del">Verwijderen</button></div>`) +
+          `<span class="archer-small archer-muted">Alles wordt automatisch bewaard.</span>`;
+      } else {
+        const seo = page.seo || {};
+        panel.innerHTML =
+          `<div class="archer-smap-panel-head"><div><span class="archer-smap-panel-eyebrow">Pagina</span>` +
+          `<h3 data-panel-title>${esc(pageName)}</h3></div>` +
+          `<button type="button" class="archer-sec-tool" data-panel-close aria-label="Sluiten">${icon.x}</button></div>` +
+          `<label class="aisb-label" for="archer-p-title">Paginanaam</label>` +
+          `<input id="archer-p-title" type="text" data-f="page_title" value="${esc(page.page_title || "")}">` +
+          `<label class="aisb-label" for="archer-p-nav">Naam in het menu</label>` +
+          `<input id="archer-p-nav" type="text" data-f="nav_label" value="${esc(page.nav_label || "")}">` +
+          `<label class="aisb-label" for="archer-p-pp">Doel van de pagina</label>` +
+          `<textarea id="archer-p-pp" rows="4" data-f="page_purpose">${esc(page.page_purpose || "")}</textarea>` +
+          `<label class="aisb-label" for="archer-p-kw">Belangrijkste zoekwoord</label>` +
+          `<input id="archer-p-kw" type="text" data-f="seo.primary_keyword" value="${esc(seo.primary_keyword || "")}">` +
+          `<label class="aisb-label" for="archer-p-mt">Titel in Google</label>` +
+          `<input id="archer-p-mt" type="text" data-f="seo.meta_title" value="${esc(seo.meta_title || "")}">` +
+          `<label class="aisb-label" for="archer-p-md">Beschrijving in Google</label>` +
+          `<textarea id="archer-p-md" rows="3" data-f="seo.meta_description">${esc(seo.meta_description || "")}</textarea>` +
+          `<span class="archer-small archer-muted">Klik op een sectie om die te bewerken. Alles wordt automatisch bewaard.</span>`;
+      }
+    };
+
+    const select = (next) => {
+      sel = next;
+      openForm = null;
+      confirmDelete = null;
+      render();
+      renderPanel();
+      const first = panel.querySelector("input, textarea");
+      first && first.focus({ preventScroll: true });
+    };
+
+    let panelTimer = null;
+    panel.addEventListener("input", (e) => {
+      const f = e.target.getAttribute("data-f");
+      if (!f || !sel) return;
+      const page = state.bySlug[sel.slug];
+      if (!page) return;
+      const val = e.target.value;
+      if (sel.kind === "section") {
+        const sec = page.sections[sel.idx];
+        if (!sec) return;
+        if (f === "key_content") sec.key_content = val.split("\n").map((x) => x.trim()).filter(Boolean);
+        else sec[f] = val;
+        if (f === "section_name" || f === "section_type") {
+          const t = panel.querySelector("[data-panel-title]");
+          if (t) t.textContent = sec.section_name || typeLabel(sec.section_type);
+        }
+      } else if (f.indexOf("seo.") === 0) {
+        page.seo = page.seo || {};
+        page.seo[f.slice(4)] = val;
+      } else {
+        page[f] = val;
+        if (f === "page_title") {
+          const t = panel.querySelector("[data-panel-title]");
+          if (t) t.textContent = val || page.slug;
+        }
+      }
+      syncPage(sel.slug);
+      saver.run();
+      clearTimeout(panelTimer);
+      panelTimer = setTimeout(() => {
+        if (app.rawEl && state.data) app.rawEl.textContent = JSON.stringify(state.data, null, 2);
+        render();
+      }, 200);
+    });
+    panel.addEventListener("change", (e) => {
+      if (e.target.getAttribute("data-f") === "section_type") e.target.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    panel.addEventListener("click", (e) => {
+      if (e.target.closest("[data-panel-close]")) {
+        sel = null;
+        render();
+        renderPanel();
+        return;
+      }
+      const b = e.target.closest("[data-panel-act]");
+      if (!b || !sel || sel.kind !== "section") return;
+      const page = state.bySlug[sel.slug];
+      if (!page) return;
+      const act = b.getAttribute("data-panel-act");
+      if (act === "del") {
+        page.sections = page.sections.filter((_, i) => i !== sel.idx);
+        syncPage(sel.slug);
+        sel = null;
+        afterChange();
+        renderPanel();
+        return;
+      }
+      const step = act === "up" ? -1 : 1;
+      let to = sel.idx + step;
+      while (page.sections[to] && isGlobal(page.sections[to])) to += step;
+      if (!page.sections[to]) return;
+      const arr = page.sections.slice();
+      const [m] = arr.splice(sel.idx, 1);
+      arr.splice(to, 0, m);
+      page.sections = arr;
+      sel.idx = to;
+      syncPage(sel.slug);
+      afterChange();
+      renderPanel();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && sel) {
+        sel = null;
+        render();
+        renderPanel();
+      }
+    });
 
     /* ── State-hulp ──────────────────────────────────────── */
 
@@ -338,7 +522,8 @@
                  <button type="button" class="archer-sec-tool" data-act="sec-down" data-slug="${esc(slug)}" data-idx="${i}" aria-label="${esc(s.section_name)} naar beneden" ${i === lastMovable ? "disabled" : ""}>${icon.down}</button>
                  <button type="button" class="archer-sec-tool is-danger" data-act="sec-del" data-slug="${esc(slug)}" data-idx="${i}" aria-label="${esc(s.section_name)} verwijderen">${icon.x}</button>
                </div>`;
-          return `<li class="archer-sec${g ? " is-global" : ""}">
+          const selected = sel && sel.kind === "section" && sel.slug === slug && sel.idx === i;
+          return `<li class="archer-sec${g ? " is-global" : ""}${selected ? " is-selected" : ""}" data-sel-slug="${esc(slug)}" data-sel-idx="${i}" tabindex="0" aria-label="Sectie ${esc(s.section_name || "")} bewerken">
               <div class="archer-sec-body">
                 <div class="archer-sec-type">${esc(typeLabel(s.section_type))}${g ? " · op elke pagina" : ""}</div>
                 <div class="archer-sec-name">${esc(s.section_name || "Sectie")}</div>
@@ -404,7 +589,7 @@
       return `<article class="archer-page-card${parent ? " is-child" : ""}" data-page="${esc(slug)}">
           <div class="archer-page-card-head">
             <div>
-              <h3 class="archer-page-card-title">${esc(page.page_title || page.nav_label || slug)}${badge}</h3>
+              <h3 class="archer-page-card-title${sel && sel.kind === "page" && sel.slug === slug ? " is-selected" : ""}" data-sel-page="${esc(slug)}" tabindex="0" title="Pagina bewerken">${esc(page.page_title || page.nav_label || slug)}${badge}</h3>
               <div class="archer-page-card-meta">${meta} · /${esc(isHome ? "" : slug)} · ${sections.length} secties</div>
             </div>
             ${keep ? "" : `<button type="button" class="archer-sec-tool is-danger" data-act="page-del" data-slug="${esc(slug)}" aria-label="Pagina ${esc(page.page_title || slug)} verwijderen">${icon.x}</button>`}
@@ -450,11 +635,24 @@
         gridEl.innerHTML = "";
         return;
       }
+      // Header altijd eerst, footer altijd laatst (ook in oudere sitemaps).
+      let reordered = false;
+      Object.keys(state.bySlug || {}).forEach((slug) => {
+        if (normalizePage(state.bySlug[slug])) {
+          syncPage(slug);
+          reordered = true;
+        }
+      });
+      if (reordered) {
+        if (sel && sel.kind === "section") sel = null;
+        saver.run();
+      }
       const pages = orderPages();
       const asCanvas = currentView === "canvas";
       vp.hidden = !asCanvas;
       gridEl.hidden = asCanvas;
       if (asCanvas) {
+        stretch();
         treeBox.innerHTML = treeHtml();
         gridEl.innerHTML = "";
         if (!view.fitted) {
@@ -480,8 +678,23 @@
     /* ── Acties ──────────────────────────────────────────── */
 
     listEl.addEventListener("click", (e) => {
+      if (e.target.closest(".archer-smap-panel")) return;
       const btn = e.target.closest("[data-act]");
-      if (!btn) return;
+      if (!btn) {
+        const secEl = e.target.closest("[data-sel-slug]");
+        if (secEl) {
+          select({ kind: "section", slug: secEl.getAttribute("data-sel-slug"), idx: parseInt(secEl.getAttribute("data-sel-idx"), 10) });
+          return;
+        }
+        const pageEl = e.target.closest("[data-sel-page]");
+        if (pageEl) select({ kind: "page", slug: pageEl.getAttribute("data-sel-page") });
+        return;
+      }
+      // Een actie op de kaart verschuift indexen: selectie op die pagina sluiten.
+      if (sel && btn.getAttribute("data-slug") === sel.slug && /^sec-|^page-del/.test(btn.getAttribute("data-act") || "")) {
+        sel = null;
+        renderPanel();
+      }
       const act = btn.getAttribute("data-act");
       const slug = btn.getAttribute("data-slug");
       const idx = parseInt(btn.getAttribute("data-idx") || "", 10);
@@ -529,6 +742,14 @@
         deletePage(slug);
         return;
       }
+    });
+
+    listEl.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const el = e.target.closest("[data-sel-slug], [data-sel-page]");
+      if (!el || e.target !== el) return;
+      e.preventDefault();
+      el.click();
     });
 
     listEl.addEventListener("submit", async (e) => {
