@@ -3010,6 +3010,10 @@
     try { initStyleGuide(); } catch (e) { console.error("[Archer] stijl", e); }
     try { initPublish(); } catch (e) { console.error("[Archer] publiceren", e); }
 
+    // De volledige preview (stap Publiceren) verving elk menu door een platte lijst van alle pagina's.
+    // De menu's komen al juist van de server (hoofdmenu met submenu's, footergroepen, juridisch).
+    if (window.AISB_Design) window.AISB_Design.injectNavMenuLinks = function () {};
+
     // De website op InstaWP al klonen zodra de klant aan de stijl begint: publiceren slaat
     // het klonen dan over (de server antwoordt meteen en kloont op de achtergrond verder).
     if (CFG.projectId && CFG.step >= 3 && !Number(CFG.published)) {
