@@ -3,6 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 require_once __DIR__ . '/class-aisb-archer-sitemap-rules.php';
 require_once __DIR__ . '/class-aisb-archer-generate.php';
+require_once __DIR__ . '/class-aisb-archer-section-edit.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -45,6 +46,7 @@ class AISB_Archer_UI {
 
     (new AISB_Archer_Sitemap_Rules())->init();
     (new AISB_Archer_Generate())->init();
+    (new AISB_Archer_Section_Edit())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
