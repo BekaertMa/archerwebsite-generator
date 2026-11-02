@@ -21,7 +21,7 @@ class AISB_Archer_Sitemap_Rules {
   private const SOURCE_TTL = 1800;
 
   /** Mappen met meer kinderen dan dit zijn een collectie (producten, blogberichten…). */
-  private const COLLECTION_MIN_CHILDREN = 9;
+  private const COLLECTION_MIN_CHILDREN = 25;
 
   public function init(): void {
     add_filter('aisb_generated_sitemap', [$this, 'apply_rules'], 10, 2);
@@ -367,8 +367,13 @@ class AISB_Archer_Sitemap_Rules {
     return 'aisb_archer_src_' . get_current_user_id();
   }
 
-  public static function remember_source(string $url, array $pages, array $collapsed): void {
-    set_transient(self::source_key(), ['url' => $url, 'pages' => $pages, 'collapsed' => $collapsed], self::SOURCE_TTL);
+  public static function remember_source(string $url, array $pages, array $collapsed, array $extra = []): void {
+    set_transient(self::source_key(), array_merge(['url' => $url, 'pages' => $pages, 'collapsed' => $collapsed], $extra), self::SOURCE_TTL);
+  }
+
+  public static function get_source(): ?array {
+    $s = get_transient(self::source_key());
+    return is_array($s) ? $s : null;
   }
 
   private static function get(string $url, int $timeout = 10) {
@@ -393,52 +398,131 @@ class AISB_Archer_Sitemap_Rules {
     $h = preg_replace('/^www\./', '', strtolower($u['host']));
     if ($h !== $host) return null;
     $path = '/' . trim((string) ($u['path'] ?? '/'), '/');
+    $path = rawurldecode($path);
     if (preg_match('#\.(pdf|jpe?g|png|gif|webp|svg|zip|docx?|xlsx?|mp4|mp3|xml|txt|css|js|ico)$#i', $path)) return null;
     if (preg_match('#^/(wp-(json|admin|content|includes|login)|feed|comments|xmlrpc|cart|winkelmand|checkout|afrekenen|my-account|mijn-account|cdn-cgi)(/|$)#i', $path)) return null;
     if (preg_match('#/(feed|page/\d+|amp)$#i', $path)) return null;
     if (preg_match('#^/(tag|category|categorie|author|auteur)/#i', $path)) return null;
-    // Technische of persoonlijke pagina's van WordPress, page builders en webshops.
-    if (preg_match('#(^|/)(sample-page|voorbeeld-pagina|hello-world|_wp_link_placeholder|templates?|elementor-[a-z0-9-]*|bricks_template|et_pb_layout|profiel|bewerk-profiel|registreer|register|registreren|login|inloggen|logout|account|wishlist|verlanglijst|buy-credits|lost-password|wachtwoord-vergeten)(/|$)#i', $path)) return null;
+    // Technische, persoonlijke of interne pagina's (formulieren voor klanten, bedankpagina's…).
+    if (preg_match('#(^|/)(sample-page|voorbeeld-pagina|hello-world|_wp_link_placeholder|templates?|elementor-[a-z0-9-]*|bricks_template|et_pb_layout|profiel|bewerk-profiel|registreer|register|registreren|login|inloggen|logout|account|wishlist|verlanglijst|buy-credits|lost-password|wachtwoord-vergeten|bedankt|dank-je|thank-?you|thanks|merci|bevestiging|confirmation)(/|$)#i', $path)) return null;
+    if (preg_match('#(intake|enquete|survey|tevredenheid)#i', $path)) return null;
     return $path;
   }
 
-  /** Haalt <loc>-adressen uit sitemap.xml (ook sitemap-indexen). */
-  private static function sitemap_paths(string $base, string $host): array {
+  /** Soort inhoud volgens de naam van het sitemapbestand: post, cases, product… ('' voor gewone pagina's). */
+  private static function sitemap_type(string $sitemap_url): string {
+    $file = strtolower(basename((string) wp_parse_url($sitemap_url, PHP_URL_PATH)));
+    if (preg_match('/^wp-sitemap-posts-([a-z0-9_-]+?)-\d+\.xml$/', $file, $m)) $t = $m[1];
+    elseif (preg_match('/^([a-z0-9_-]+?)[-_]sitemap\d*\.xml$/', $file, $m)) $t = $m[1];
+    else return '';
+    return in_array($t, ['page', 'pages', 'wp', 'main'], true) ? '' : $t;
+  }
+
+  /**
+   * Haalt de adressen uit sitemap.xml (ook sitemap-indexen), parallel.
+   * Extra adressen (bv. REST-routes) gaan mee in de eerste ronde; hun antwoord komt terug in $extra_out.
+   * @return array pad => soort ('' = pagina)
+   */
+  private static function sitemap_paths(string $base, string $host, string $robots, array $extra = [], array &$extra_out = []): array {
     $candidates = [];
-    $robots = self::get($base . '/robots.txt', 6);
-    if (!is_wp_error($robots) && (int) wp_remote_retrieve_response_code($robots) === 200) {
-      if (preg_match_all('/^\s*sitemap:\s*(\S+)/im', (string) wp_remote_retrieve_body($robots), $m)) $candidates = $m[1];
-    }
-    $candidates = array_merge($candidates, [$base . '/sitemap_index.xml', $base . '/wp-sitemap.xml', $base . '/sitemap.xml', $base . '/page-sitemap.xml']);
+    if (preg_match_all('/^\s*sitemap:\s*(\S+)/im', $robots, $m)) $candidates = $m[1];
+    if (!$candidates) $candidates = [$base . '/sitemap_index.xml', $base . '/wp-sitemap.xml', $base . '/sitemap.xml'];
     $queue = array_values(array_unique($candidates));
-    $seen = []; $paths = []; $fetched = 0;
-    while ($queue && $fetched < 12 && count($paths) < 800) {
-      $sm = array_shift($queue);
-      if (isset($seen[$sm])) continue;
-      $seen[$sm] = true;
-      $res = self::get($sm, 8);
-      $fetched++;
-      if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) continue;
-      $xml = (string) wp_remote_retrieve_body($res);
-      if (stripos($xml, '<sitemapindex') !== false) {
+    $seen = []; $paths = []; $rounds = 0;
+    while (($queue || ($rounds === 0 && $extra)) && $rounds < 3 && count($paths) < 800) {
+      $rounds++;
+      $batch = array_slice(array_values(array_filter($queue, function ($u) use ($seen) { return !isset($seen[$u]); })), 0, 16);
+      $queue = [];
+      foreach ($batch as $u) $seen[$u] = true;
+      $fetch = $rounds === 1 ? array_merge($batch, $extra) : $batch;
+      foreach (self::fetch_many($fetch, 8) as $req => $res) {
+        if ($rounds === 1 && in_array($req, $extra, true)) { $extra_out[$req] = $res['body']; continue; }
+        $xml = $res['body'];
+        if (stripos($xml, '<sitemapindex') !== false) {
+          if (preg_match_all('#<loc>\s*([^<\s]+)\s*</loc>#i', $xml, $m)) {
+            foreach ($m[1] as $loc) {
+              $loc = html_entity_decode($loc);
+              if (preg_match('#(attachment|post_tag|tag-sitemap|author|category|taxonom|users|locations?-sitemap)#i', $loc)) continue;
+              $queue[] = $loc;
+            }
+          }
+          continue;
+        }
+        $type = self::sitemap_type($req);
         if (preg_match_all('#<loc>\s*([^<\s]+)\s*</loc>#i', $xml, $m)) {
           foreach ($m[1] as $loc) {
-            $loc = html_entity_decode($loc);
-            // Bijlagen, tags en auteurs overslaan.
-            if (preg_match('#(attachment|tag|author|category|taxonomies|users)#i', $loc)) continue;
-            $queue[] = $loc;
+            $p = self::page_path($loc, $base, $host);
+            if ($p !== null && !isset($paths[$p])) $paths[$p] = $type;
           }
-        }
-        continue;
-      }
-      if (preg_match_all('#<loc>\s*([^<\s]+)\s*</loc>#i', $xml, $m)) {
-        foreach ($m[1] as $loc) {
-          $p = self::page_path($loc, $base, $host);
-          if ($p !== null) $paths[$p] = true;
         }
       }
     }
-    return array_keys($paths);
+    unset($paths['/']);
+    return $paths;
+  }
+
+  /** Haalt WordPress-inhoud op via de REST-API: titels, ouders en soorten. */
+  private static function wp_rest(string $base, string $host, array $first, array &$titles, array &$wp_parent): array {
+    $types = [];
+    $pages_json = json_decode((string) ($first[$base . '/wp-json/wp/v2/pages?per_page=100&_fields=id,link,title,parent'] ?? ''), true);
+    if (!is_array($pages_json) || !$pages_json || !isset($pages_json[0]['link'])) return [];
+    $id_path = [];
+    $add = function (array $items, string $type) use (&$types, &$titles, &$id_path, $base, $host) {
+      foreach ($items as $it) {
+        if (!is_array($it) || empty($it['link'])) continue;
+        $p = self::page_path((string) $it['link'], $base, $host);
+        if ($p === null || $p === '/') continue;
+        $types[$p] = $type;
+        $t = trim(html_entity_decode(wp_strip_all_tags((string) ($it['title']['rendered'] ?? '')), ENT_QUOTES));
+        if ($t !== '') $titles[$p] = $t;
+        if (isset($it['id'])) $id_path[$type . ':' . (int) $it['id']] = $p;
+      }
+    };
+    $add($pages_json, '');
+    foreach ($pages_json as $it) {
+      if (!empty($it['parent']) && isset($id_path[':' . (int) $it['id']], $id_path[':' . (int) $it['parent']])) {
+        $wp_parent[$id_path[':' . (int) $it['id']]] = $id_path[':' . (int) $it['parent']];
+      }
+    }
+    $posts = json_decode((string) ($first[$base . '/wp-json/wp/v2/posts?per_page=100&_fields=id,link,title'] ?? ''), true);
+    if (is_array($posts)) $add($posts, 'post');
+    // Eigen inhoudssoorten (cases, projecten, producten…).
+    $all_types = json_decode((string) ($first[$base . '/wp-json/wp/v2/types'] ?? ''), true);
+    $skip = ['page', 'post', 'attachment', 'nav_menu_item', 'wp_block', 'wp_template', 'wp_template_part', 'wp_navigation', 'wp_font_family', 'wp_font_face', 'wp_global_styles', 'bricks_template', 'elementor_library', 'ct_template', 'oxy_user_library', 'et_pb_layout', 'fl-builder-template', 'jet-engine', 'jet-theme-core'];
+    $urls = [];
+    if (is_array($all_types)) {
+      foreach ($all_types as $slug => $def) {
+        if (!is_array($def) || in_array($slug, $skip, true) || empty($def['rest_base'])) continue;
+        if (isset($def['viewable']) && !$def['viewable']) continue;
+        $urls[$slug] = $base . '/wp-json/wp/v2/' . rawurlencode((string) $def['rest_base']) . '?per_page=100&_fields=id,link,title';
+      }
+    }
+    if ($urls) {
+      $res = self::fetch_many(array_values(array_slice($urls, 0, 8)), 8);
+      foreach (array_slice($urls, 0, 8, true) as $slug => $u) {
+        $items = json_decode((string) ($res[$u]['body'] ?? ''), true);
+        if (is_array($items)) $add($items, (string) $slug);
+      }
+    }
+    return $types;
+  }
+
+  /** Eén kleine AI-vraag: onder welke menupagina hoort elke losse pagina? */
+  private static function ai_parents(array $orphans, array $menu): array {
+    if (!$orphans || !$menu || !class_exists('AISB_OpenAI')) return [];
+    $settings = class_exists('AISB_Settings') ? (new AISB_Settings())->get_settings() : [];
+    if (empty($settings['api_key'])) return [];
+    $settings['timeout'] = min(25, max(10, (int) ($settings['timeout'] ?? 25)));
+    $lines_m = []; foreach ($menu as $k => $t) $lines_m[] = '- ' . $k . ': ' . $t;
+    $lines_o = []; foreach ($orphans as $k => $t) $lines_o[] = '- ' . $k . ': ' . $t;
+    $system = 'You organise website pages into a sitemap. Return only JSON.';
+    $user = "Menu pages (id: title):\n" . implode("\n", $lines_m) . "\n\nLoose pages (id: title):\n" . implode("\n", $lines_o)
+      . "\n\nFor each loose page, choose the menu page it logically belongs under: a service, a free audit, analysis or quote offer under the services page, a case or project under the cases/projects page, a blog post or article under the blog/news/insights page, a team member under the about page, a product under the products page. If none fits clearly, use \"home\"."
+      . "\nReturn JSON: {\"parents\": {\"<loose page id>\": \"<menu page id or home>\"}}";
+    $res = (new AISB_OpenAI())->call_openai_chat_completions($user, $settings, $system);
+    if (is_wp_error($res)) return [];
+    $j = json_decode((string) $res, true);
+    return is_array($j['parents'] ?? null) ? $j['parents'] : [];
   }
 
   /** Interne links op een pagina, met de linktekst (menunaam) per pad. */
@@ -451,7 +535,6 @@ class AISB_Archer_Sitemap_Rules {
         $out[$p] = true;
         if ($labels !== null) {
           $t = trim(preg_replace('/\s+/', ' ', html_entity_decode(wp_strip_all_tags($hit[2]), ENT_QUOTES)));
-          // Korte linkteksten zijn menunamen; "Lees meer" en co. niet.
           if ($t !== '' && mb_strlen($t) >= 2 && mb_strlen($t) <= 40
               && !preg_match('/^(lees meer|meer info|read more|learn more|en savoir plus|ontdek|discover|klik hier|click here|meer|more|home|→|›)$/iu', $t)) {
             if (!isset($labels[$p]) || mb_strlen($t) < mb_strlen($labels[$p])) $labels[$p] = $t;
@@ -462,20 +545,86 @@ class AISB_Archer_Sitemap_Rules {
     return array_keys($out);
   }
 
+  private static function dom(string $html): ?DOMXPath {
+    if (trim($html) === '' || !class_exists('DOMDocument')) return null;
+    $doc = new DOMDocument();
+    $prev = libxml_use_internal_errors(true);
+    $ok = $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html, LIBXML_NOWARNING | LIBXML_NOERROR);
+    libxml_clear_errors();
+    libxml_use_internal_errors($prev);
+    return $ok ? new DOMXPath($doc) : null;
+  }
+
+  /**
+   * Menustructuur van de site: welk menu-item staat onder welk ander item,
+   * en welke links staan in header, menu of footer (op elke pagina).
+   * @return array{parent: array, items: array, chrome: array}
+   */
+  private static function nav_structure(string $html, string $base, string $host): array {
+    $out = ['parent' => [], 'items' => [], 'chrome' => []];
+    $x = self::dom($html);
+    if (!$x) return $out;
+    foreach ($x->query('//header//a[@href] | //nav//a[@href] | //footer//a[@href] | //*[contains(@id,"header") or contains(@id,"footer") or contains(@class,"site-header") or contains(@class,"footer")]//a[@href]') as $a) {
+      $p = self::page_path($a->getAttribute('href'), $base, $host);
+      if ($p !== null) $out['chrome'][$p] = true;
+    }
+    $menus = $x->query('//header | //nav');
+    foreach ($menus as $menu) {
+      foreach ($x->query('.//li', $menu) as $li) {
+        $own = null;
+        foreach ($x->query('.//a[@href]', $li) as $a) {
+          $p = self::page_path($a->getAttribute('href'), $base, $host);
+          if ($p !== null) { $own = $p; break; }
+          if (trim($a->getAttribute('href')) === '#' || trim($a->getAttribute('href')) === '') break;
+        }
+        if ($own === null || $own === '/') continue;
+        $out['items'][$own] = true;
+        // Alles in een submenu (of megamenu) van dit item hangt eronder.
+        foreach ($x->query('.//ul//a[@href] | .//div[contains(@class,"sub") or contains(@class,"mega") or contains(@class,"dropdown")]//a[@href]', $li) as $a) {
+          $p = self::page_path($a->getAttribute('href'), $base, $host);
+          if ($p === null || $p === $own || $p === '/') continue;
+          $out['parent'][$p] = $own; // diepere menu-items komen later en overschrijven dit
+        }
+      }
+    }
+    return $out;
+  }
+
+  /** Links in de inhoud van een pagina (zonder header, menu, zijbalk en footer). */
+  private static function content_links(string $html, string $base, string $host): array {
+    $x = self::dom($html);
+    if (!$x) return [];
+    foreach (['//header', '//nav', '//footer', '//aside', '//*[contains(@id,"header")]', '//*[contains(@id,"footer")]', '//*[contains(@class,"site-header")]', '//*[contains(@class,"footer")]'] as $q) {
+      foreach (iterator_to_array($x->query($q)) as $n) {
+        if ($n->parentNode) $n->parentNode->removeChild($n);
+      }
+    }
+    $out = [];
+    foreach ($x->query('//body//a[@href]') as $a) {
+      $p = self::page_path($a->getAttribute('href'), $base, $host);
+      if ($p !== null && $p !== '/') $out[$p] = true;
+    }
+    return array_keys($out);
+  }
+
   /** Korte paginanaam: titeltag (eerste deel) of h1, als die kort genoeg is. */
   private static function title_from(string $html): string {
     $cands = [];
     if (preg_match('#<title[^>]*>(.*?)</title>#is', $html, $m)) {
       $t = trim(html_entity_decode(wp_strip_all_tags($m[1]), ENT_QUOTES));
-      $cands[] = trim(preg_split('/\s+[\|\-–—·:]\s+/u', $t)[0] ?? $t);
+      $cands[] = trim(preg_split('/\s+[\|\-–—·]\s+/u', $t)[0] ?? $t);
     }
     if (preg_match('#<h1[^>]*>(.*?)</h1>#is', $html, $m)) {
       $cands[] = trim(preg_replace('/\s+/', ' ', html_entity_decode(wp_strip_all_tags($m[1]), ENT_QUOTES)));
     }
     foreach ($cands as $t) {
-      if ($t !== '' && mb_strlen($t) <= 45) return $t;
+      if ($t !== '' && mb_strlen($t) <= 80) return $t;
     }
     return '';
+  }
+
+  private static function is_noindex(string $html): bool {
+    return (bool) preg_match('#<meta[^>]+name=["\']robots["\'][^>]+content=["\'][^"\']*noindex#i', $html);
   }
 
   private static function humanize(string $segment): string {
@@ -490,11 +639,21 @@ class AISB_Archer_Sitemap_Rules {
     return preg_match('/^[a-z]{2}(?:[-_][a-z]{2})?$/i', $first) ? strtolower($first) : '';
   }
 
+  /** Woorden waaraan je een blog- of nieuwsoverzicht herkent. */
+  private const BLOG_WORDS = ['blog', 'blogs', 'nieuws', 'news', 'inzichten', 'insights', 'artikels', 'artikelen', 'articles', 'kennisbank', 'actueel', 'magazine', 'tips', 'journal', 'actualites', 'actualite'];
+
   /**
    * Leest de volledige paginastructuur van een website.
+   *
+   * Ouders, in deze volgorde:
+   * 1. het pad (/diensten/branding hangt onder /diensten);
+   * 2. het menu (Branding staat in het submenu van Diensten);
+   * 3. het soort inhoud uit sitemap.xml (blogberichten onder Blog/Inzichten, cases onder Cases);
+   * 4. links in de inhoud van een menupagina (de casepagina linkt naar elke case);
+   * anders hangt de pagina onder Home.
    * Meertalige sites: alleen de taal van het opgegeven adres (anders Nederlands, anders de grootste).
    *
-   * @return array{pages: array, collapsed: array}
+   * @return array{pages: array, collapsed: array, language: string}
    */
   public static function crawl_site(string $url, string $home_html): array {
     $u = wp_parse_url($url);
@@ -503,22 +662,41 @@ class AISB_Archer_Sitemap_Rules {
     $base = $scheme . '://' . ($u['host'] ?? $host);
     $labels = [];
 
-    $paths = array_flip(self::sitemap_paths($base, $host));
-    foreach (self::link_paths($home_html, $base, $host, $labels) as $p) $paths[$p] = true;
-
-    // Een niveau dieper via de menupagina's, als de sitemap.xml weinig opleverde.
-    if (count($paths) < 15) {
-      $level1 = array_slice(array_keys($paths), 0, 25);
-      foreach (self::fetch_many(array_map(function ($p) use ($base) { return $base . $p; }, $level1)) as $html) {
-        foreach (self::link_paths($html, $base, $host) as $p) $paths[$p] = true;
+    // Ronde 1 (parallel): robots.txt en de WordPress REST-API.
+    $rest = [
+      $base . '/wp-json/wp/v2/pages?per_page=100&_fields=id,link,title,parent',
+      $base . '/wp-json/wp/v2/posts?per_page=100&_fields=id,link,title',
+      $base . '/wp-json/wp/v2/types',
+    ];
+    $first = [];
+    foreach (self::fetch_many(array_merge([$base . '/robots.txt'], $rest), 8) as $req => $res) $first[$req] = $res['body'];
+    $known_titles = []; $wp_parent = [];
+    $rest_types = self::wp_rest($base, $host, $first, $known_titles, $wp_parent);
+    // sitemap.xml: welke pagina's de site zelf laat indexeren.
+    $types = self::sitemap_paths($base, $host, (string) ($first[$base . '/robots.txt'] ?? ''));
+    if ($rest_types) {
+      // REST kent ook verborgen pagina's: alleen houden wat in sitemap.xml of op de homepage staat.
+      $home_set = array_flip(self::link_paths($home_html, $base, $host));
+      foreach ($rest_types as $p => $t) {
+        if ($types && !isset($types[$p]) && !isset($home_set[$p])) continue;
+        $types[$p] = $t !== '' ? $t : ($types[$p] ?? '');
       }
     }
-    unset($paths['/']);
-    $paths = array_keys($paths);
+    $home_links = self::link_paths($home_html, $base, $host, $labels);
+    foreach ($home_links as $p) if (!isset($types[$p])) $types[$p] = '';
+    $nav = self::nav_structure($home_html, $base, $host);
+    unset($types['/']);
+
+    // Weinig gevonden: een niveau dieper via de menupagina's.
+    if (count($types) < 8) {
+      foreach (self::fetch_many(array_map(function ($p) use ($base) { return $base . $p; }, array_slice(array_keys($types), 0, 20)), 8) as $res) {
+        foreach (self::link_paths($res['body'], $base, $host) as $p) if (!isset($types[$p]) && $p !== '/') $types[$p] = '';
+      }
+    }
 
     // Meertalig: een taal kiezen en de taalmap uit het pad halen.
     $by_lang = [];
-    foreach ($paths as $p) {
+    foreach (array_keys($types) as $p) {
       $l = self::lang_prefix($p);
       if ($l !== '') $by_lang[$l] = ($by_lang[$l] ?? 0) + 1;
     }
@@ -532,130 +710,303 @@ class AISB_Archer_Sitemap_Rules {
         if ($lang === '') { arsort($by_lang); $lang = (string) key($by_lang); }
       }
     }
-    $real = []; // weergavepad => echt pad
-    foreach ($paths as $p) {
+    $display = function (string $p) use ($multi, $lang): ?string {
+      if (!$multi) return $p;
       $l = self::lang_prefix($p);
-      if ($multi && $l !== '' && $l !== $lang) continue;
-      $display = ($multi && $l === $lang) ? '/' . trim(substr(trim($p, '/'), strlen($l)), '/') : $p;
-      if ($display === '/' || $display === '') continue;
-      if (!isset($real[$display])) $real[$display] = $p;
+      if ($l !== '' && $l !== $lang) return null;
+      if ($l === $lang) {
+        $d = '/' . trim(substr(trim($p, '/'), strlen($l)), '/');
+        return $d === '/' ? null : $d;
+      }
+      return $p;
+    };
+    $real = []; $type_of = [];
+    foreach ($types as $p => $t) {
+      $d = $display($p);
+      if ($d === null || isset($real[$d])) continue;
+      $real[$d] = $p;
+      $type_of[$d] = $t;
     }
-    if ($multi && $lang !== '') {
-      foreach ($labels as $p => $t) {
-        if (self::lang_prefix($p) === $lang) $labels['/' . trim(substr(trim($p, '/'), strlen($lang)), '/')] = $t;
+    $map_keys = function (array $arr) use ($display) {
+      $o = [];
+      foreach ($arr as $k => $v) { $d = $display((string) $k); if ($d !== null) $o[$d] = $v; }
+      return $o;
+    };
+    $labels = $map_keys($labels);
+    $known_titles = $map_keys($known_titles);
+    $nav_items = $map_keys($nav['items']);
+    $chrome = $map_keys($nav['chrome']);
+    $nav_parent = [];
+    foreach ($nav['parent'] as $c => $par) {
+      $dc = $display((string) $c); $dp = $display((string) $par);
+      if ($dc !== null && $dp !== null && $dc !== $dp) $nav_parent[$dc] = $dp;
+    }
+
+    // Grote verzamelingen (bv. 200 producten) samenvatten tot één sjabloonpagina.
+    $type_count = [];
+    foreach ($type_of as $d => $t) if ($t !== '') $type_count[$t] = ($type_count[$t] ?? 0) + 1;
+    $collapsed_types = [];
+    foreach ($type_count as $t => $n) {
+      if ($n >= self::COLLECTION_MIN_CHILDREN) $collapsed_types[$t] = $n;
+    }
+    foreach ($type_of as $d => $t) {
+      if (isset($collapsed_types[$t])) { unset($real[$d], $type_of[$d]); }
+    }
+
+    // Veiligheidsgrens (de echte grens van 60 volgt na het bepalen van de ouders).
+    $order = array_keys($real);
+    usort($order, function ($a, $b) use ($nav_items) {
+      $na = isset($nav_items[$a]) ? 0 : 1; $nb = isset($nav_items[$b]) ? 0 : 1;
+      return $na <=> $nb ?: (substr_count($a, '/') <=> substr_count($b, '/')) ?: strcmp($a, $b);
+    });
+    $order = array_slice($order, 0, 200);
+    $real = array_intersect_key($real, array_flip($order));
+
+    // Dubbele pagina's met dezelfde naam (bv. /smithii en /cases/smithii): de versie met een eigen soort houden.
+    $by_base = [];
+    foreach (array_keys($real) as $d) $by_base[basename($d)][] = $d;
+    foreach ($by_base as $list) {
+      if (count($list) < 2) continue;
+      $typed = array_values(array_filter($list, function ($d) use ($type_of) { return ($type_of[$d] ?? '') !== ''; }));
+      if (!$typed) continue;
+      foreach ($list as $d) {
+        if (!in_array($d, $typed, true) && !isset($nav_items[$d])) unset($real[$d], $type_of[$d]);
       }
     }
 
-    // Tussenmappen zonder eigen pagina (bv. /diensten/ boven /diensten/x en /diensten/y) worden een groepspagina.
-    $count_under = [];
-    foreach (array_keys($real) as $p) {
-      $segs = explode('/', trim($p, '/'));
-      for ($k = 1; $k < count($segs); $k++) {
+    // Ouders bepalen.
+    $parent = [];
+    $closest_real = function (string $d) use (&$real): ?string {
+      $segs = explode('/', trim($d, '/'));
+      for ($k = count($segs) - 1; $k >= 1; $k--) {
         $pp = '/' . implode('/', array_slice($segs, 0, $k));
-        $count_under[$pp] = ($count_under[$pp] ?? 0) + 1;
+        if (isset($real[$pp])) return $pp;
       }
-    }
+      return null;
+    };
+    // Overzichtspagina per soort inhoud (posts → blog/inzichten, cases → cases…).
+    $overview_for = function (string $type) use (&$real, $labels): ?string {
+      $want = $type === 'post' ? self::BLOG_WORDS : array_unique([self::plain($type), rtrim(self::plain($type), 's'), self::plain($type) . 's', 'onze-' . self::plain($type), 'our-' . self::plain($type)]);
+      foreach (array_keys($real) as $d) {
+        if (substr_count(trim($d, '/'), '/') > 0) continue;
+        $last = self::plain(basename($d));
+        $lab = self::plain((string) ($labels[$d] ?? ''));
+        foreach ($want as $w) {
+          if ($last === $w || $lab === $w || $last === 'onze-' . $w || $last === 'our-' . $w) return $d;
+        }
+      }
+      return null;
+    };
     $virtual = [];
-    foreach ($count_under as $pp => $n) {
-      if (!isset($real[$pp]) && $n >= 2) { $real[$pp] = null; $virtual[$pp] = true; }
-    }
-
-    // Collecties met veel kinderen (producten, blogberichten) samenvatten.
-    $kids = [];
-    foreach (array_keys($real) as $p) {
-      $parent = dirname($p);
-      if ($parent === '\\' || $parent === '.') $parent = '/';
-      $kids[$parent][] = $p;
-    }
-    $collapsed = [];
-    $keep = [];
-    foreach (array_keys($real) as $p) {
-      $parent = dirname($p);
-      if ($parent === '\\' || $parent === '.') $parent = '/';
-      if ($parent !== '/' && count($kids[$parent]) >= self::COLLECTION_MIN_CHILDREN) {
-        $collapsed[$parent] = count($kids[$parent]);
-        continue;
+    $group_by_type = [];
+    $wp_parent_d = [];
+    foreach ($wp_parent as $c => $pp) { $dc = $display((string) $c); $dp = $display((string) $pp); if ($dc !== null && $dp !== null) $wp_parent_d[$dc] = $dp; }
+    foreach (array_keys($real) as $d) {
+      if (isset($wp_parent_d[$d]) && isset($real[$wp_parent_d[$d]]) && $wp_parent_d[$d] !== $d) { $parent[$d] = $wp_parent_d[$d]; continue; }
+      if (($cp = $closest_real($d)) !== null) { $parent[$d] = $cp; continue; }
+      if (isset($nav_parent[$d]) && isset($real[$nav_parent[$d]])) { $parent[$d] = $nav_parent[$d]; continue; }
+      $t = $type_of[$d] ?? '';
+      if ($t !== '') {
+        $ov = $overview_for($t);
+        if ($ov !== null && $ov !== $d) { $parent[$d] = $ov; continue; }
+        $group_by_type[$t][] = $d;
       }
-      $keep[] = $p;
     }
-    // Ondiepe pagina's eerst; zeer grote sites: maximaal 60 pagina's.
-    usort($keep, function ($a, $b) { return substr_count($a, '/') <=> substr_count($b, '/') ?: strcmp($a, $b); });
-    $keep = array_slice($keep, 0, 60);
-    foreach (array_keys($collapsed) as $parent) {
-      if (!in_array($parent, $keep, true)) $keep[] = $parent;
+    // Soort inhoud zonder overzichtspagina: een groepspagina maken.
+    foreach ($group_by_type as $t => $list) {
+      if (count($list) < 2) continue;
+      $gp = '/' . ($t === 'post' ? 'blog' : sanitize_title($t));
+      if (!isset($real[$gp])) { $real[$gp] = null; $virtual[$gp] = $t === 'post' ? 'Blog' : self::humanize($t); }
+      foreach ($list as $d) $parent[$d] = $gp;
     }
-    usort($keep, function ($a, $b) { return substr_count($a, '/') <=> substr_count($b, '/') ?: strcmp($a, $b); });
+    // Mappen zonder eigen pagina (/diensten/x en /diensten/y zonder /diensten): groepspagina.
+    $under = [];
+    foreach (array_keys($real) as $d) {
+      if (isset($parent[$d])) continue;
+      $segs = explode('/', trim($d, '/'));
+      if (count($segs) > 1) $under['/' . $segs[0]][] = $d;
+    }
+    foreach ($under as $gp => $list) {
+      if (count($list) < 2) continue;
+      if (!isset($real[$gp])) { $real[$gp] = null; $virtual[$gp] = self::humanize(basename($gp)); }
+      foreach ($list as $d) $parent[$d] = $gp;
+    }
+    // Ophalen (parallel): menupagina's (voor links in hun inhoud) en pagina's zonder gekende titel.
+    $html_of = [];
+    // Maximaal 60 pagina's: de grootste groepen (blogberichten, producten…) worden één sjabloonpagina.
+    $collapsed_parents = [];
+    if (count($real) > 60) {
+      $kids = [];
+      foreach ($parent as $c => $pp) if (!isset($nav_items[$c])) $kids[$pp][] = $c;
+      uasort($kids, function ($a, $b) { return count($b) <=> count($a); });
+      foreach ($kids as $pp => $list) {
+        if (count($real) <= 60 || count($list) < 8) break;
+        foreach ($list as $c) { unset($real[$c], $parent[$c]); }
+        $collapsed_parents[$pp] = count($list);
+      }
+      if (count($real) > 60) {
+        $order = array_keys($real);
+        usort($order, function ($a, $b) use ($nav_items) {
+          return ((isset($nav_items[$a]) ? 0 : 1) <=> (isset($nav_items[$b]) ? 0 : 1)) ?: (substr_count($a, '/') <=> substr_count($b, '/'));
+        });
+        $real = array_intersect_key($real, array_flip(array_slice($order, 0, 60)));
+      }
+    }
 
-    // Titels ophalen (parallel), alleen voor echte pagina's zonder menunaam.
-    $titles = [];
-    $fetch = [];
-    foreach ($keep as $p) {
-      if (!empty($real[$p]) && empty($labels[$p])) $fetch[$base . $real[$p]] = $p;
+    $legal = '#(privacy|cookie|voorwaarden|terms|disclaimer|legal|contact|sitemap|impressum|mentions)#i';
+    $has_orphans = false;
+    foreach (array_keys($real) as $d) {
+      if (!isset($parent[$d]) && !isset($nav_items[$d]) && !isset($chrome[$d]) && !preg_match($legal, $d)) { $has_orphans = true; break; }
     }
-    foreach (self::fetch_many(array_keys(array_slice($fetch, 0, 60, true))) as $full => $html) {
-      if (isset($fetch[$full])) $titles[$fetch[$full]] = self::title_from($html);
+    $to_fetch = array_values(array_filter(array_keys($real), function ($d) use ($nav_items, $known_titles, $labels, $has_orphans, $real) {
+      if ($real[$d] === null) return false;
+      return ($has_orphans && isset($nav_items[$d])) || (!isset($known_titles[$d]) && !isset($labels[$d]));
+    }));
+    // Hooguit 30 pagina's ophalen (menu en ondiepe pagina's eerst); de rest krijgt een naam uit het adres.
+    usort($to_fetch, function ($a, $b) use ($nav_items) {
+      return ((isset($nav_items[$a]) ? 0 : 1) <=> (isset($nav_items[$b]) ? 0 : 1)) ?: (substr_count($a, '/') <=> substr_count($b, '/'));
+    });
+    $to_fetch = array_slice($to_fetch, 0, 30);
+    $fetched = self::fetch_many(array_map(function ($d) use ($base, $real) { return $base . $real[$d]; }, $to_fetch), 7);
+    foreach ($real as $d => $p) {
+      if ($p === null) continue;
+      $res = $fetched[$base . $p] ?? null;
+      if (!$res) continue;
+      // Doorverwezen naar een andere pagina die we al hebben: dubbel, weg.
+      $final = self::page_path((string) $res['final'], $base, $host);
+      $fd = $final !== null ? $display($final) : null;
+      if ($fd !== null && $fd !== $d && (isset($real[$fd]) || $fd === '/')) { unset($real[$d]); continue; }
+      if (self::is_noindex($res['body']) && !isset($nav_items[$d])) { unset($real[$d]); continue; }
+      $html_of[$d] = $res['body'];
     }
+
+    // Kinderen van weggevallen pagina's hangen onder Home.
+    foreach ($parent as $d => $pp) { if (!array_key_exists($d, $real) || !array_key_exists($pp, $real)) unset($parent[$d]); }
+
+    // Losse pagina's waar een menupagina naar linkt in haar inhoud (bv. Cases → elke case).
+    $cands = array_values(array_filter(array_keys($nav_items), function ($d) use ($html_of) { return isset($html_of[$d]); }));
+    usort($cands, function ($a, $b) use ($labels) {
+      $ca = self::collection_for(['slug' => basename($a), 'page_title' => $labels[$a] ?? '']) ? 0 : 1;
+      $cb = self::collection_for(['slug' => basename($b), 'page_title' => $labels[$b] ?? '']) ? 0 : 1;
+      return $ca <=> $cb;
+    });
+    foreach ($cands as $pd) {
+      foreach (self::content_links($html_of[$pd], $base, $host) as $lp) {
+        $ld = $display($lp);
+        if ($ld === null || $ld === $pd || !array_key_exists($ld, $real)) continue;
+        if (isset($parent[$ld]) || isset($nav_items[$ld]) || isset($chrome[$ld]) || preg_match($legal, $ld)) continue;
+        $parent[$ld] = $pd;
+      }
+    }
+    // Wat dan nog los hangt (geen menu, geen header/footer, geen juridische pagina): de AI kiest de ouder.
+    $menu = []; $orphans = [];
+    foreach (array_keys($real) as $d) {
+      $t = $labels[$d] ?? ($known_titles[$d] ?? self::humanize(basename($d)));
+      if (isset($nav_items[$d]) && !isset($parent[$d]) && substr_count(trim($d, '/'), '/') === 0) $menu[$d] = $t;
+      elseif (!isset($parent[$d]) && !isset($nav_items[$d]) && !isset($chrome[$d])
+              && !preg_match($legal, $d)) $orphans[$d] = $t;
+    }
+    if ($orphans && $menu && count($orphans) <= 40) {
+      foreach (self::ai_parents($orphans, $menu) as $od => $md) {
+        if (isset($orphans[$od]) && isset($menu[$md]) && $od !== $md) $parent[$od] = $md;
+      }
+    }
+    // Geen lussen.
+    foreach (array_keys($parent) as $d) {
+      $seen = [$d => true]; $c = $parent[$d];
+      while ($c !== null && isset($parent[$c])) {
+        if (isset($seen[$c])) { unset($parent[$d]); break; }
+        $seen[$c] = true; $c = $parent[$c];
+      }
+    }
+
+    // Titels.
     $home_title = self::title_from($home_html);
+    $title_of = [];
+    foreach (array_keys($real) as $d) {
+      if (isset($virtual[$d])) { $title_of[$d] = $virtual[$d]; continue; }
+      $t = $labels[$d] ?? ($known_titles[$d] ?? '');
+      if ($t === '' && isset($html_of[$d])) $t = self::title_from($html_of[$d]);
+      if ($t === '' || mb_strtolower($t) === mb_strtolower($home_title)) $t = self::humanize(basename($d));
+      $title_of[$d] = $t;
+    }
 
-    // Slugs en ouders uit het pad.
+    // Volgorde: ouders voor kinderen, menu-items eerst.
+    $depth = function ($d) use (&$parent) { $n = 0; while (isset($parent[$d]) && $n < 6) { $d = $parent[$d]; $n++; } return $n; };
+    $list = array_keys($real);
+    usort($list, function ($a, $b) use ($depth, $nav_items) {
+      return $depth($a) <=> $depth($b) ?: ((isset($nav_items[$a]) ? 0 : 1) <=> (isset($nav_items[$b]) ? 0 : 1)) ?: strcmp($a, $b);
+    });
+
     $slug_of = ['/' => 'home'];
     $taken = ['home' => true];
     $pages = [];
-    foreach ($keep as $p) {
-      $segments = explode('/', trim($p, '/'));
+    foreach ($list as $d) {
+      $segments = explode('/', trim($d, '/'));
       $last = end($segments);
-      $slug = sanitize_title(urldecode($last)) ?: 'pagina';
+      $slug = sanitize_title($last) ?: 'pagina';
       if (isset($taken[$slug])) $slug = sanitize_title(implode('-', $segments));
       $n = 2; $b = $slug;
       while (isset($taken[$slug])) $slug = $b . '-' . $n++;
       $taken[$slug] = true;
-      $slug_of[$p] = $slug;
-      $parent = 'home';
-      for ($k = count($segments) - 1; $k >= 1; $k--) {
-        $pp = '/' . implode('/', array_slice($segments, 0, $k));
-        if (isset($slug_of[$pp])) { $parent = $slug_of[$pp]; break; }
-      }
-      $title = $labels[$p] ?? ($titles[$p] ?? '');
-      if ($title === '' || mb_strtolower($title) === mb_strtolower($home_title)) $title = self::humanize($last);
+      $slug_of[$d] = $slug;
+    }
+    foreach ($list as $d) {
       $pages[] = [
-        'slug' => $slug,
-        'title' => $title,
-        'parent_slug' => $parent,
-        'url' => $real[$p] ? $base . $real[$p] : '',
-        'group' => isset($virtual[$p]),
+        'slug' => $slug_of[$d],
+        'title' => $title_of[$d],
+        'parent_slug' => isset($parent[$d]) ? ($slug_of[$parent[$d]] ?? 'home') : 'home',
+        'url' => $real[$d] ? $base . $real[$d] : '',
+        'group' => isset($virtual[$d]),
+        'type' => $type_of[$d] ?? '',
+        'in_menu' => isset($nav_items[$d]),
       ];
     }
 
     $collapsed_out = [];
-    foreach ($collapsed as $parent => $n) {
-      $collapsed_out[] = ['path' => $parent, 'slug' => $slug_of[$parent] ?? '', 'items' => $n];
+    foreach ($collapsed_parents as $pp => $n) {
+      if (isset($slug_of[$pp])) $collapsed_out[] = ['path' => $pp, 'slug' => $slug_of[$pp], 'items' => $n, 'type' => ''];
+    }
+    foreach ($collapsed_types as $t => $n) {
+      $ov = $overview_for($t);
+      $collapsed_out[] = ['path' => $ov ?? '/' . $t, 'slug' => $ov ? ($slug_of[$ov] ?? '') : '', 'items' => $n, 'type' => $t];
     }
     return ['pages' => $pages, 'collapsed' => $collapsed_out, 'language' => $lang];
   }
 
-  /** Haalt meerdere pagina's tegelijk op. */
-  private static function fetch_many(array $urls): array {
+  /**
+   * Haalt meerdere adressen tegelijk op (in groepjes).
+   * @return array gevraagde url => ['body' => string, 'final' => string]
+   */
+  private static function fetch_many(array $urls, int $timeout = 10): array {
     $out = [];
+    $urls = array_values(array_unique(array_filter($urls, 'wp_http_validate_url')));
     if (!$urls) return $out;
-    if (class_exists('WpOrg\Requests\Requests')) {
-      $requests = [];
-      foreach (array_values($urls) as $i => $u) {
-        if (!wp_http_validate_url($u)) continue;
-        $requests[$i] = ['url' => $u, 'type' => 'GET', 'headers' => ['User-Agent' => 'Mozilla/5.0 (compatible; ArcherWebsitesBot/1.0)']];
-      }
-      try {
-        $responses = \WpOrg\Requests\Requests::request_multiple($requests, ['timeout' => 10, 'connect_timeout' => 6, 'redirects' => 3]);
-        foreach ($responses as $i => $r) {
-          if ($r instanceof \WpOrg\Requests\Response && $r->status_code === 200) $out[$requests[$i]['url']] = (string) $r->body;
+    foreach (array_chunk($urls, 20) as $chunk) {
+      $done = false;
+      if (class_exists('WpOrg\Requests\Requests')) {
+        $requests = [];
+        foreach ($chunk as $i => $u) {
+          $requests[$i] = ['url' => $u, 'type' => 'GET', 'headers' => ['User-Agent' => 'Mozilla/5.0 (compatible; ArcherWebsitesBot/1.0; +https://archerwebsites.be)']];
         }
-        return $out;
-      } catch (\Throwable $e) {
-        // Valt terug op een voor een.
+        try {
+          $responses = \WpOrg\Requests\Requests::request_multiple($requests, ['timeout' => $timeout, 'connect_timeout' => 6, 'redirects' => 3]);
+          foreach ($responses as $i => $r) {
+            if ($r instanceof \WpOrg\Requests\Response && $r->status_code === 200 && wp_http_validate_url((string) $r->url)) {
+              $out[$requests[$i]['url']] = ['body' => (string) $r->body, 'final' => (string) $r->url];
+            }
+          }
+          $done = true;
+        } catch (\Throwable $e) {
+          $done = false;
+        }
       }
-    }
-    foreach (array_slice($urls, 0, 25) as $u) {
-      $res = self::get($u, 8);
-      if (!is_wp_error($res) && (int) wp_remote_retrieve_response_code($res) === 200) $out[$u] = (string) wp_remote_retrieve_body($res);
+      if (!$done) {
+        foreach ($chunk as $u) {
+          $res = self::get($u, $timeout);
+          if (!is_wp_error($res) && (int) wp_remote_retrieve_response_code($res) === 200) $out[$u] = ['body' => (string) wp_remote_retrieve_body($res), 'final' => $u];
+        }
+      }
     }
     return $out;
   }

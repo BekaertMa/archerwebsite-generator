@@ -2,6 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 require_once __DIR__ . '/class-aisb-archer-sitemap-rules.php';
+require_once __DIR__ . '/class-aisb-archer-generate.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -39,6 +40,7 @@ class AISB_Archer_UI {
     add_action('wp_ajax_aisb_archer_site_brief', [$this, 'ajax_site_brief']);
 
     (new AISB_Archer_Sitemap_Rules())->init();
+    (new AISB_Archer_Generate())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
@@ -642,7 +644,7 @@ class AISB_Archer_UI {
     $brief['pages'] = $crawl['pages'];
     $brief['collapsed'] = $crawl['collapsed'];
     if ($crawl['pages']) {
-      AISB_Archer_Sitemap_Rules::remember_source($url, $crawl['pages'], $crawl['collapsed']);
+      AISB_Archer_Sitemap_Rules::remember_source($url, $crawl['pages'], $crawl['collapsed'], ['brief' => $brief['text'], 'title' => $brief['title']]);
     }
 
     if (mb_strlen($brief['text']) < 80 && !$crawl['pages']) {
