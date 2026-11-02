@@ -985,3 +985,17 @@ body.archer-app .archer-shell .aisb-sg-split-right { flex: 1 1 auto; min-width: 
 body.archer-app .archer-shell .archer-btn.archer-btn-sm { min-height: 34px; padding: 6px 12px; font-size: 13px; }
 .archer-taste-status { margin: 0; min-height: 18px; font-size: 13px; color: var(--ar-teal); }
 .archer-scheme-box { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; padding-top: 14px; border-top: 1px solid var(--ar-line); }
+
+/* ── Stijl: actiebalk boven het voorbeeld (concepten, licht/donker, verras me) ── */
+.archer-sg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.archer-sg-concepts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.archer-sg-concept { display: inline-flex; align-items: center; border: 1px solid var(--ar-line-2); border-radius: 999px; background: #fff; overflow: hidden; }
+.archer-sg-concept button { all: unset; cursor: pointer; padding: 6px 10px; font-size: 13px; font-weight: 600; color: var(--ar-navy); }
+.archer-sg-concept .archer-sg-concept-x { padding: 6px 9px 6px 2px; font-size: 11px; color: var(--ar-muted); }
+.archer-sg-concept .archer-sg-concept-x:hover { color: var(--ar-navy); }
+.archer-sg-concept button:focus-visible { outline: 2px solid var(--ar-teal); outline-offset: -2px; }
+.archer-sg-concept.is-active { border-color: var(--ar-teal); box-shadow: 0 0 0 1px var(--ar-teal); }
+.archer-sg-concepts .archer-link-btn { all: unset; cursor: pointer; padding: 6px 4px; font-size: 13px; font-weight: 600; color: var(--ar-teal); }
+.archer-sg-concepts .archer-link-btn:hover { text-decoration: underline; }
+/* Secties in Stijl zijn aanklikbaar (kleurschema per sectie, hoverbalk). */
+body.archer-app .aisb-sg-iframe-wrap iframe.aisb-sg-section-iframe { pointer-events: auto; }

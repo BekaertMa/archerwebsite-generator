@@ -2062,6 +2062,16 @@
         render();
         if (applyFirst && dealt[0]) apply(dealt[0]);
       };
+      UI.taste = {
+        setColours,
+        setFonts,
+        render,
+        surprise: async () => {
+          round++;
+          await load(false);
+          if (dealt[0]) apply(dealt[0]);
+        },
+      };
       box.addEventListener("click", (e) => {
         const card = e.target.closest("[data-taste-idx]");
         if (card) return apply(dealt[Number(card.getAttribute("data-taste-idx"))]);
@@ -2101,7 +2111,16 @@
         const primary = take(rest, (a, b) => a.s > b.s);
         const neutral = take(rest, (a, b) => a.s < b.s);
         rest.sort((a, b) => b.s - a.s);
-        return [primary, rest[0], rest[1], dark, light, neutral].concat(rest.slice(2)).map((x) => x.c);
+        const out = [primary, rest[0], rest[1], dark, light, neutral].concat(rest.slice(2)).map((x) => x.c);
+        // Lichte gronden: een foto levert vaak een middentint als "Light"; die wordt een lichte tint.
+        const g = window.AISB_StyleGuide && window.AISB_StyleGuide.guide;
+        if (UI.lightenGrounds && !(g && g.darkMode)) {
+          const names = ["Primary", "Secondary", "Accent", "Dark", "Light", "Neutral"];
+          const cols = out.slice(0, 6).map((c, i) => ({ name: names[i], hex: "#" + c.slice(0, 3).map((v) => v.toString(16).padStart(2, "0")).join("") }));
+          UI.lightenGrounds(cols);
+          cols.forEach((c, i) => { const h = c.hex.slice(1); out[i] = [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16)); });
+        }
+        return out;
       };
     }
 
@@ -2327,6 +2346,7 @@
         st.id = "archer-scheme";
       }
       doc.head.appendChild(st); // altijd na de stijl van de stijlgids
+      renderSchemeBar(iframe);
       const id = getScheme(iframe);
       const s = id && schemeList().find((x) => x.id === id);
       if (!s) {
@@ -2357,12 +2377,56 @@
       const hover = doc.createElement("style");
       hover.textContent = "#aisb-preview{cursor:pointer}html:hover #aisb-preview{outline:3px solid #14b8a6;outline-offset:-3px}";
       doc.head.appendChild(hover);
-      doc.body.title = "Klik voor een ander kleurschema";
+      // Zoals Relume: bij hover de kleurschema's als stalen bovenaan de sectie.
+      const barCss = doc.createElement("style");
+      barCss.textContent =
+        "#archer-scheme-bar{position:fixed;top:12px;right:12px;z-index:99999;display:none;gap:8px;align-items:center;padding:8px 10px;background:#fff !important;border:1px solid #d7dbe6;border-radius:999px;font:600 18px/1 system-ui,sans-serif !important;color:#0b1033 !important}" +
+        "html:hover #archer-scheme-bar{display:flex}" +
+        "#archer-scheme-bar button{all:unset;cursor:pointer;width:40px;height:40px;border-radius:50%;border:2px solid #fff;outline:1px solid #c8ccd8;box-sizing:border-box}" +
+        "#archer-scheme-bar button.is-on{outline:3px solid #14b8a6}" +
+        "#archer-scheme-bar button[data-id='']{width:auto;height:40px;border-radius:999px;padding:0 14px;background:#f1f3f8 !important;color:#0b1033 !important;font:600 16px/40px system-ui,sans-serif !important}";
+      doc.head.appendChild(barCss);
+      const bar = doc.createElement("div");
+      bar.id = "archer-scheme-bar";
+      bar.setAttribute("role", "toolbar");
+      bar.setAttribute("aria-label", "Kleurschema");
+      doc.body.appendChild(bar);
+      bar.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        e.preventDefault();
+        e.stopPropagation();
+        if (!b) return;
+        setScheme(iframe, b.getAttribute("data-id"));
+        reinjectFor(iframe);
+        saveGuide();
+        schemeStatus(iframe);
+      });
       doc.addEventListener("click", (e) => {
+        if (e.target.closest && e.target.closest("#archer-scheme-bar")) return;
         e.preventDefault();
         e.stopPropagation();
         cycleScheme(iframe);
-      }, true);
+      }, true);      renderSchemeBar(iframe);
+    }
+    function renderSchemeBar(iframe) {
+      let doc;
+      try {
+        doc = iframe.contentDocument;
+      } catch (e) {
+        return;
+      }
+      const bar = doc && doc.getElementById("archer-scheme-bar");
+      if (!bar) return;
+      const cur = getScheme(iframe);
+      bar.innerHTML =
+        schemeList().map((x) => `<button type="button" data-id="${x.id}" title="${x.name}" aria-label="${x.name}" class="${x.id === cur ? "is-on" : ""}" style="background:${x.hex} !important"></button>`).join("") +
+        `<button type="button" data-id="" class="${cur ? "" : "is-on"}">Standaard</button>`;
+    }
+    function schemeStatus(iframe) {
+      const id = getScheme(iframe);
+      const nm = (schemeList().find((x) => x.id === id) || {}).name;
+      const st = $("[data-scheme-status]", panel);
+      if (st) st.textContent = id ? "Kleurschema: " + nm + "." : "Kleurschema: standaard.";
     }
     const reinjectFor = (iframe) => {
       const i = sectionInfo(iframe);
@@ -2382,9 +2446,7 @@
       setScheme(iframe, next);
       reinjectFor(iframe);
       saveGuide();
-      const nm = (list.find((x) => x.id === next) || {}).name;
-      const st = $("[data-scheme-status]", panel);
-      if (st) st.textContent = next ? "Kleurschema: " + nm + "." : "Kleurschema: standaard.";
+      schemeStatus(iframe);
     }
     /** Alle secties van de getoonde pagina een schema geven (spatiebalk of knop), zonder twee keer hetzelfde na elkaar. */
     function shuffleSchemes() {
@@ -2392,20 +2454,32 @@
       if (!list.length) return;
       const slug = pick.value;
       const frames = (SG.allIframes || []).filter((f) => f._loaded && (slug === "__all" || f._pageSlug === slug)).sort((a, b) => (a._pageSlug === b._pageSlug ? a._sectionIdx - b._sectionIdx : 0));
+      // Vooral lichte vlakken (grond en toon om beurten); af en toe één sterk vlak, nooit twee na elkaar.
+      const light = list.filter((x) => lum(hexCol(x.hex)) >= 0.7).map((x) => x.id);
+      const strong = list.filter((x) => lum(hexCol(x.hex)) < 0.7 && x.id !== "ink").map((x) => x.id);
       let prev = "";
+      let sinceStrong = 0;
+      let n = 0;
       frames.forEach((f) => {
         const i = sectionInfo(f);
         if (i.global === "header") {
           prev = getScheme(f) || "ground";
           return;
         }
-        let opts = list.map((x) => x.id).filter((id) => id !== prev);
+        let id;
         if (i.global === "footer") {
           // De footer sluit de pagina af: het donkerste schema.
           const dark = list.slice().sort((a, b) => lum(hexCol(a.hex)) - lum(hexCol(b.hex)))[0];
-          if (dark) opts = [dark.id];
+          id = dark ? dark.id : "";
+        } else if (n > 0 && strong.length && sinceStrong >= 2 && Math.random() < 0.35) {
+          id = strong[Math.floor(Math.random() * strong.length)];
+          sinceStrong = 0;
+        } else {
+          const opts = light.filter((x) => x !== prev);
+          id = (opts.length ? opts : light)[n % Math.max(1, (opts.length ? opts : light).length)] || "";
+          sinceStrong++;
         }
-        const id = opts[Math.floor(Math.random() * opts.length)] || "";
+        n++;
         setScheme(f, id);
         prev = id;
       });
@@ -2455,6 +2529,146 @@
       });
     }
     UI.sectionSchemes = { cycle: cycleScheme, shuffle: shuffleSchemes, reset: resetSchemes };
+
+    /* Lichte achtergronden: "Light" en "Neutral" zijn de grond van de secties en moeten echt licht zijn. */
+    const toHex = (c) => "#" + c.slice(0, 3).map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
+    const groundOf = (hex, L) => {
+      const c = hexCol(hex);
+      if (!c) return hex;
+      const { h, s } = hslOf(c);
+      return toHex(hsl2rgb(h, Math.min(s, 0.3), L));
+    };
+    function lightenGrounds(colours) {
+      if (!Array.isArray(colours)) return false;
+      const get = (n) => colours.find((c) => c && c.name === n);
+      const primary = get("Primary") || get("Accent");
+      const base = (primary && primary.hex) || "#808080";
+      let changed = false;
+      const lightC = get("Light");
+      if (lightC && hexCol(lightC.hex) && lum(hexCol(lightC.hex)) < 0.75) {
+        lightC.hex = groundOf(lightC.hex && hslOf(hexCol(lightC.hex)).s > 0.05 ? lightC.hex : base, 0.965);
+        changed = true;
+      }
+      const neutralC = get("Neutral");
+      if (neutralC && hexCol(neutralC.hex) && lum(hexCol(neutralC.hex)) < 0.6) {
+        neutralC.hex = groundOf(lightC && hexCol(lightC.hex) ? lightC.hex : base, 0.925);
+        changed = true;
+      }
+      const darkC = get("Dark");
+      if (darkC && hexCol(darkC.hex) && lum(hexCol(darkC.hex)) > 0.2) {
+        const c = hexCol(darkC.hex);
+        darkC.hex = toHex(hsl2rgb(hslOf(c).h, Math.min(hslOf(c).s, 0.5), 0.16));
+        changed = true;
+      }
+      return changed;
+    }
+    UI.lightenGrounds = lightenGrounds;
+    // Zelf kiezen: de harmonie van de stijlgids maakt "Light" vaak te donker.
+    if (typeof SG.renderSwatchRow === "function") {
+      const prevRender = SG.renderSwatchRow;
+      SG.renderSwatchRow = function (container, colours) {
+        if (container && container === SG.el.manualSwatches && Array.isArray(colours) && colours !== SG.extractedColours) lightenGrounds(colours);
+        return prevRender.apply(this, arguments);
+      };
+    }
+    // Bestaande projecten één keer omzetten naar lichte gronden.
+    setTimeout(() => {
+      if (Array.isArray(SG.guide) || !SG.guide || SG.guide.groundsLight || SG.guide.darkMode) return;
+      const cols = SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : SG.guide.colours;
+      if (!cols || !cols.length) return;
+      SG.guide.groundsLight = 1;
+      if (lightenGrounds(cols)) {
+        SG.extractedColours = cols;
+        [SG.el.extractedSwatches, SG.el.manualSwatches].forEach((c) => c && SG.renderSwatchRow(c, SG.extractedColours));
+        SG.applyOverridesToAllIframes();
+      } else if (SG.saveDraft) SG.saveDraft();
+    }, 2500);
+
+    /* Bovenaan het voorbeeld, zoals Relume: Verras me, licht/donker en concepten. */
+    if (schemeView && header) {
+      const bar = document.createElement("div");
+      bar.className = "archer-sg-actions";
+      header.appendChild(bar);
+      const renderBar = () => {
+        const g = Array.isArray(SG.guide) ? {} : SG.guide || {};
+        const concepts = Array.isArray(g.concepts) ? g.concepts : [];
+        bar.innerHTML =
+          '<div class="archer-sg-concepts" role="group" aria-label="Concepten">' +
+          concepts.map((c, i) => `<span class="archer-sg-concept${g.activeConcept === i ? " is-active" : ""}"><button type="button" data-concept="${i}">${esc(c.name)}</button><button type="button" class="archer-sg-concept-x" data-concept-del="${i}" aria-label="${esc(c.name)} verwijderen">✕</button></span>`).join("") +
+          (concepts.length < 3 ? '<button type="button" class="archer-link-btn" data-concept-save>+ Bewaar als concept</button>' : "") +
+          "</div>" +
+          `<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-sg-dark aria-pressed="${g.darkMode ? "true" : "false"}">${g.darkMode ? "Licht" : "Donker"}</button>` +
+          '<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-sg-surprise>Verras me</button>';
+      };
+      const snapshot = (name) => ({
+        name,
+        colours: (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : SG.guide.colours || []).map((c) => ({ name: c.name, hex: c.hex })),
+        headingFont: SG.guide.headingFont || "",
+        bodyFont: SG.guide.bodyFont || "",
+        tasteDirection: SG.guide.tasteDirection ? Object.assign({}, SG.guide.tasteDirection) : null,
+        sectionSchemes: JSON.parse(JSON.stringify(SG.guide.sectionSchemes || {})),
+        darkMode: !!SG.guide.darkMode,
+      });
+      const applyConcept = (c) => {
+        if (!c || !UI.taste) return;
+        UI.taste.setColours(c.colours);
+        if (c.headingFont) UI.taste.setFonts(c.headingFont, c.bodyFont || c.headingFont);
+        SG.guide.tasteDirection = c.tasteDirection ? Object.assign({}, c.tasteDirection) : SG.guide.tasteDirection;
+        SG.guide.sectionSchemes = JSON.parse(JSON.stringify(c.sectionSchemes || {}));
+        SG.guide.darkMode = !!c.darkMode;
+        SG.applyOverridesToAllIframes();
+        UI.taste.render();
+      };
+      bar.addEventListener("click", async (e) => {
+        if (Array.isArray(SG.guide)) SG.guide = {};
+        const g = SG.guide;
+        let b;
+        if ((b = e.target.closest("[data-concept-save]"))) {
+          g.concepts = Array.isArray(g.concepts) ? g.concepts : [];
+          g.concepts.push(snapshot("Concept " + (g.concepts.length + 1)));
+          g.activeConcept = g.concepts.length - 1;
+          saveGuide();
+        } else if ((b = e.target.closest("[data-concept-del]"))) {
+          const i = Number(b.getAttribute("data-concept-del"));
+          g.concepts.splice(i, 1);
+          g.concepts.forEach((c, j) => (c.name = "Concept " + (j + 1)));
+          if (g.activeConcept === i) g.activeConcept = null;
+          else if (g.activeConcept > i) g.activeConcept--;
+          saveGuide();
+        } else if ((b = e.target.closest("[data-concept]"))) {
+          const i = Number(b.getAttribute("data-concept"));
+          // Wijzigingen aan het actieve concept eerst bewaren, dan wisselen.
+          if (typeof g.activeConcept === "number" && g.concepts[g.activeConcept] && g.activeConcept !== i) {
+            g.concepts[g.activeConcept] = snapshot(g.concepts[g.activeConcept].name);
+          }
+          g.activeConcept = i;
+          applyConcept(g.concepts[i]);
+        } else if (e.target.closest("[data-sg-dark]")) {
+          // Zoals Relume: het concept omkeren (grond en inkt wisselen), geen aparte donkere modus.
+          const cols = SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : g.colours || [];
+          const get = (n) => cols.find((c) => c.name === n);
+          const L = get("Light"), D = get("Dark"), N = get("Neutral");
+          if (L && D) {
+            [L.hex, D.hex] = [D.hex, L.hex];
+            if (N) {
+              if (!g.darkMode) {
+                g._lightNeutral = N.hex;
+                N.hex = toHex(hsl2rgb(hslOf(hexCol(L.hex)).h, Math.min(hslOf(hexCol(L.hex)).s, 0.4), 0.2));
+              } else if (g._lightNeutral) N.hex = g._lightNeutral;
+            }
+            g.darkMode = !g.darkMode;
+            UI.taste && UI.taste.setColours(cols);
+            SG.applyOverridesToAllIframes();
+          }
+        } else if (e.target.closest("[data-sg-surprise]")) {
+          if (UI.taste) await UI.taste.surprise();
+          setTimeout(shuffleSchemes, 400);
+        } else return;
+        renderBar();
+      });
+      renderBar();
+      setTimeout(renderBar, 2500);
+    }
 
     if (typeof SG.injectOverrideIntoIframe === "function") {
       const origInject = SG.injectOverrideIntoIframe;
