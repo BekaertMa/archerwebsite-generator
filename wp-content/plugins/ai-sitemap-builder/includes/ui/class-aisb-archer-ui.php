@@ -124,6 +124,7 @@ class AISB_Archer_UI {
       'projectId' => isset($_GET['aisb_project']) ? (int) $_GET['aisb_project'] : 0,
       'sitemapId' => isset($_GET['aisb_sitemap']) ? (int) $_GET['aisb_sitemap'] : 0,
       'isStaff'   => current_user_can('manage_options') ? 1 : 0,
+      'published' => (!empty($_GET['aisb_project']) && get_post_meta((int) $_GET['aisb_project'], 'aisb_published_url', true)) ? 1 : 0,
       'sectionLabels' => self::section_labels(),
     ]);
   }

@@ -241,12 +241,12 @@ class AISB_Archer_Chrome {
         if (strpos(' ' . $cls . ' ', ' archer-' . $region . ' ') === false) $s['_cssClasses'] = trim($cls . ' archer-' . $region);
       }
       if ($name === 'logo') {
-        $is_ph = !empty($s['logo']['isPlaceholder']) || preg_match('/placeholder/i', (string) ($s['logo']['url'] ?? ''));
-        // Logo uit de stijlgids (ook een data-URI: Bricks toont die gewoon), anders de naam.
-        if ($ctx['logo'] !== '' && $is_ph) {
+        // Het logo in een sectiesjabloon is altijd een voorbeeld (Brixies: "Logoipsum", "placeholder"):
+        // het logo uit de stijlgids (ook een data-URI: Bricks toont die gewoon), anders de naam.
+        if ($ctx['logo'] !== '') {
           $s['logo'] = ['url' => $ctx['logo'], 'external' => true];
           unset($s['logoInverse']);
-        } elseif ($is_ph || empty($s['logo'])) {
+        } else {
           unset($s['logo'], $s['logoInverse']);
           $s['logoText'] = $ctx['name'];
         }

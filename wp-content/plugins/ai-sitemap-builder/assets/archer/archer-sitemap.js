@@ -1350,7 +1350,7 @@
         scheduleRender();
         saver.run();
       };
-      // Vier vragen tegelijk: tot zestien pagina's worden tegelijk geschreven.
+      // Zes vragen tegelijk: tot 24 pagina's worden in één ronde geschreven (de site praat HTTP/2).
       let next = 0;
       const worker = async () => {
         while (next < batches.length) {
@@ -1359,7 +1359,7 @@
         }
       };
       setProgress(count(), (state.pages || []).length);
-      await Promise.all([worker(), worker(), worker(), worker()]);
+      await Promise.all(Array.from({ length: 6 }, worker));
       render();
       await saver.flush();
     };

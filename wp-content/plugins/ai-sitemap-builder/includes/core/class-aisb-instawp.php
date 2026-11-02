@@ -25,6 +25,18 @@ class AISB_InstaWP {
   /** @var AISB_Wireframe_Compiler */
   private $compiler;
 
+  /** Archer: aantal XML-RPC-aanroepen per system.multicall-verzoek bij het publiceren. */
+  private const ARCHER_MULTICALL_SIZE = 8;
+
+  /** Archer: aantal Bricks-saves dat tegelijk loopt bij het publiceren. */
+  private const ARCHER_PARALLEL_SAVES = 4;
+
+  /** @var array<string,array> Archer: login-cookies per site, zodat één publicatie maar één keer inlogt. */
+  private $archer_login_cache = [];
+
+  /** @var array<string,string> Archer: REST-nonce per site. */
+  private $archer_rest_nonce_cache = [];
+
   public function __construct(AISB_Wireframe_Compiler $compiler) {
     $this->compiler = $compiler;
   }
@@ -46,6 +58,7 @@ class AISB_InstaWP {
 
   public function init(): void {
     add_action('wp_ajax_' . self::AJAX_ACTION, [$this, 'ajax_publish_site']);
+    add_action('wp_ajax_aisb_archer_prewarm', [$this, 'ajax_archer_prewarm']);
     add_action('admin_post_' . self::AUTO_LOGIN_ACTION, [$this, 'handle_auto_login_redirect']);
     $this->register_bricks_meta_auth();
   }
@@ -308,6 +321,15 @@ class AISB_InstaWP {
       }
     }
 
+    // Archer: loopt de voorbereiding van de site nog (ajax_archer_prewarm), wacht daar dan op en gebruik die site.
+    $this->archer_wait_for_prewarm($project_id);
+    if (!$site_name_supplied) {
+      $archer_prewarmed = $this->load_latest_publish_session($project_id);
+      if (is_array($archer_prewarmed) && !empty($archer_prewarmed['site_name'])) {
+        $site_name = sanitize_title((string) $archer_prewarmed['site_name']);
+      }
+    }
+
     try {
       if (is_array($export)) {
         $result = $this->publish_export_site($project, $export, $site_name);
@@ -341,6 +363,91 @@ class AISB_InstaWP {
     wp_send_json_success($result);
   }
 
+  /* ───────────────── Archer: site op voorhand klaarzetten ───────────────── */
+
+  private function archer_prewarm_key(int $project_id): string {
+    return 'aisb_archer_prewarm_' . $project_id;
+  }
+
+  /** Loopt er een voorbereiding voor dit project? Rechtstreeks uit de database, zonder cache. */
+  private function archer_prewarm_running(int $project_id): bool {
+    global $wpdb;
+    $since = (int) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $this->archer_prewarm_key($project_id)));
+    return $since > 0 && time() - $since < 300;
+  }
+
+  private function archer_wait_for_prewarm(int $project_id): void {
+    $deadline = time() + 240;
+    $waited = false;
+    while ($this->archer_prewarm_running($project_id) && time() < $deadline) {
+      $waited = true;
+      sleep(2);
+    }
+    if ($waited) {
+      // De sessie werd in een ander verzoek bewaard: niet uit de cache van dit verzoek lezen.
+      wp_cache_delete('_transient_' . $this->get_publish_session_key($project_id), 'options');
+      wp_cache_delete($this->get_publish_session_key($project_id), 'transient');
+      wp_cache_delete('notoptions', 'options');
+      error_log('[AISB] Archer: gewacht op de voorbereiding van project ' . $project_id . '.');
+    }
+  }
+
+  /**
+   * AJAX: de InstaWP-site van een project al klonen terwijl de klant nog aan de stijl of de foto's werkt.
+   * Publiceren vindt die site daarna terug (get_or_create_publish_site) en slaat het klonen over.
+   */
+  public function ajax_archer_prewarm(): void {
+    global $wpdb;
+    if (!is_user_logged_in()) wp_send_json_error(['message' => 'Not logged in'], 401);
+    $nonce = isset($_POST['nonce']) ? (string) wp_unslash($_POST['nonce']) : '';
+    if (!$this->verify_nonce($nonce)) wp_send_json_error(['message' => 'Invalid nonce'], 403);
+
+    $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
+    $project = $project_id ? get_post($project_id) : null;
+    if (!$project || $project->post_type !== 'aisb_project' || (int) $project->post_author !== (int) get_current_user_id()) {
+      wp_send_json_error(['message' => 'Forbidden'], 403);
+    }
+
+    $settings = AISB_Settings::get_settings();
+    $api_key = trim((string) ($settings['instawp_api_key'] ?? ''));
+    $template_id = trim((string) ($settings['instawp_template_id'] ?? ''));
+    if ($api_key === '' || $template_id === '') wp_send_json_success(['status' => 'not_configured']);
+
+    $session = $this->load_latest_publish_session($project_id);
+    if (is_array($session) && !empty($session['site_name'])) wp_send_json_success(['status' => 'ready']);
+    if ($this->archer_prewarm_running($project_id)) wp_send_json_success(['status' => 'running']);
+
+    $key = $this->archer_prewarm_key($project_id);
+    $wpdb->replace($wpdb->options, ['option_name' => $key, 'option_value' => (string) time(), 'autoload' => 'no']);
+
+    // Meteen antwoorden; het klonen loopt verder, ook als de browser de pagina verlaat.
+    ignore_user_abort(true);
+    if (function_exists('set_time_limit')) @set_time_limit(360);
+    $body = wp_json_encode(['success' => true, 'data' => ['status' => 'started']]);
+    if (!headers_sent()) {
+      header('Content-Type: application/json; charset=utf-8');
+      header('Content-Length: ' . strlen($body));
+      header('Connection: close');
+    }
+    echo $body;
+    while (ob_get_level() > 0) @ob_end_flush();
+    @flush();
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    if (function_exists('session_write_close')) @session_write_close();
+
+    $started = microtime(true);
+    try {
+      $timeout = $this->normalise_instawp_timeout($settings['instawp_timeout'] ?? 240);
+      $result = $this->get_or_create_publish_site($project_id, $this->default_site_name($project), $template_id, $api_key, $timeout);
+      error_log(sprintf('[AISB] Archer: site voor project %d %s in %.1fs.', $project_id, is_wp_error($result) ? 'niet klaargezet (' . $result->get_error_message() . ')' : 'klaargezet', microtime(true) - $started));
+    } catch (\Throwable $e) {
+      error_log('[AISB] Archer: voorbereiding project ' . $project_id . ' fout: ' . $e->getMessage());
+    } finally {
+      $wpdb->delete($wpdb->options, ['option_name' => $key]);
+    }
+    exit;
+  }
+
   private function verify_nonce(string $nonce): bool {
     if ($nonce === '') return false;
     return (bool) (wp_verify_nonce($nonce, AISB_Plugin::NONCE_ACTION) || wp_verify_nonce($nonce, 'aisb_sg_nonce'));
@@ -361,7 +468,10 @@ class AISB_InstaWP {
       $base = 'aisb-site';
     }
 
-    return substr($base, 0, 40) . '-' . (int) $project->ID . '-' . gmdate('His');
+    // Archer: InstaWP aanvaardt maximaal 30 tekens voor de sitenaam.
+    $suffix = '-' . (int) $project->ID . '-' . gmdate('His');
+    $base = rtrim(substr($base, 0, max(4, 30 - strlen($suffix))), '-');
+    return $base . $suffix;
   }
 
   private function acquire_publish_lock(int $project_id, string $site_name): bool {
@@ -1004,6 +1114,9 @@ class AISB_InstaWP {
     $project_name = $project instanceof WP_Post ? (string) $project->post_title : '';
     $bricks_injections = [];
 
+    // Archer: eerst alle pagina's voorbereiden, dan aanmaken in enkele system.multicall-verzoeken.
+    // Eén verzoek per pagina liep tegen de limiet van InstaWP (HTTP 429, telkens 10 s wachten).
+    $archer_jobs = [];
     foreach ($pages as $page_index => $page) {
       if (!is_array($page)) continue;
 
@@ -1055,39 +1168,59 @@ class AISB_InstaWP {
           $bricks_payload,
           isset($remote_page['custom_fields']) && is_array($remote_page['custom_fields']) ? $remote_page['custom_fields'] : []
         );
-        error_log('[AISB] Publishing Bricks meta for page "' . $slug . '" with keys: ' . implode(',', array_map(static function ($field): string {
-          return (string) ($field['key'] ?? '');
-        }, $content_struct['custom_fields'])));
+      }
+
+      $archer_jobs[] = [
+        'slug' => $slug,
+        'content_struct' => $content_struct,
+        'remote_page' => $remote_page,
+        'bricks_payload' => $bricks_payload,
+      ];
+    }
+
+    $archer_calls = [];
+    foreach ($archer_jobs as $job) {
+      $remote_page = $job['remote_page'];
+      if (is_array($remote_page) && !empty($remote_page['page_id'])) {
+        $archer_calls[] = ['methodName' => 'wp.editPage', 'params' => [self::XMLRPC_BLOG_ID, (int) $remote_page['page_id'], $site['username'], $site['password'], $job['content_struct'], true]];
+      } else {
+        $archer_calls[] = ['methodName' => 'wp.newPage', 'params' => [self::XMLRPC_BLOG_ID, $site['username'], $site['password'], $job['content_struct']]];
+      }
+    }
+    $archer_started = microtime(true);
+    $archer_results = $this->archer_xmlrpc_multicall($site['xmlrpc_url'], $timeout, $archer_calls);
+
+    foreach ($archer_jobs as $job_index => $job) {
+      $slug = $job['slug'];
+      $content_struct = $job['content_struct'];
+      $remote_page = $job['remote_page'];
+      $bricks_payload = $job['bricks_payload'];
+      $result = $archer_results[$job_index] ?? null;
+
+      if ($result === null) {
+        // Terugval: deze pagina apart, zoals vroeger.
+        $call = $archer_calls[$job_index];
+        $result = $this->call_xmlrpc(
+          $site['xmlrpc_url'],
+          $timeout,
+          $call['methodName'],
+          $call['params'],
+          ($call['methodName'] === 'wp.editPage' ? 'update' : 'create') . ' page "' . $slug . '"'
+        );
+        if (is_wp_error($result)) {
+          return $result;
+        }
       }
 
       $mode = 'created';
       if (is_array($remote_page) && !empty($remote_page['page_id'])) {
-        $result = $this->call_xmlrpc(
-          $site['xmlrpc_url'],
-          $timeout,
-          'wp.editPage',
-          [self::XMLRPC_BLOG_ID, (int) $remote_page['page_id'], $site['username'], $site['password'], $content_struct, true],
-          'update page "' . $slug . '"'
-        );
-        if (is_wp_error($result)) {
-          return $result;
-        }
-
         $page_id = (int) $remote_page['page_id'];
         $mode = 'updated';
       } else {
-        $result = $this->call_xmlrpc(
-          $site['xmlrpc_url'],
-          $timeout,
-          'wp.newPage',
-          [self::XMLRPC_BLOG_ID, $site['username'], $site['password'], $content_struct],
-          'create page "' . $slug . '"'
-        );
-        if (is_wp_error($result)) {
-          return $result;
-        }
-
         $page_id = (int) $result;
+      }
+      if ($page_id <= 0) {
+        return new WP_Error('aisb_instawp_xmlrpc_failed', 'Failed to create page "' . $slug . '" on the new InstaWP site.', ['status' => 502]);
       }
 
       $existing_pages[$slug] = [
@@ -1116,6 +1249,7 @@ class AISB_InstaWP {
         'url' => $this->build_remote_page_url($site['site_url'], $slug),
       ];
     }
+    error_log(sprintf('[AISB] Archer: %d pagina\'s aangemaakt in %.1fs (%d multicall-verzoeken).', count($published_pages), microtime(true) - $archer_started, (int) ceil(count($archer_calls) / self::ARCHER_MULTICALL_SIZE)));
 
     $bricks_code_execution_ok = $this->configure_bricks_code_execution($site, $timeout);
 
@@ -1140,19 +1274,34 @@ class AISB_InstaWP {
       if (count($nav_menu_items) >= 10) break;
     }
 
+    // Archer: alle menu's samen via de REST batch-API (één login, enkele verzoeken in plaats van één per item).
+    $archer_menu_specs = [];
     if (!empty($nav_menu_items)) {
-      $menu_label = $project_name !== '' ? $project_name . ' Menu' : 'Main Menu';
-      $nav_menu_id = $this->configure_remote_nav_menu($clone, $site, $nav_menu_items, $menu_label, $timeout);
+      $archer_menu_specs['__default'] = [
+        'name' => $project_name !== '' ? $project_name . ' Menu' : 'Main Menu',
+        'items' => $nav_menu_items,
+      ];
     }
-
-    // Archer: menu's volgens de sitemap (hoofdmenu met submenu's, footergroepen, juridisch).
-    $archer_menu_ids = [];
     if (class_exists('AISB_Archer_Chrome')) {
       foreach (AISB_Archer_Chrome::publish_menus((int) $project->ID, $published_pages) as $archer_role => $archer_items) {
-        $archer_mid = $this->configure_remote_nav_menu($clone, $site, $archer_items, ($project_name !== '' ? $project_name : 'Site') . ' ' . $archer_role, $timeout);
-        if ($archer_mid > 0) $archer_menu_ids[$archer_role] = $archer_mid;
+        $archer_menu_specs[$archer_role] = [
+          'name' => ($project_name !== '' ? $project_name : 'Site') . ' ' . $archer_role,
+          'items' => $archer_items,
+        ];
       }
     }
+    $archer_started = microtime(true);
+    $archer_all_menu_ids = $this->archer_configure_menus_batch($site, $archer_menu_specs, $timeout);
+    foreach ($archer_menu_specs as $archer_key => $archer_spec) {
+      if (empty($archer_all_menu_ids[$archer_key])) {
+        // Terugval: dit menu op de oude manier.
+        $archer_all_menu_ids[$archer_key] = $this->configure_remote_nav_menu($clone, $site, $archer_spec['items'], $archer_spec['name'], $timeout);
+      }
+    }
+    error_log(sprintf('[AISB] Archer: %d menu\'s klaar in %.1fs.', count(array_filter($archer_all_menu_ids)), microtime(true) - $archer_started));
+    $nav_menu_id = (int) ($archer_all_menu_ids['__default'] ?? 0);
+    unset($archer_all_menu_ids['__default']);
+    $archer_menu_ids = array_filter(array_map('intval', $archer_all_menu_ids));
 
     if (($nav_menu_id > 0 || $archer_menu_ids) && !empty($bricks_injections)) {
       foreach ($bricks_injections as $injection_index => $injection) {
@@ -1213,6 +1362,211 @@ class AISB_InstaWP {
    *
    * @return array<int, array{post_id:int, slug:string, ok:bool, message?:string}>
    */
+  /**
+   * Archer: meerdere XML-RPC-aanroepen in één verzoek (system.multicall).
+   * Geeft per aanroep het resultaat terug, of null als die aanroep apart opnieuw moet.
+   */
+  private function archer_xmlrpc_multicall(string $xmlrpc_url, int $timeout, array $calls): array {
+    $results = array_fill(0, count($calls), null);
+    foreach (array_chunk($calls, self::ARCHER_MULTICALL_SIZE, true) as $chunk) {
+      $keys = array_keys($chunk);
+      $response = $this->call_xmlrpc($xmlrpc_url, $timeout, 'system.multicall', [array_values($chunk)], 'publish pages (batch)');
+      if (is_wp_error($response) || !is_array($response)) {
+        error_log('[AISB] Archer multicall mislukt, terugval per pagina: ' . (is_wp_error($response) ? $response->get_error_message() : 'ongeldig antwoord'));
+        continue;
+      }
+      foreach (array_values($response) as $i => $item) {
+        if (!isset($keys[$i])) break;
+        if (is_array($item) && array_key_exists(0, $item) && !isset($item['faultCode'])) {
+          $results[$keys[$i]] = $item[0];
+        } else {
+          error_log('[AISB] Archer multicall: aanroep ' . $keys[$i] . ' gaf een fout: ' . (is_array($item) ? (string) ($item['faultString'] ?? '') : ''));
+        }
+      }
+    }
+    return $results;
+  }
+
+  /**
+   * Archer: REST batch-verzoek (/batch/v1, max. 25 per verzoek). Geeft per verzoek
+   * ['status' => int, 'body' => array] terug, of null als het niet lukte.
+   */
+  private function archer_rest_batch(string $site_url, array $cookies, array $headers, array $requests, int $timeout): array {
+    $out = array_fill(0, count($requests), null);
+    foreach (array_chunk($requests, 25, true) as $chunk) {
+      $keys = array_keys($chunk);
+      for ($try = 0; $try < 3; $try++) {
+        $response = $this->remote_request($site_url . '/wp-json/batch/v1', [
+          'method' => 'POST',
+          'timeout' => max(20, min(90, $timeout)),
+          'cookies' => $cookies,
+          'headers' => $headers,
+          'body' => wp_json_encode(['validation' => 'normal', 'requests' => array_values($chunk)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+        $code = is_wp_error($response) ? 0 : (int) ($response['code'] ?? 0);
+        if ($code === 429) {
+          usleep(3000000);
+          continue;
+        }
+        break;
+      }
+      if (is_wp_error($response) || !in_array($code, [200, 207], true)) {
+        error_log('[AISB] Archer REST batch HTTP ' . $code . ': ' . (is_wp_error($response) ? $response->get_error_message() : substr((string) ($response['body'] ?? ''), 0, 300)));
+        continue;
+      }
+      $decoded = json_decode((string) ($response['body'] ?? ''), true);
+      foreach (array_values((array) ($decoded['responses'] ?? [])) as $i => $r) {
+        if (!isset($keys[$i]) || !is_array($r)) continue;
+        $out[$keys[$i]] = ['status' => (int) ($r['status'] ?? 0), 'body' => is_array($r['body'] ?? null) ? $r['body'] : []];
+      }
+    }
+    return $out;
+  }
+
+  /**
+   * Archer: alle menu's en hun items in enkele REST batch-verzoeken. $specs: key => ['name', 'items'];
+   * items: title, object_id, url en optioneel parent (index in dezelfde lijst).
+   * Geeft key => menu-id terug voor de menu's die gelukt zijn.
+   */
+  private function archer_configure_menus_batch(array $site, array $specs, int $timeout): array {
+    if (!$specs) return [];
+    $login = $this->remote_wordpress_login($site);
+    if (is_wp_error($login)) {
+      error_log('[AISB] Archer menu batch: login mislukt: ' . $login->get_error_message());
+      return [];
+    }
+    $cookies = $login['cookies'];
+    $site_url = untrailingslashit((string) ($site['site_url'] ?? ''));
+    $nonce = $this->fetch_wp_rest_nonce($site_url, $cookies, $timeout);
+    if ($nonce === '') {
+      error_log('[AISB] Archer menu batch: geen REST nonce.');
+      return [];
+    }
+    $headers = ['X-WP-Nonce' => $nonce, 'Content-Type' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'];
+
+    $keys = array_keys($specs);
+    $requests = [];
+    foreach ($keys as $key) {
+      $slug = sanitize_title((string) $specs[$key]['name']);
+      $requests[] = ['method' => 'POST', 'path' => '/wp/v2/menus', 'body' => ['name' => (string) $specs[$key]['name'], 'slug' => $slug !== '' ? $slug : 'menu-' . sanitize_key((string) $key)]];
+    }
+    $ids = [];
+    foreach ($this->archer_rest_batch($site_url, $cookies, $headers, $requests, $timeout) as $i => $r) {
+      if (is_array($r) && in_array($r['status'], [200, 201], true) && !empty($r['body']['id'])) {
+        $ids[$keys[$i]] = (int) $r['body']['id'];
+      } else {
+        error_log('[AISB] Archer menu batch: menu "' . $specs[$keys[$i]]['name'] . '" niet aangemaakt (' . (is_array($r) ? $r['status'] . ' ' . (string) ($r['body']['message'] ?? '') : 'geen antwoord') . ').');
+      }
+    }
+    if (!$ids) return [];
+
+    // Items per niveau: eerst de items zonder ouder, dan hun kinderen, enzovoort.
+    $created = [];
+    for ($wave = 0; $wave < 4; $wave++) {
+      $requests = [];
+      $map = [];
+      foreach ($ids as $key => $menu_id) {
+        foreach (array_values((array) $specs[$key]['items']) as $order => $item) {
+          if (!is_array($item) || isset($created[$key][$order])) continue;
+          $title = sanitize_text_field((string) ($item['title'] ?? ''));
+          if ($title === '') {
+            $created[$key][$order] = 0;
+            continue;
+          }
+          $parent = isset($item['parent']) ? (int) $item['parent'] : -1;
+          if ($parent >= 0 && !isset($created[$key][$parent])) continue; // ouder nog niet aangemaakt
+          $body = [
+            'title' => $title,
+            'menus' => $menu_id,
+            'status' => 'publish',
+            'menu_order' => $order + 1,
+          ];
+          if ($parent >= 0 && !empty($created[$key][$parent])) $body['parent'] = $created[$key][$parent];
+          $object_id = (int) ($item['object_id'] ?? 0);
+          $url = (string) ($item['url'] ?? '');
+          if ($object_id > 0) {
+            $body['type'] = 'post_type';
+            $body['object'] = 'page';
+            $body['object_id'] = $object_id;
+          } else {
+            $body['type'] = 'custom';
+            $body['url'] = $url !== '' ? $url : '#';
+          }
+          $requests[] = ['method' => 'POST', 'path' => '/wp/v2/menu-items', 'body' => $body];
+          $map[] = [$key, $order];
+        }
+      }
+      if (!$requests) break;
+      foreach ($this->archer_rest_batch($site_url, $cookies, $headers, $requests, $timeout) as $i => $r) {
+        [$key, $order] = $map[$i];
+        $ok = is_array($r) && in_array($r['status'], [200, 201], true) && !empty($r['body']['id']);
+        $created[$key][$order] = $ok ? (int) $r['body']['id'] : 0;
+        if (!$ok) error_log('[AISB] Archer menu batch: item ' . $order . ' van ' . $key . ' mislukt (' . (is_array($r) ? $r['status'] . ' ' . (string) ($r['body']['message'] ?? '') : 'geen antwoord') . ').');
+      }
+    }
+
+    // Een menu waarvan geen enkel item lukte, telt niet als gelukt (dan neemt de terugval het over).
+    foreach ($ids as $key => $menu_id) {
+      $items = array_values((array) $specs[$key]['items']);
+      if ($items && !array_filter((array) ($created[$key] ?? []))) unset($ids[$key]);
+    }
+
+    // Theme-locaties (Bricks heeft er meestal geen): het hoofdmenu toewijzen als er zijn.
+    $main = $ids['main'] ?? $ids['main_cta'] ?? $ids['__default'] ?? 0;
+    if ($main > 0) $this->assign_menu_to_locations_via_rest($site_url, $cookies, $headers, $main, $timeout);
+    return $ids;
+  }
+
+  /**
+   * Archer: Bricks-saves tegelijk versturen (max. ARCHER_PARALLEL_SAVES per keer).
+   * Geeft per job-index true/false terug; ontbrekende indexen moeten apart opnieuw.
+   */
+  private function archer_parallel_bricks_saves(string $ajax_url, string $site_url, array $cookies, string $nonce, array $jobs, int $timeout): array {
+    $out = [];
+    if (!$jobs || $nonce === '') return $out;
+    $requests_class = class_exists('\WpOrg\Requests\Requests') ? '\WpOrg\Requests\Requests' : (class_exists('Requests') ? 'Requests' : '');
+    if ($requests_class === '') return $out;
+    $cookie_header = implode('; ', array_filter(array_map(static function ($c): string {
+      return $c instanceof WP_Http_Cookie ? (string) $c->getHeaderValue() : '';
+    }, $cookies)));
+    $options = [
+      'timeout' => max(20, min(120, $timeout)),
+      'connect_timeout' => 15,
+      'verify' => ABSPATH . WPINC . '/certificates/ca-bundle.crt',
+      'useragent' => 'AI Sitemap Builder Publisher',
+    ];
+    foreach (array_chunk($jobs, self::ARCHER_PARALLEL_SAVES, true) as $chunk) {
+      $requests = [];
+      foreach ($chunk as $i => $job) {
+        $requests[$i] = [
+          'url' => $ajax_url,
+          'type' => 'POST',
+          'headers' => [
+            'Cookie' => $cookie_header,
+            'Referer' => $site_url . '/?page_id=' . (int) $job['post_id'] . '&bricks=run',
+            'X-Requested-With' => 'XMLHttpRequest',
+            'Content-Type' => 'application/x-www-form-urlencoded',
+          ],
+          'data' => http_build_query(array_merge($job['body'], ['nonce' => $nonce])),
+          'options' => $options,
+        ];
+      }
+      try {
+        $responses = $requests_class::request_multiple($requests, $options);
+      } catch (\Throwable $e) {
+        error_log('[AISB] Archer parallelle Bricks-saves mislukt: ' . $e->getMessage());
+        return $out;
+      }
+      foreach ($responses as $i => $r) {
+        if ($r instanceof \Throwable || !is_object($r) || !isset($r->status_code)) continue;
+        $decoded = json_decode((string) $r->body, true);
+        $out[$i] = (int) $r->status_code === 200 && is_array($decoded) && !empty($decoded['success']);
+        if (!$out[$i]) error_log('[AISB] Archer Bricks-save post ' . (int) $chunk[$i]['post_id'] . ' HTTP ' . (int) $r->status_code . ' (wordt apart opnieuw geprobeerd).');
+      }
+    }
+    return $out;
+  }
+
   private function inject_bricks_via_builder(array $site, array $injections, int $timeout, array $global_classes = [], array $theme_styles = [], array $global_variables = [], array $global_variables_categories = [], array $color_palette = []): array {
     $results = [];
 
@@ -1233,128 +1587,106 @@ class AISB_InstaWP {
     $cookies = $login['cookies'];
     $site_url = untrailingslashit((string) ($site['site_url'] ?? ''));
     $ajax_url = $site_url . '/wp-admin/admin-ajax.php';
+    $json = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+    $started = microtime(true);
 
-    // Bricks global classes hold the styling that page elements reference via
-    // `_cssGlobalClasses`. The clone template does not ship the project's
-    // classes, so buttons/sections lose their styling. `bricks_save_post`
-    // persists a `globalClasses` POST param to the BRICKS_DB_GLOBAL_CLASSES
-    // option, so we attach the project's classes to the first save and stop once
-    // they have been stored.
-    $global_classes_sent = empty($global_classes);
+    // Bricks-globals (theme styles, variabelen, palet, global classes) gaan mee met de eerste
+    // geslaagde save; `bricks_save_post` bewaart ze in de opties van de clone.
+    $extra = [];
+    if (!empty($theme_styles)) $extra['themeStyles'] = wp_json_encode($theme_styles, $json);
+    if (!empty($global_variables)) $extra['globalVariables'] = wp_json_encode(array_values($global_variables), $json);
+    if (!empty($global_variables_categories)) $extra['globalVariablesCategories'] = wp_json_encode(array_values($global_variables_categories), $json);
+    if (!empty($color_palette)) $extra['colorPalette'] = wp_json_encode(array_values($color_palette), $json);
+    if (!empty($global_classes)) {
+      $extra['globalClasses'] = wp_json_encode(array_values($global_classes), $json);
+      $extra['globalClassesTimestamp'] = (string) (time() * 1000);
+    }
 
-    // Bricks theme styles (colours, typography, background colours, border
-    // radii) live in the BRICKS_DB_THEME_STYLES option. The same
-    // `bricks_save_post` endpoint persists a `themeStyles` POST param, so we
-    // attach the project's theme styles to the first save and stop once they
-    // have been stored. Theme styles only take visual effect when they carry an
-    // "Entire website" condition, which normalise_theme_styles_for_target()
-    // guarantees.
-    $theme_styles_sent = empty($theme_styles);
-
-    // Bricks global variables, their categories and the colour palette define
-    // the `var(--xxx)` tokens that the global classes and theme styles
-    // reference. Without them the clone resolves those vars to the framework's
-    // defaults (wrong button/background/accent colours), so we ship them once on
-    // the first successful save via the same endpoint.
-    $globals_sent = empty($global_variables) && empty($global_variables_categories) && empty($color_palette);
-
+    $jobs = [];
     foreach ($injections as $injection) {
       $post_id = (int) ($injection['post_id'] ?? 0);
       $slug = (string) ($injection['slug'] ?? '');
       $payload = is_array($injection['payload'] ?? null) ? $injection['payload'] : [];
-      if ($post_id <= 0 || empty($payload['content'])) {
-        continue;
-      }
-
-      $nonce = $this->fetch_bricks_builder_nonce($site_url, $post_id, $cookies, $timeout);
-      if ($nonce === '') {
-        error_log('[AISB] Bricks injection: could not read builder nonce for post ' . $post_id . ' ("' . $slug . '")');
-        $results[] = ['post_id' => $post_id, 'slug' => $slug, 'ok' => false, 'message' => 'missing builder nonce'];
-        continue;
-      }
-
+      if ($post_id <= 0 || empty($payload['content'])) continue;
       $body = [
         'action' => 'bricks_save_post',
-        'nonce' => $nonce,
         'postId' => (string) $post_id,
-        'content' => wp_json_encode($payload['content'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'content' => wp_json_encode($payload['content'], $json),
       ];
-      if (!empty($payload['header'])) {
-        $body['header'] = wp_json_encode($payload['header'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-      }
-      if (!empty($payload['footer'])) {
-        $body['footer'] = wp_json_encode($payload['footer'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-      }
-
-      $includes_theme_styles = false;
-      if (!$theme_styles_sent) {
-        $body['themeStyles'] = wp_json_encode($theme_styles, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $includes_theme_styles = true;
-      }
-
-      $includes_globals = false;
-      if (!$globals_sent) {
-        if (!empty($global_variables)) {
-          $body['globalVariables'] = wp_json_encode(array_values($global_variables), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-        if (!empty($global_variables_categories)) {
-          $body['globalVariablesCategories'] = wp_json_encode(array_values($global_variables_categories), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-        if (!empty($color_palette)) {
-          $body['colorPalette'] = wp_json_encode(array_values($color_palette), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        }
-        $includes_globals = true;
-      }
-
-      $includes_global_classes = false;
-      if (!$global_classes_sent) {
-        $body['globalClasses'] = wp_json_encode(array_values($global_classes), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $body['globalClassesTimestamp'] = (string) (time() * 1000);
-        $includes_global_classes = true;
-      }
-
-      $response = $this->remote_request($ajax_url, [
-        'method' => 'POST',
-        'timeout' => max(20, min(120, $timeout)),
-        'cookies' => $cookies,
-        'headers' => [
-          'Referer' => $site_url . '/?page_id=' . $post_id . '&bricks=run',
-          'X-Requested-With' => 'XMLHttpRequest',
-        ],
-        'body' => $body,
-      ]);
-
-      if (is_wp_error($response)) {
-        error_log('[AISB] Bricks injection transport error for post ' . $post_id . ': ' . $response->get_error_message());
-        $results[] = ['post_id' => $post_id, 'slug' => $slug, 'ok' => false, 'message' => $response->get_error_message()];
-        continue;
-      }
-
-      $code = (int) ($response['code'] ?? 0);
-      $decoded = json_decode((string) ($response['body'] ?? ''), true);
-      $ok = $code === 200 && is_array($decoded) && !empty($decoded['success']);
-
-      if (!$ok) {
-        error_log('[AISB] Bricks injection failed for post ' . $post_id . ' (HTTP ' . $code . '): ' . substr((string) ($response['body'] ?? ''), 0, 500));
-        $results[] = ['post_id' => $post_id, 'slug' => $slug, 'ok' => false, 'message' => 'HTTP ' . $code];
-        continue;
-      }
-
-      error_log('[AISB] Bricks injection succeeded for post ' . $post_id . ' ("' . $slug . '")');
-      if ($includes_global_classes) {
-        $global_classes_sent = true;
-        error_log('[AISB] Bricks injection: transferred ' . count($global_classes) . ' global classes to the clone.');
-      }
-      if ($includes_theme_styles) {
-        $theme_styles_sent = true;
-        error_log('[AISB] Bricks theme styles imported: ' . count($theme_styles) . ' style set(s) transferred to the clone.');
-      }
-      if ($includes_globals) {
-        $globals_sent = true;
-        error_log('[AISB] Bricks global variables imported: ' . count($global_variables) . ' variable(s), ' . count($global_variables_categories) . ' categorie(s), ' . count($color_palette) . ' palette(s) transferred to the clone.');
-      }
-      $results[] = ['post_id' => $post_id, 'slug' => $slug, 'ok' => true];
+      if (!empty($payload['header'])) $body['header'] = wp_json_encode($payload['header'], $json);
+      if (!empty($payload['footer'])) $body['footer'] = wp_json_encode($payload['footer'], $json);
+      $jobs[] = ['post_id' => $post_id, 'slug' => $slug, 'body' => $body];
     }
+    if (!$jobs) return $results;
+
+    // De builder-nonce hoort bij de gebruiker, niet bij de pagina: één keer ophalen volstaat.
+    // Lukt een save niet, dan halen we hem opnieuw op en proberen we nog één keer.
+    $nonce = '';
+    $send = function (array $job, array $more = []) use (&$nonce, $site_url, $ajax_url, $cookies, $timeout): bool {
+      if ($nonce === '') $nonce = $this->fetch_bricks_builder_nonce($site_url, (int) $job['post_id'], $cookies, $timeout);
+      if ($nonce === '') {
+        error_log('[AISB] Bricks injection: could not read builder nonce for post ' . (int) $job['post_id'] . ' ("' . $job['slug'] . '")');
+        return false;
+      }
+      for ($try = 0; $try < 2; $try++) {
+        $response = $this->remote_request($ajax_url, [
+          'method' => 'POST',
+          'timeout' => max(20, min(120, $timeout)),
+          'cookies' => $cookies,
+          'headers' => [
+            'Referer' => $site_url . '/?page_id=' . (int) $job['post_id'] . '&bricks=run',
+            'X-Requested-With' => 'XMLHttpRequest',
+          ],
+          'body' => array_merge($job['body'], $more, ['nonce' => $nonce]),
+        ]);
+        if (is_wp_error($response)) {
+          error_log('[AISB] Bricks injection transport error for post ' . (int) $job['post_id'] . ': ' . $response->get_error_message());
+        } else {
+          $code = (int) ($response['code'] ?? 0);
+          $decoded = json_decode((string) ($response['body'] ?? ''), true);
+          if ($code === 200 && is_array($decoded) && !empty($decoded['success'])) return true;
+          error_log('[AISB] Bricks injection failed for post ' . (int) $job['post_id'] . ' (HTTP ' . $code . '): ' . substr((string) ($response['body'] ?? ''), 0, 300));
+          if ($code === 429) {
+            usleep(3000000);
+            continue;
+          }
+        }
+        if ($try === 0) {
+          $nonce = $this->fetch_bricks_builder_nonce($site_url, (int) $job['post_id'], $cookies, $timeout);
+          if ($nonce === '') return false;
+        }
+      }
+      return false;
+    };
+
+    $done = [];
+    // Eerst één pagina met de globals erbij (opeenvolgend), daarna de rest tegelijk.
+    $globals_sent = !$extra;
+    foreach ($jobs as $i => $job) {
+      $done[$i] = $send($job, $globals_sent ? [] : $extra);
+      if ($done[$i]) {
+        if (!$globals_sent) {
+          error_log('[AISB] Bricks injection: transferred ' . count($global_classes) . ' global classes, ' . count($theme_styles) . ' theme style set(s), ' . count($global_variables) . ' variable(s) to the clone.');
+        }
+        $globals_sent = true;
+        break;
+      }
+    }
+
+    $rest = array_diff_key($jobs, $done);
+    if ($rest && $globals_sent) {
+      $parallel = $this->archer_parallel_bricks_saves($ajax_url, $site_url, $cookies, $nonce, $rest, $timeout);
+      foreach ($rest as $i => $job) {
+        $done[$i] = !empty($parallel[$i]) || $send($job);
+      }
+    }
+
+    foreach ($jobs as $i => $job) {
+      $ok = !empty($done[$i]);
+      if ($ok) error_log('[AISB] Bricks injection succeeded for post ' . $job['post_id'] . ' ("' . $job['slug'] . '")');
+      $results[] = ['post_id' => $job['post_id'], 'slug' => $job['slug'], 'ok' => $ok] + ($ok ? [] : ['message' => 'save failed']);
+    }
+    error_log(sprintf('[AISB] Archer: Bricks-inhoud van %d pagina\'s in %.1fs.', count($jobs), microtime(true) - $started));
 
     return $results;
   }
@@ -1580,6 +1912,16 @@ class AISB_InstaWP {
    * WordPress injecteert dit in het wpApiSettings object op elke admin-pagina.
    */
   private function fetch_wp_rest_nonce(string $site_url, array $cookies, int $timeout): string {
+    // Archer: de REST-nonce één keer per site ophalen.
+    if (!empty($this->archer_rest_nonce_cache[$site_url])) {
+      return $this->archer_rest_nonce_cache[$site_url];
+    }
+    $nonce = $this->archer_fetch_wp_rest_nonce_uncached($site_url, $cookies, $timeout);
+    if ($nonce !== '') $this->archer_rest_nonce_cache[$site_url] = $nonce;
+    return $nonce;
+  }
+
+  private function archer_fetch_wp_rest_nonce_uncached(string $site_url, array $cookies, int $timeout): string {
     $response = $this->remote_request($site_url . '/wp-admin/index.php', [
       'method'      => 'GET',
       'timeout'     => max(15, min(60, $timeout)),
@@ -2799,6 +3141,11 @@ class AISB_InstaWP {
     if ($site_url === '') {
       return new WP_Error('aisb_instawp_missing_site_url', 'The remote site URL is missing.', ['status' => 500]);
     }
+    // Archer: één login per site en per publicatie.
+    $archer_cache_key = $site_url . '|' . (string) ($site['username'] ?? '');
+    if (isset($this->archer_login_cache[$archer_cache_key])) {
+      return $this->archer_login_cache[$archer_cache_key];
+    }
 
     $host = (string) wp_parse_url($site_url, PHP_URL_HOST);
     $request_cookies = [];
@@ -2839,7 +3186,7 @@ class AISB_InstaWP {
       return new WP_Error('aisb_instawp_login_failed', 'Remote WordPress login did not return any cookies.', ['status' => 502]);
     }
 
-    return ['cookies' => $cookies];
+    return $this->archer_login_cache[$archer_cache_key] = ['cookies' => $cookies];
   }
 
   /**
