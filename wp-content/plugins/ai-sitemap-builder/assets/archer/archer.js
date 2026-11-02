@@ -1935,6 +1935,148 @@
     });
     window.addEventListener("resize", () => containers().forEach(focusPage));
 
+    /* Altijd genoeg contrast: tekst t.o.v. de achtergrond (WCAG AA) en knoppen t.o.v. de sectie. */
+    const parseCol = (s) => {
+      const m = /rgba?\(([^)]+)\)/.exec(s || "");
+      if (!m) return null;
+      const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+    };
+    const hexCol = (h) => {
+      const m = /^#?([0-9a-f]{6})$/i.exec((h || "").trim());
+      if (!m) return null;
+      const n = parseInt(m[1], 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
+    };
+    const over = (top, under) => {
+      const a = top[3];
+      return [0, 1, 2].map((i) => top[i] * a + under[i] * (1 - a)).concat(1);
+    };
+    const lum = (c) => {
+      const f = (v) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    };
+    const ratio = (a, b) => {
+      const x = lum(a), y = lum(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    const css = (c) => `rgb(${c.slice(0, 3).map(Math.round).join(",")})`;
+    /** Achtergrond achter een element; null als er een afbeelding achter zit (niet te meten). */
+    const bgOf = (el, win) => {
+      const layers = [];
+      for (let x = el; x && x.nodeType === 1; x = x.parentElement) {
+        const cs = win.getComputedStyle(x);
+        if (cs.backgroundImage && cs.backgroundImage !== "none" && !/gradient/.test(cs.backgroundImage)) return null;
+        const c = parseCol(cs.backgroundColor);
+        if (c && c[3] > 0.02) {
+          layers.push(c);
+          if (c[3] >= 0.99) break;
+        }
+      }
+      return layers.reduceRight((acc, c) => over(c, acc), [255, 255, 255, 1]);
+    };
+    const paletteCandidates = () => {
+      const pal = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+      const by = (n) => (pal.find((c) => c.name === n) || {}).hex;
+      return [by("Dark"), by("Primary") || (pal[0] && pal[0].hex), by("Light"), "#111111", "#ffffff", "#000000"].map(hexCol).filter(Boolean);
+    };
+    const pickColour = (bg, need, candidates) => {
+      const ok = candidates.find((c) => ratio(c, bg) >= need);
+      return ok || candidates.slice().sort((a, b) => ratio(b, bg) - ratio(a, bg))[0];
+    };
+    const TEXT_SEL = "h1,h2,h3,h4,h5,h6,p,span,a,li,label,blockquote,figcaption,strong,em,button,.brxe-heading,.brxe-text-basic,.brxe-text,.bricks-button";
+    function fixContrast(iframe) {
+      let doc, win;
+      try {
+        doc = iframe.contentDocument;
+        win = iframe.contentWindow;
+      } catch (e) {
+        return;
+      }
+      const root = doc && doc.getElementById("aisb-preview");
+      if (!root || !win) return;
+      // Geen overgangen in het voorbeeld: anders meten we kleuren halverwege een animatie.
+      if (!doc.getElementById("archer-notrans")) {
+        const nt = doc.createElement("style");
+        nt.id = "archer-notrans";
+        nt.textContent = "*,*::before,*::after{transition:none !important;}";
+        doc.head.appendChild(nt);
+      }
+      let style = doc.getElementById("archer-contrast");
+      if (!style) {
+        style = doc.createElement("style");
+        style.id = "archer-contrast";
+        doc.head.appendChild(style);
+      }
+      style.textContent = "";
+      root.querySelectorAll("[data-archer-c]").forEach((x) => x.removeAttribute("data-archer-c"));
+      const cand = paletteCandidates();
+      let n = 0;
+      const rules = [];
+      const marked = new Map(); // element => index in rules (één regel per element)
+      const mark = (el, decl) => {
+        if (marked.has(el)) {
+          const i = marked.get(el);
+          rules[i] = rules[i].replace(/}$/, decl + "}");
+          return;
+        }
+        el.setAttribute("data-archer-c", String(++n));
+        marked.set(el, rules.length);
+        rules.push(`html [data-archer-c="${n}"][data-archer-c]{${decl}}`);
+      };
+      // 1. Knoppen die wegvallen tegen de sectie (bv. hoofdkleur op een sectie in dezelfde kleur).
+      root.querySelectorAll(".bricks-button,.brxe-button").forEach((b) => {
+        if (!b.getClientRects().length) return;
+        const own = parseCol(win.getComputedStyle(b).backgroundColor);
+        const behind = bgOf(b.parentElement, win);
+        if (!own || own[3] < 0.5 || !behind) return; // outline-knoppen: de tekstcontrole hieronder
+        const fill = over(own, behind);
+        if (ratio(fill, behind) >= 1.6) return;
+        const nb = pickColour(behind, 3, cand);
+        const txt = pickColour(nb, 4.5, cand.slice().reverse());
+        mark(b, `background-color:${css(nb)} !important;border-color:${css(nb)} !important;color:${css(txt)} !important;`);
+      });
+      style.textContent = rules.join("");
+      // 2. Elke tekst tegen haar echte achtergrond.
+      const fixes = [];
+      root.querySelectorAll(TEXT_SEL).forEach((el) => {
+        if (!el.getClientRects().length) return;
+        const hasText = Array.from(el.childNodes).some((c) => c.nodeType === 3 && c.textContent.trim());
+        if (!hasText) return;
+        const cs = win.getComputedStyle(el);
+        if (cs.visibility === "hidden" || Number(cs.opacity) === 0) return;
+        const bg = bgOf(el, win);
+        if (!bg) return;
+        const fgRaw = parseCol(cs.color);
+        if (!fgRaw) return;
+        const fg = over(fgRaw, bg);
+        const size = parseFloat(cs.fontSize) || 16;
+        const large = size >= 24 || (size >= 18.6 && Number(cs.fontWeight) >= 700);
+        const need = large ? 3 : 4.5;
+        if (ratio(fg, bg) >= need) return;
+        fixes.push([el, pickColour(bg, need, cand), el.matches(".bricks-button,.brxe-button")]);
+      });
+      fixes.forEach(([el, c, isBtn]) => mark(el, `color:${css(c)} !important;` + (isBtn ? `border-color:${css(c)} !important;` : "")));
+      style.textContent = rules.join("");
+    }
+    if (typeof SG.injectOverrideIntoIframe === "function") {
+      const origInject = SG.injectOverrideIntoIframe;
+      SG.injectOverrideIntoIframe = function (iframe) {
+        const r = origInject.apply(this, arguments);
+        // Kort uitgesteld: bij het slepen in de kleurkiezer maar één keer per frame meten.
+        clearTimeout(iframe._archerContrastTimer);
+        clearTimeout(iframe._archerContrastLate);
+        iframe._archerContrastTimer = setTimeout(() => fixContrast(iframe), 40);
+        // Nog eens na het laden van lettertypes, afbeeldingen en late stijlen van Bricks.
+        iframe._archerContrastLate = setTimeout(() => fixContrast(iframe), 1500);
+        return r;
+      };
+    }
+    UI.fixContrast = fixContrast;
+
     /* Kleuren meteen toepassen: ook als ze uit een logo of foto gehaald worden. */
     if (typeof SG.renderSwatchRow === "function") {
       const origSwatches = SG.renderSwatchRow;

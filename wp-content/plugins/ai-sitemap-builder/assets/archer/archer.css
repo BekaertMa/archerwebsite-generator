@@ -949,3 +949,13 @@ details.archer-ed-item > summary { cursor: pointer; list-style: revert; text-tra
 }
 .archer-sg-page-select:focus { outline: 2px solid var(--ar-teal); outline-offset: 1px; }
 .archer-sg-page-select[hidden] { display: none; }
+/* Stijl en foto's: het voorbeeld rechts krijgt de ruimte (geen 80%-kaart, smallere instellingen) */
+body.archer-app .archer-shell .archer-sg-card { max-width: none; width: 100%; }
+body.archer-app .archer-shell .aisb-sg-split-left { flex: 0 0 360px; width: 360px; min-width: 0; box-sizing: border-box; }
+body.archer-app .archer-shell .aisb-sg-split-right { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 1100px) {
+  body.archer-app .archer-shell .aisb-sg-split-left { flex-basis: 320px; width: 320px; }
+}
+@media (max-width: 900px) {
+  body.archer-app .archer-shell .aisb-sg-split-left { flex: 0 0 auto; width: auto; }
+}
