@@ -524,6 +524,16 @@
     let firstCanvas = true;
     let canvasStale = false;
     const sitemapSections = {}; // slug => [{ name, type }] uit de sitemap, voor de skeletten
+    // Pas als alle bestaande wireframes geladen zijn, mag het canvas beslissen of er iets gemaakt moet worden.
+    let modelsLoaded = false;
+    const origLoadAll = wf.loadAllPageModels;
+    if (typeof origLoadAll === "function") {
+      wf.loadAllPageModels = async function () {
+        const r = await origLoadAll.apply(this, arguments);
+        modelsLoaded = true;
+        return r;
+      };
+    }
     const genPending = new Set(); // pagina's waarvan de wireframe gemaakt wordt
     const genFailed = new Set();
 
@@ -544,7 +554,8 @@
               }));
             }
           });
-          if (wf.state.pages.length && !isOpen()) wf.renderWhiteboard();
+          // Alleen opnieuw tekenen als de wireframes al geladen zijn (anders lijkt het project leeg).
+          if (modelsLoaded && wf.state.pages.length && !isOpen()) wf.renderWhiteboard();
         })
         .catch(() => {});
     }
@@ -611,15 +622,41 @@
         const iframe = document.createElement("iframe");
         iframe.src = PREVIEW + id;
         iframe.className = "aisb-bricks-iframe";
-        iframe.loading = "lazy";
+        // Niet lazy: in het geschaalde canvas laadt Chrome lazy iframes vaak pas na een klik.
+        iframe.loading = "eager";
         iframe.title = typeLabelOf(s) + " (voorbeeld)";
         iframe.scrolling = "no";
         iframe.tabIndex = -1;
+        iframe.addEventListener("load", () => {
+          measureIframe(iframe);
+          setTimeout(() => measureIframe(iframe), 400);
+          setTimeout(() => measureIframe(iframe), 1500);
+        });
         $(".aisb-wf-iframe-wrap", el).appendChild(iframe);
       } else {
         $(".archer-cv-placeholder", el).textContent = typeLabelOf(s);
       }
       return el;
+    }
+
+    /** Meet de hoogte rechtstreeks (zelfde origin), los van de postMessage van de preview. */
+    function measureIframe(iframe) {
+      let h = 0;
+      try {
+        const doc = iframe.contentDocument;
+        const wrap = doc && doc.getElementById("aisb-preview");
+        if (wrap) h = Math.ceil(wrap.getBoundingClientRect().height);
+      } catch (e) {
+        return;
+      }
+      if (!h) return;
+      iframe.style.height = h + "px";
+      const body = iframe.closest(".archer-cv-body");
+      if (!body) return;
+      const scale = (body.offsetWidth || COL_BODY) / 1200;
+      const wrapEl = iframe.closest(".aisb-wf-iframe-wrap");
+      if (wrapEl) wrapEl.style.setProperty("--exp-scale", scale.toFixed(4));
+      body.style.height = Math.ceil(h * scale) + "px";
     }
 
     function updateSectionEl(el, s, idx, sections) {
@@ -948,10 +985,14 @@
     });
     window.addEventListener("mouseup", () => (downAt = null));
 
+    let baselineDone = false;
     wf.renderWhiteboard = function () {
       if (!inner) return;
       const pages = wf.state.pages || [];
-      if (firstCanvas && pages.length) {
+      // Alle andere aanroepen komen pas na het laden van de wireframes (sitemap.js, generatie, openen/sluiten).
+      if (pages.length) modelsLoaded = true;
+      if (!baselineDone && pages.length) {
+        baselineDone = true;
         // Modellen die al op de server staan, gelden als bewaard; daarna de volgorde rechtzetten.
         Object.keys(wf.state.pageModels || {}).forEach((slug) => {
           lastSaved[slug] = JSON.stringify(wf.state.pageModels[slug]);
@@ -989,7 +1030,10 @@
       if (firstCanvas && pages.length) {
         firstCanvas = false;
         fitPending = true;
-        if (!anyGenerated() && !wf.root.hasAttribute("data-archer-no-autogen")) {
+        // Alleen een project zonder enige wireframe start vanzelf (zoals Relume). Bestaande wireframes
+        // worden nooit automatisch opnieuw gemaakt.
+        const nothingYet = !Object.values(wf.state.pageModels || {}).some((m) => m && Array.isArray(m.sections) && m.sections.length);
+        if (nothingYet && !wf.root.hasAttribute("data-archer-no-autogen")) {
           setTimeout(() => generatePages(pages.map((p) => p.slug)), 300);
         }
       }
