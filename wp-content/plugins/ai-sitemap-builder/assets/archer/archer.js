@@ -1863,6 +1863,92 @@
       "Unsplash images will be loaded automatically…": "De stockfoto's worden geladen…",
     });
 
+    /* Live voorbeeld: standaard ingezoomd op de startpagina, met een keuzelijst per pagina. */
+    const header = $(".aisb-sg-preview-header", panel);
+    let focusSlug = "home";
+    const pick = document.createElement("select");
+    pick.className = "archer-sg-page-select";
+    pick.setAttribute("aria-label", "Pagina in het live voorbeeld");
+    pick.hidden = true;
+    if (header) {
+      const label = $(".aisb-sg-preview-label", header);
+      if (label) label.after(pick);
+      else header.prepend(pick);
+    }
+    const fillPick = () => {
+      const pages = SG.wireframePages || [];
+      if (!pages.length) return;
+      if (focusSlug !== "__all" && !pages.some((p) => p.slug === focusSlug)) focusSlug = pages[0].slug;
+      pick.innerHTML =
+        pages.map((p) => `<option value="${esc(p.slug)}">${esc(p.title || p.slug)}</option>`).join("") +
+        `<option value="__all">Alle pagina's</option>`;
+      pick.value = focusSlug;
+      pick.hidden = false;
+    };
+    // Zoomt in op één pagina: zo breed als het voorbeeld, bovenaan beginnen.
+    const focusPage = (container) => {
+      const canvas = $(".aisb-sg-canvas", container);
+      const innerEl = canvas && $(".aisb-sg-canvas-inner", canvas);
+      const st = canvas && canvas._sgState;
+      if (!st || !innerEl) return;
+      if (focusSlug === "__all") {
+        if (container._archerFitAll) container._archerFitAll();
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width) return;
+      const idx = Math.max(0, (SG.wireframePages || []).findIndex((p) => p.slug === focusSlug));
+      const card = $$(".aisb-sg-page-card", innerEl)[idx];
+      if (!card || !card.offsetWidth) return;
+      const pad = 16;
+      st.scale = Math.max(0.05, Math.min(1, (rect.width - pad * 2) / card.offsetWidth));
+      st.translateX = (rect.width - card.offsetWidth * st.scale) / 2 - card.offsetLeft * st.scale;
+      st.translateY = pad - card.offsetTop * st.scale;
+      innerEl.style.transform = `translate(${st.translateX}px, ${st.translateY}px) scale(${st.scale})`;
+    };
+    const setupCanvas = (container) => {
+      if (!container || !$(".aisb-sg-canvas", container)) return;
+      // In een geschaald canvas laden lazy iframes niet altijd: meteen laden.
+      $$("iframe", container).forEach((f) => (f.loading = "eager"));
+      if (container._sgFitToView && container._sgFitToView !== container._archerFocus) {
+        container._archerFitAll = container._sgFitToView;
+      }
+      container._archerFocus = () => focusPage(container);
+      container._sgFitToView = container._archerFocus; // ook bij het wisselen van kleuren naar lettertypes
+      fillPick();
+      requestAnimationFrame(() => focusPage(container));
+      setTimeout(() => focusPage(container), 80);
+    };
+    const containers = () => Array.from(new Set([SG.el.coloursPreview, SG.el.typographyPreview, SG.el.imagesPreview].filter(Boolean)));
+    if (typeof SG.buildCanvasForContainer === "function") {
+      const origBuild = SG.buildCanvasForContainer;
+      SG.buildCanvasForContainer = function (container) {
+        const r = origBuild.apply(this, arguments);
+        setupCanvas(container);
+        return r;
+      };
+    }
+    containers().forEach(setupCanvas); // canvas dat al gebouwd was
+    pick.addEventListener("change", () => {
+      focusSlug = pick.value;
+      containers().forEach(focusPage);
+    });
+    window.addEventListener("resize", () => containers().forEach(focusPage));
+
+    /* Kleuren meteen toepassen: ook als ze uit een logo of foto gehaald worden. */
+    if (typeof SG.renderSwatchRow === "function") {
+      const origSwatches = SG.renderSwatchRow;
+      let applyTimer = null;
+      SG.renderSwatchRow = function (container, colours) {
+        const r = origSwatches.apply(this, arguments);
+        if (Array.isArray(colours) && colours.length) {
+          clearTimeout(applyTimer);
+          applyTimer = setTimeout(() => SG.applyOverridesToAllIframes && SG.applyOverridesToAllIframes(), 0);
+        }
+        return r;
+      };
+    }
+
     // Autosave naar de server, bovenop de lokale kladversie van de stijlgids.
     const saver = UI.debouncedSaver(async () => {
       if (!SG.extractedColours || !SG.extractedColours.length) return;

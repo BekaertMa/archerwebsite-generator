@@ -939,3 +939,13 @@ details.archer-ed-item > summary { cursor: pointer; list-style: revert; text-tra
 .archer-ed-rte:focus { outline: 2px solid var(--ar-teal); outline-offset: 0; border-color: var(--ar-teal); }
 .archer-ed-rte p { margin: 0 0 6px; }
 .archer-ed-rte ul { margin: 0 0 6px 18px; padding: 0; }
+
+/* ── Stijl: paginakeuze in het live voorbeeld ───────────── */
+.aisb-sg-preview-header { flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.archer-sg-page-select {
+  flex: 0 1 220px; min-width: 0; max-width: 100%;
+  font: 600 13px/1.3 var(--ar-font); color: var(--ar-navy);
+  border: 1px solid var(--ar-line-2); border-radius: 999px; padding: 6px 30px 6px 12px; background-color: #fff;
+}
+.archer-sg-page-select:focus { outline: 2px solid var(--ar-teal); outline-offset: 1px; }
+.archer-sg-page-select[hidden] { display: none; }
