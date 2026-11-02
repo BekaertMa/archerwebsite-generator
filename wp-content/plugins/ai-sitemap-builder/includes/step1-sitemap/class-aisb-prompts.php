@@ -77,6 +77,10 @@ Rules:
 - Parent/child relationships should be realistic (e.g., Services -> Service Detail pages).
 - nav_label is short (1–3 words) for menus.
 - SEO keywords must be inferred from the brief (no stuffing).
+- ALWAYS include a Contact page (page_type "Contact", parent_slug "home").
+- Every overview page that lists several items (for example Services, Products, Cars, Vehicles, Projects, Cases, Vacancies, Events, Courses, Team; in Dutch Diensten, Producten, Wagens, Auto's, Occasions, Projecten, Realisaties, Vacatures, Evenementen, Opleidingen) MUST have child pages: one child page per item that is known from the brief (max 6), or otherwise one detail page template (for example "Dienst (detailpagina)" or "Wagen (detailpagina)") with parent_slug set to the overview page.
+- If the brief contains an EXISTING SITEMAP (BESTAANDE SITEMAP), include EVERY page of it in the new sitemap with the same parent/child structure (improve titles and content, but do not drop pages). In that case the existing sitemap overrides the desired number of pages.
+- In every page, the Headers section is always the FIRST section and the Footers section is always the LAST section.
 - For required sections, use these types:
   - Navbar => Headers (or Megamenu Sections - part of navbar if you include megamenu details)
   - Hero => Hero Sections

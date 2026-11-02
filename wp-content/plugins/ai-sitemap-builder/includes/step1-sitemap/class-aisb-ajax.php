@@ -133,6 +133,9 @@ class AISB_Ajax {
 
     $decoded = $this->enforcer()->enforce_rules_on_data($decoded);
 
+    // Archer-regels: contactpagina, subpagina's bij overzichtspagina's, volledige sitemap van een bestaande site.
+    $decoded = apply_filters('aisb_generated_sitemap', $decoded, ['prompt' => $prompt, 'languages' => $languages]);
+
     // Maak automatisch een project aan wanneer er nog geen project_id is.
     if (!$project_id) {
       $title      = $decoded['website_name'] ?? 'New project';
