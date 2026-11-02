@@ -999,3 +999,20 @@ body.archer-app .archer-shell .archer-btn.archer-btn-sm { min-height: 34px; padd
 .archer-sg-concepts .archer-link-btn:hover { text-decoration: underline; }
 /* Secties in Stijl zijn aanklikbaar (kleurschema per sectie, hoverbalk). */
 body.archer-app .aisb-sg-iframe-wrap iframe.aisb-sg-section-iframe { pointer-events: auto; }
+
+/* ── Sitemap: menu en structuur ───────────────────────── */
+.archer-smap-menu-btn { position: absolute; top: 14px; left: 14px; z-index: 6; display: inline-flex; align-items: center; gap: 6px; background: #fff; }
+.archer-menu-list, .archer-menu-sub { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.archer-menu-sub { margin: 6px 0 0 22px; padding-left: 10px; border-left: 2px solid var(--ar-line); }
+.archer-menu-item { display: flex; flex-direction: column; gap: 4px; }
+.archer-menu-row { display: flex; align-items: center; gap: 6px; }
+.archer-smap-panel .archer-menu-row input { flex: 1 1 auto; min-width: 0; padding: 7px 10px; }
+.archer-menu-row.is-child input { font-size: 13px; }
+.archer-menu-tools { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+.archer-menu-tools .archer-sec-tool { width: 28px; height: 28px; font-weight: 700; }
+.archer-menu-tools .archer-sec-tool[disabled] { opacity: 0.3; cursor: default; }
+.archer-smap-panel .archer-form-row select { flex: 1 1 auto; width: auto; min-width: 0; }
+.archer-smap-tree .archer-page-card[draggable="true"] .archer-page-card-head { cursor: grab; }
+.archer-smap-tree .archer-page-card.is-dragging { opacity: 0.45; }
+.archer-smap-tree .archer-page-card.is-drop-target { outline: 3px dashed var(--ar-teal); outline-offset: 4px; }
+body.archer-app .archer-shell .archer-btn.archer-btn-sm.is-active { background: var(--ar-navy); border-color: var(--ar-navy); color: #fff; }

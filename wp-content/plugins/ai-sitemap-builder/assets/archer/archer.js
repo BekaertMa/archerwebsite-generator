@@ -21,6 +21,38 @@
     pendingCount: 0,
   });
 
+  // Voorbeelden kennen het project: de header en footer krijgen het menu en de naam van deze website.
+  (function () {
+    const q = new URLSearchParams(location.search);
+    const pid = q.get("aisb_project");
+    const sid = q.get("aisb_sitemap");
+    if (!pid) return;
+    ["AISB_WF", "AISB_SG", "AISB_DESIGN"].forEach((k) => {
+      const o = window[k];
+      if (o && typeof o.previewUrl === "string" && o.previewUrl.indexOf("aisb_project=") < 0) {
+        o.previewUrl = o.previewUrl.replace(
+          "?aisb_bricks_preview=",
+          "?aisb_project=" + encodeURIComponent(pid) + (sid ? "&aisb_sitemap=" + encodeURIComponent(sid) : "") + "&aisb_bricks_preview=",
+        );
+      }
+    });
+  })();
+
+  /** Hoeken van knoppen en velden (dezelfde waarden als AISB_Archer_Taste::RADIUS). */
+  UI.RADIUS = { sharp: "0px", soft: "6px", round: "999px" };
+  UI.applyRadius = (doc, key) => {
+    if (!doc || !doc.head) return;
+    const v = UI.RADIUS[key];
+    let st = doc.getElementById("archer-radius");
+    if (!v) { if (st) st.remove(); return; }
+    if (!st) {
+      st = doc.createElement("style");
+      st.id = "archer-radius";
+    }
+    doc.head.appendChild(st);
+    st.textContent = `:root{--archer-radius:${v};}`;
+  };
+
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const esc = (s) =>
@@ -1950,6 +1982,10 @@
         '<div class="archer-taste-tools"><span>Los schudden:</span>' +
         '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-taste-shuffle="palette">Andere kleuren</button>' +
         '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-taste-shuffle="type">Andere letters</button></div>' +
+        '<div class="archer-taste-tools" role="group" aria-label="Hoeken van knoppen en velden"><span>Hoeken:</span>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-radius="sharp">Recht</button>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-radius="soft">Zacht</button>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-radius="round">Rond</button></div>' +
         '<p class="archer-taste-status" data-taste-status aria-live="polite"></p>';
       const host = anchor ? anchor.closest("div") : null;
       if (host && host.parentElement) host.parentElement.insertBefore(box, host);
@@ -2072,7 +2108,24 @@
           if (dealt[0]) apply(dealt[0]);
         },
       };
+      const radiusNow = () => (SG.guide && !Array.isArray(SG.guide) && SG.guide.radius) || "soft";
+      const markRadius = () =>
+        box.querySelectorAll("[data-radius]").forEach((b) => {
+          const on = b.getAttribute("data-radius") === radiusNow();
+          b.classList.toggle("is-active", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      markRadius();
       box.addEventListener("click", (e) => {
+        const rb = e.target.closest("[data-radius]");
+        if (rb) {
+          if (!SG.guide || Array.isArray(SG.guide)) SG.guide = {};
+          SG.guide.radius = rb.getAttribute("data-radius");
+          markRadius();
+          (SG.allIframes || []).forEach((f) => { try { UI.applyRadius(f.contentDocument, SG.guide.radius); } catch (err) {} });
+          SG.saveDraft && SG.saveDraft();
+          return;
+        }
         const card = e.target.closest("[data-taste-idx]");
         if (card) return apply(dealt[Number(card.getAttribute("data-taste-idx"))]);
         const sh = e.target.closest("[data-taste-shuffle]");
@@ -2365,6 +2418,7 @@
         st.id = "archer-scheme";
       }
       doc.head.appendChild(st); // altijd na de stijl van de stijlgids
+      UI.applyRadius(doc, SG.guide && !Array.isArray(SG.guide) ? SG.guide.radius : "");
       renderSchemeBar(iframe);
       const id = getScheme(iframe);
       const s = id && schemeList().find((x) => x.id === id);

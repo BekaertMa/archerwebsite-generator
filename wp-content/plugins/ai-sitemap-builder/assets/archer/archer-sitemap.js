@@ -260,6 +260,205 @@
       return true;
     };
 
+    /* ── Structuur: ouder en volgorde van pagina's ───────── */
+
+    const isTop = (p) => !p.parent_slug || p.parent_slug === "home" || !state.bySlug[p.parent_slug] || p.parent_slug === p.slug;
+    const parentKey = (p) => (p.slug === "home" ? null : isTop(p) ? "home" : p.parent_slug);
+    const descendants = (slug) => {
+      const out = new Set();
+      const walk = (s) =>
+        (state.pages || []).forEach((p) => {
+          if (p.parent_slug === s && !out.has(p.slug)) {
+            out.add(p.slug);
+            walk(p.slug);
+          }
+        });
+      walk(slug);
+      return out;
+    };
+    const rebuildIndex = () => {
+      if (app.buildIndex) state.bySlug = app.buildIndex(state.pages);
+      if (app.buildTree) state.tree = app.buildTree(state.bySlug);
+    };
+    const depthOf = (p) => {
+      let d = 0;
+      let cur = p;
+      while (cur && !isTop(cur) && d < 6) { cur = state.bySlug[cur.parent_slug]; d++; }
+      return d;
+    };
+    /** Pagina onder een andere pagina hangen ('home' = hoofdniveau). Geen lussen. */
+    const setParent = (slug, parent) => {
+      const page = state.bySlug[slug];
+      if (!page || slug === "home") return false;
+      parent = parent || "home";
+      if (parent === slug || descendants(slug).has(parent) || (parent !== "home" && !state.bySlug[parent])) return false;
+      if ((page.parent_slug || "home") === parent) return false;
+      page.parent_slug = parent;
+      syncPage(slug);
+      rebuildIndex();
+      afterChange();
+      return true;
+    };
+    /** Eerder of later tussen pagina's met dezelfde ouder. */
+    const moveSibling = (slug, dir) => {
+      const page = state.bySlug[slug];
+      if (!page) return;
+      const key = parentKey(page);
+      const sibs = (state.pages || []).filter((p) => p.slug !== "home" && parentKey(p) === key);
+      const i = sibs.findIndex((p) => p.slug === slug);
+      const other = sibs[i + dir];
+      if (i < 0 || !other) return;
+      const swap = (arr) => {
+        const same = (p, x) => p.slug === x || (app.normalizeSlug && app.normalizeSlug(p.slug) === x);
+        const a = arr.findIndex((p) => same(p, slug));
+        const b = arr.findIndex((p) => same(p, other.slug));
+        if (a >= 0 && b >= 0) [arr[a], arr[b]] = [arr[b], arr[a]];
+      };
+      swap(state.pages);
+      // state.pages is vaak dezelfde lijst als data.sitemap: dan niet twee keer wisselen.
+      if (state.data && Array.isArray(state.data.sitemap) && state.data.sitemap !== state.pages) swap(state.data.sitemap);
+      rebuildIndex();
+      afterChange();
+    };
+    const parentOptions = (page) => {
+      const banned = descendants(page.slug);
+      banned.add(page.slug);
+      const cur = isTop(page) ? "home" : page.parent_slug;
+      return (
+        `<option value="home"${cur === "home" ? " selected" : ""}>Hoofdniveau (onder Home)</option>` +
+        orderPages()
+          .filter((p) => p.slug !== "home" && !banned.has(p.slug) && p.archer_added !== "detail")
+          .map((p) => `<option value="${esc(p.slug)}"${cur === p.slug ? " selected" : ""}>${"— ".repeat(depthOf(p) + 1)}${esc(p.page_title || p.slug)}</option>`)
+          .join("")
+      );
+    };
+
+    /* ── Menu (header en footer) ─────────────────────────── */
+
+    const isLegal = (p) => /^legal$/i.test(p.page_type || "") || /privacy|cookie|voorwaarden|terms|disclaimer|juridisch|gdpr|mentions-legales|impressum/i.test(p.slug || "");
+    const isContactPage = (p) => /^contact$/i.test(p.page_type || "") || /(^|-)(contact|kontakt)(-|$)/i.test(p.slug || "");
+    const menuPage = (p) => p && p.slug !== "home" && p.archer_added !== "detail" && !isLegal(p);
+    const labelOf = (slug) => {
+      const p = state.bySlug[slug];
+      return p ? p.nav_label || p.page_title || slug : slug;
+    };
+    /** Zelfde regels als AISB_Archer_Chrome::proposal(). */
+    const proposal = () => {
+      const pages = state.pages || [];
+      const tops = pages.filter((p) => p.slug !== "home" && isTop(p));
+      const ctaPage = tops.find(isContactPage);
+      const cta = ctaPage ? ctaPage.slug : "";
+      const items = tops
+        .filter((p) => menuPage(p) && p.slug !== cta)
+        .slice(0, 6)
+        .map((p) => ({
+          slug: p.slug,
+          label: "",
+          children: pages.filter((c) => c.parent_slug === p.slug && menuPage(c)).slice(0, 8).map((c) => ({ slug: c.slug, label: "" })),
+        }));
+      return { source: "auto", cta, items };
+    };
+    /** Het menu zoals het nu geldt: bewaard (zonder verdwenen pagina's) of het voorstel. */
+    const currentMenu = () => {
+      const m = state.data && state.data.archer_menu;
+      if (!m || !Array.isArray(m.items) || !m.items.length) return proposal();
+      const seen = new Set();
+      const ok = (it) => it && (it.slug ? state.bySlug[it.slug] && !seen.has(it.slug) && seen.add(it.slug) : true);
+      const items = m.items
+        .filter(ok)
+        .map((it) => ({ slug: it.slug || "", label: it.label || "", children: (Array.isArray(it.children) ? it.children : []).filter((c) => c && c.slug && ok(c)).map((c) => ({ slug: c.slug, label: c.label || "" })) }))
+        .filter((it) => it.slug || it.label);
+      return { source: m.source || "user", cta: m.cta && state.bySlug[m.cta] ? m.cta : "", items };
+    };
+    /** Bewerken: vanaf nu het bewaarde menu, gemarkeerd als zelf aangepast. */
+    const editMenu = (fn) => {
+      const m = currentMenu();
+      fn(m);
+      m.source = "user";
+      state.data.archer_menu = m;
+      saver.run();
+      renderPanel();
+      render();
+    };
+    const inMenu = () => {
+      const m = currentMenu();
+      const set = new Set();
+      m.items.forEach((it) => { if (it.slug) set.add(it.slug); it.children.forEach((c) => set.add(c.slug)); });
+      if (m.cta) set.add(m.cta);
+      return set;
+    };
+    let menuBusy = false;
+    let menuTried = false;
+    const proposeMenu = async (silent) => {
+      if (menuBusy || !state.data || !state.projectId) return;
+      menuBusy = true;
+      if (!silent) renderPanel();
+      try {
+        const out = await UI.post("aisb_archer_menu", { project_id: state.projectId, sitemap: JSON.stringify(stripTransient(state.data)) });
+        if (out && out.menu && Array.isArray(out.menu.items) && out.menu.items.length) {
+          state.data.archer_menu = out.menu;
+          saver.run();
+        }
+      } catch (e) {
+        if (!silent) menuStatus = e.message || "Het voorstel lukte niet.";
+      }
+      menuBusy = false;
+      renderPanel();
+      render();
+    };
+    let menuStatus = "";
+
+    const menuPanelHtml = () => {
+      const m = currentMenu();
+      const used = inMenu();
+      const src = menuBusy ? "Menu wordt voorgesteld…" : m.source === "user" ? "Zelf aangepast." : m.source === "ai" ? "Voorstel op basis van je pagina's." : "Voorlopig voorstel: de hoofdpagina's van je sitemap.";
+      const tool = (act, i, j, label, txt, dis) =>
+        `<button type="button" class="archer-sec-tool" data-menu-act="${act}" data-i="${i}"${j !== undefined ? ` data-j="${j}"` : ""} aria-label="${esc(label)}"${dis ? " disabled" : ""}>${txt}</button>`;
+      const rows = m.items
+        .map((it, i) => {
+          const kids = it.children
+            .map((c, j) =>
+              `<li class="archer-menu-row is-child"><input type="text" data-menu-label data-i="${i}" data-j="${j}" value="${esc(c.label)}" placeholder="${esc(labelOf(c.slug))}" aria-label="Naam in het menu">` +
+              `<span class="archer-menu-tools">${tool("up", i, j, "Hoger", icon.up, j === 0)}${tool("down", i, j, "Lager", icon.down, j === it.children.length - 1)}` +
+              `${tool("out", i, j, "Uit het submenu", "←")}${tool("del", i, j, "Uit het menu", icon.x)}</span></li>`)
+            .join("");
+          return (
+            `<li class="archer-menu-item"><div class="archer-menu-row"><input type="text" data-menu-label data-i="${i}" value="${esc(it.label)}" placeholder="${esc(it.slug ? labelOf(it.slug) : "Groep")}" aria-label="Naam in het menu">` +
+            `<span class="archer-menu-tools">${tool("up", i, undefined, "Hoger", icon.up, i === 0)}${tool("down", i, undefined, "Lager", icon.down, i === m.items.length - 1)}` +
+            `${tool("in", i, undefined, "In het submenu van het item erboven", "→", i === 0)}${tool("del", i, undefined, "Uit het menu", icon.x)}</span></div>` +
+            (it.slug ? "" : `<span class="archer-small archer-muted">Groep zonder eigen pagina.${it.children.length ? "" : " Zet er pagina's onder met →."}</span>`) +
+            (kids ? `<ol class="archer-menu-sub">${kids}</ol>` : "") +
+            `</li>`
+          );
+        })
+        .join("");
+      const notIn = orderPages().filter((p) => menuPage(p) && !used.has(p.slug));
+      const addOpts =
+        notIn.map((p) => `<option value="${esc(p.slug)}">${esc(p.page_title || p.slug)}</option>`).join("") +
+        `<option value="__group">Groep zonder eigen pagina…</option>`;
+      const ctaOpts =
+        `<option value="">Geen knop</option>` +
+        orderPages()
+          .filter((p) => p.slug !== "home" && p.archer_added !== "detail")
+          .map((p) => `<option value="${esc(p.slug)}"${m.cta === p.slug ? " selected" : ""}>${esc(p.page_title || p.slug)}</option>`)
+          .join("");
+      return (
+        `<div class="archer-smap-panel-head"><div><span class="archer-smap-panel-eyebrow">Header en footer</span><h3>Menu</h3></div>` +
+        `<button type="button" class="archer-sec-tool" data-panel-close aria-label="Sluiten">${icon.x}</button></div>` +
+        `<p class="archer-small archer-muted" aria-live="polite">${esc(src)}</p>` +
+        (m.items.length ? `<ol class="archer-menu-list">${rows}</ol>` : `<p class="archer-muted">Nog geen items in het menu.</p>`) +
+        `<label class="aisb-label" for="archer-menu-add">Toevoegen aan het menu</label>` +
+        `<div class="archer-form-row"><select id="archer-menu-add" data-menu-add>${addOpts}</select>` +
+        `<button type="button" class="archer-btn archer-btn-outline" data-menu-act="add">Toevoegen</button></div>` +
+        `<label class="aisb-label" for="archer-menu-cta">Knop in de header</label>` +
+        `<select id="archer-menu-cta" data-menu-cta>${ctaOpts}</select>` +
+        (notIn.length ? `<span class="archer-small archer-muted">Niet in het menu (wel in de footer of via links): ${notIn.map((p) => esc(p.page_title || p.slug)).join(", ")}.</span>` : "") +
+        `<div class="archer-form-row"><button type="button" class="archer-btn archer-btn-outline" data-menu-act="ai"${menuBusy ? " disabled" : ""}>${menuBusy ? "Bezig…" : "Stel een nieuw menu voor"}</button></div>` +
+        (menuStatus ? `<span class="archer-small archer-danger-text">${esc(menuStatus)}</span>` : "") +
+        `<span class="archer-small archer-muted">De header en footer van elke pagina volgen dit menu, al in de wireframes. Juridische pagina's staan onderaan de footer.</span>`
+      );
+    };
+
     const typeOptions = (current) => {
       const list = TYPES.slice();
       if (current && !list.includes(current)) list.unshift(current);
@@ -268,6 +467,11 @@
 
     const renderPanel = () => {
       vp.classList.toggle("has-panel", !!sel);
+      if (sel && sel.kind === "menu") {
+        panel.hidden = false;
+        panel.innerHTML = menuPanelHtml();
+        return;
+      }
       const page = sel ? state.bySlug && state.bySlug[sel.slug] : null;
       const sec = sel && sel.kind === "section" && page && Array.isArray(page.sections) ? page.sections[sel.idx] : null;
       if (!page || (sel.kind === "section" && !sec)) {
@@ -313,6 +517,14 @@
           `<input id="archer-p-title" type="text" data-f="page_title" value="${esc(page.page_title || "")}">` +
           `<label class="aisb-label" for="archer-p-nav">Naam in het menu</label>` +
           `<input id="archer-p-nav" type="text" data-f="nav_label" value="${esc(page.nav_label || "")}">` +
+          (page.slug === "home"
+            ? ""
+            : `<label class="aisb-label" for="archer-p-parent">Hangt onder</label>` +
+              `<select id="archer-p-parent" data-parent>${parentOptions(page)}</select>` +
+              `<div class="archer-form-row">` +
+              `<button type="button" class="archer-btn archer-btn-outline" data-panel-act="page-earlier">← Eerder</button>` +
+              `<button type="button" class="archer-btn archer-btn-outline" data-panel-act="page-later">Later →</button></div>` +
+              `<span class="archer-small archer-muted">Of sleep de pagina op een andere pagina (op Home: hoofdniveau). Het menu pas je aan via de knop Menu.</span>`) +
           `<label class="aisb-label" for="archer-p-pp">Doel van de pagina</label>` +
           `<textarea id="archer-p-pp" rows="4" data-f="page_purpose">${esc(page.page_purpose || "")}</textarea>` +
           `<label class="aisb-label" for="archer-p-kw">Belangrijkste zoekwoord</label>` +
@@ -350,13 +562,26 @@
       confirmDelete = null;
       render();
       renderPanel();
-      ensureVisible(next.slug);
+      if (next.slug) ensureVisible(next.slug);
       const first = panel.querySelector("input, textarea");
       first && first.focus({ preventScroll: true });
     };
 
     let panelTimer = null;
     panel.addEventListener("input", (e) => {
+      if (e.target.hasAttribute("data-menu-label") && sel && sel.kind === "menu") {
+        const i = Number(e.target.getAttribute("data-i"));
+        const j = e.target.hasAttribute("data-j") ? Number(e.target.getAttribute("data-j")) : -1;
+        const m = currentMenu();
+        const it = m.items[i];
+        if (!it) return;
+        if (j >= 0) { if (it.children[j]) it.children[j].label = e.target.value; }
+        else it.label = e.target.value;
+        m.source = "user";
+        state.data.archer_menu = m;
+        saver.run();
+        return;
+      }
       const f = e.target.getAttribute("data-f");
       if (!f || !sel) return;
       const page = state.bySlug[sel.slug];
@@ -391,6 +616,19 @@
     });
     panel.addEventListener("change", (e) => {
       if (e.target.getAttribute("data-f") === "section_type") e.target.dispatchEvent(new Event("input", { bubbles: true }));
+      if (e.target.hasAttribute("data-parent") && sel && sel.kind === "page") {
+        setParent(sel.slug, e.target.value);
+        renderPanel();
+        ensureVisible(sel.slug);
+      }
+      if (e.target.hasAttribute("data-menu-cta")) {
+        const v = e.target.value;
+        editMenu((m) => {
+          m.cta = v;
+          // Een pagina is knop of menu-item, niet allebei.
+          m.items = m.items.filter((it) => it.slug !== v || !v).map((it) => ({ ...it, children: it.children.filter((c) => c.slug !== v || !v) }));
+        });
+      }
     });
     panel.addEventListener("click", (e) => {
       if (e.target.closest("[data-panel-close]")) {
@@ -399,7 +637,60 @@
         renderPanel();
         return;
       }
+      const mb = e.target.closest("[data-menu-act]");
+      if (mb && sel && sel.kind === "menu") {
+        const act = mb.getAttribute("data-menu-act");
+        const i = Number(mb.getAttribute("data-i"));
+        const j = mb.hasAttribute("data-j") ? Number(mb.getAttribute("data-j")) : -1;
+        if (act === "ai") { menuStatus = ""; proposeMenu(false); return; }
+        if (act === "add") {
+          const v = (panel.querySelector("[data-menu-add]") || {}).value || "";
+          if (!v) return;
+          editMenu((m) => {
+            if (v === "__group") m.items.push({ slug: "", label: "Nieuwe groep", children: [] });
+            else m.items.push({ slug: v, label: "", children: [] });
+          });
+          const inputs = panel.querySelectorAll("[data-menu-label]:not([data-j])");
+          const last = inputs[inputs.length - 1];
+          if (last) { last.focus(); if (v === "__group") last.select(); }
+          return;
+        }
+        editMenu((m) => {
+          const it = m.items[i];
+          if (!it) return;
+          if (j >= 0) {
+            const kids = it.children;
+            if (act === "up" && j > 0) [kids[j - 1], kids[j]] = [kids[j], kids[j - 1]];
+            else if (act === "down" && j < kids.length - 1) [kids[j + 1], kids[j]] = [kids[j], kids[j + 1]];
+            else if (act === "del") kids.splice(j, 1);
+            else if (act === "out") {
+              const [c] = kids.splice(j, 1);
+              m.items.splice(i + 1, 0, { slug: c.slug, label: c.label, children: [] });
+            }
+          } else {
+            if (act === "up" && i > 0) [m.items[i - 1], m.items[i]] = [m.items[i], m.items[i - 1]];
+            else if (act === "down" && i < m.items.length - 1) [m.items[i + 1], m.items[i]] = [m.items[i], m.items[i + 1]];
+            else if (act === "del") m.items.splice(i, 1);
+            else if (act === "in" && i > 0) {
+              const [moved] = m.items.splice(i, 1);
+              const target = m.items[i - 1];
+              if (moved.slug) target.children.push({ slug: moved.slug, label: moved.label });
+              moved.children.forEach((c) => target.children.push(c));
+            }
+          }
+        });
+        return;
+      }
       const b = e.target.closest("[data-panel-act]");
+      if (b && sel && sel.kind === "page") {
+        const act = b.getAttribute("data-panel-act");
+        if (act === "page-earlier" || act === "page-later") {
+          moveSibling(sel.slug, act === "page-earlier" ? -1 : 1);
+          renderPanel();
+          ensureVisible(sel.slug);
+        }
+        return;
+      }
       if (!b || !sel || sel.kind !== "section") return;
       const page = state.bySlug[sel.slug];
       if (!page) return;
@@ -622,7 +913,9 @@
              </div>`
           : "";
 
-      const meta = isHome ? "Startpagina" : parent ? `Subpagina van ${esc(parent.page_title || parent.slug)}` : "Pagina in het menu";
+      const menuSet = inMenu();
+      const menuNote = !isHome && menuPage(page) && !menuSet.has(slug) ? " · niet in het menu" : "";
+      const meta = (isHome ? "Startpagina" : parent ? `Subpagina van ${esc(parent.page_title || parent.slug)}` : "Hoofdpagina") + menuNote;
       const badge =
         page.archer_added === "source"
           ? '<span class="archer-page-badge">van je huidige website</span>'
@@ -632,7 +925,7 @@
               ? '<span class="archer-page-badge">altijd aanwezig</span>'
               : "";
 
-      return `<article class="archer-page-card${parent ? " is-child" : ""}" data-page="${esc(slug)}">
+      return `<article class="archer-page-card${parent ? " is-child" : ""}" data-page="${esc(slug)}"${isHome ? "" : ' draggable="true"'}>
           <div class="archer-page-card-head">
             <div>
               <h3 class="archer-page-card-title${sel && sel.kind === "page" && sel.slug === slug ? " is-selected" : ""}" data-sel-page="${esc(slug)}" tabindex="0" title="Pagina bewerken">${esc(page.page_title || page.nav_label || slug)}${badge}</h3>
@@ -1144,6 +1437,85 @@
         fail(e.message || "Er ging iets mis.");
         throw e;
       }
+    };
+
+    /* ── Menu-knop en slepen op het canvas ───────────────── */
+
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.className = "archer-btn archer-btn-outline archer-btn-sm archer-smap-menu-btn";
+    menuBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg><span>Menu</span>';
+    stage.appendChild(menuBtn);
+    menuBtn.addEventListener("click", () => {
+      if (sel && sel.kind === "menu") {
+        sel = null;
+        render();
+        renderPanel();
+        return;
+      }
+      select({ kind: "menu" });
+    });
+
+    // Een pagina slepen op een andere pagina: wordt een subpagina ervan. Op Home: hoofdniveau.
+    let dragSlug = null;
+    const clearDrop = () => treeBox.querySelectorAll(".is-drop-target, .is-dragging").forEach((el) => el.classList.remove("is-drop-target", "is-dragging"));
+    treeBox.addEventListener("dragstart", (e) => {
+      const card = e.target.closest && e.target.closest(".archer-page-card[draggable]");
+      if (!card || e.target.closest("input, textarea, select, button")) return;
+      dragSlug = card.getAttribute("data-page");
+      card.classList.add("is-dragging");
+      try {
+        e.dataTransfer.setData("text/plain", dragSlug);
+        e.dataTransfer.effectAllowed = "move";
+      } catch (err) {}
+    });
+    treeBox.addEventListener("dragover", (e) => {
+      if (!dragSlug) return;
+      const card = e.target.closest(".archer-page-card");
+      const to = card && card.getAttribute("data-page");
+      if (!to || to === dragSlug || descendants(dragSlug).has(to)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (!card.classList.contains("is-drop-target")) {
+        clearDrop();
+        card.classList.add("is-drop-target");
+      }
+    });
+    treeBox.addEventListener("drop", (e) => {
+      if (!dragSlug) return;
+      const card = e.target.closest(".archer-page-card");
+      const to = card && card.getAttribute("data-page");
+      e.preventDefault();
+      const slug = dragSlug;
+      dragSlug = null;
+      clearDrop();
+      if (to && setParent(slug, to)) {
+        app.setStatus && app.setStatus(`<div class="aisb-ok">${esc(labelOf(slug))} ${to === "home" ? "staat nu op het hoofdniveau" : "hangt nu onder " + esc(labelOf(to))}.</div>`);
+      }
+    });
+    treeBox.addEventListener("dragend", () => {
+      dragSlug = null;
+      clearDrop();
+    });
+
+    // Nog geen menu bewaard (oudere sitemaps): één keer een voorstel vragen.
+    const maybePropose = () => {
+      if (menuTried || !state.data || !state.projectId || pending.size) return;
+      const m = state.data.archer_menu;
+      if (m && Array.isArray(m.items) && m.items.length) return;
+      menuTried = true;
+      proposeMenu(true);
+    };
+    setInterval(maybePropose, 4000);
+
+    // Na een nieuwe sitemap: meteen een menuvoorstel.
+    const origFast = UI.fastGenerate;
+    UI.fastGenerate = async (opts) => {
+      const r = await origFast(opts);
+      menuTried = true;
+      await proposeMenu(true);
+      await saver.flush();
+      return r;
     };
 
     // Als de sitemap al geladen was voor dit script draaide.
