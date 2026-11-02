@@ -168,24 +168,44 @@ class AISB_Archer_Template_Import {
     return $nodes;
   }
 
-  /** Werkt op elke site met Bricks, ook na publicatie (zelfde placeholder als de andere sjablonen). */
-  const PLACEHOLDER = '/wp-content/themes/bricks/assets/images/placeholder-image-800x600.jpg';
+  /** Eén grijze voorbeeldfoto voor alle sjablonen; volledige URL, zodat ze ook op een gepubliceerde site laadt. */
+  public static function placeholder_url(): string {
+    return plugins_url('assets/archer/img/placeholder.png', dirname(__DIR__));
+  }
 
-  /** Placeholderbeelden van een andere site (brixies.co, ...) vervangen door de lokale Bricks-placeholder. */
-  public static function localise_images(array $nodes): array {
+  /**
+   * Voorbeeldfoto's gelijk trekken: elke placeholder (brixies.co, Bricks, ...) wordt de grijze van Archer.
+   * Met $foreign ook elk beeld van een andere site (bij het importeren).
+   */
+  public static function localise_images(array $nodes, bool $foreign = true): array {
     $home = wp_parse_url(home_url(), PHP_URL_HOST);
-    $fix = function ($img) use ($home) {
-      if (!is_array($img) || empty($img['url']) || !empty($img['id'])) return $img;
-      $host = wp_parse_url($img['url'], PHP_URL_HOST);
-      if ($host && $host !== $home) {
-        $img['url'] = self::PLACEHOLDER;
-        $img['external'] = true;
+    $ph = self::placeholder_url();
+    $walk = function (&$v, $key = '') use (&$walk, $home, $ph, $foreign) {
+      if (!is_array($v)) return;
+      $url = isset($v['url']) && is_string($v['url']) ? $v['url'] : '';
+      if ($url && preg_match('/\.svg(\?|$)/i', $url)) return; // logo's en iconen
+      // Alleen beelden (geen links): sleutel image/images/... of de velden die Bricks bij een beeld bewaart.
+      $is_img = isset($v['filename']) || isset($v['full']) || preg_match('/^(image|images|_background|src|photo|avatar)$/i', (string) $key);
+      if ($url && $is_img && $url !== $ph) {
+        $host = wp_parse_url($url, PHP_URL_HOST);
+        $is_ph = (bool) preg_match('/placeholder/i', $url . ' ' . (string) ($v['filename'] ?? ''));
+        $lib_host = $host && preg_match('/(^|\.)(brixies\.co|endesarrollo\.click)$/i', $host); // beelden van sjabloonbibliotheken
+        if ($is_ph || $lib_host || ($foreign && $host && $host !== $home)) {
+          unset($v['id'], $v['size']); // id/maat van de bronsite gelden hier niet
+          $v['url'] = $ph;
+          $v['external'] = true;
+          $v['filename'] = 'placeholder.png';
+          return;
+        }
       }
-      return $img;
+      foreach ($v as $k => &$x) {
+        if (is_string($k) && stripos($k, 'logo') !== false) continue;
+        $walk($x, is_string($k) ? $k : $key);
+      }
     };
     foreach ($nodes as &$n) {
-      if (isset($n['settings']['image'])) $n['settings']['image'] = $fix($n['settings']['image']);
-      if (isset($n['settings']['_background']['image'])) $n['settings']['_background']['image'] = $fix($n['settings']['_background']['image']);
+      if (($n['name'] ?? '') === 'logo') continue;
+      if (isset($n['settings']) && is_array($n['settings'])) $walk($n['settings']);
     }
     unset($n);
     return $nodes;
