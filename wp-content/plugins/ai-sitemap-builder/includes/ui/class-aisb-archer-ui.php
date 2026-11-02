@@ -7,6 +7,7 @@ require_once __DIR__ . '/class-aisb-archer-section-edit.php';
 require_once __DIR__ . '/class-aisb-archer-taste.php';
 require_once __DIR__ . '/class-aisb-archer-template-import.php';
 require_once __DIR__ . '/class-aisb-archer-chrome.php';
+require_once __DIR__ . '/class-aisb-archer-logo.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -663,8 +664,10 @@ class AISB_Archer_UI {
     $crawl = AISB_Archer_Sitemap_Rules::crawl_site($url, $html);
     $brief['pages'] = $crawl['pages'];
     $brief['collapsed'] = $crawl['collapsed'];
+    // Het logo van die website, voor de stijlgids van het nieuwe project.
+    $brief['logo'] = AISB_Archer_Logo::find($html, $url);
     if ($crawl['pages']) {
-      AISB_Archer_Sitemap_Rules::remember_source($url, $crawl['pages'], $crawl['collapsed'], ['brief' => $brief['text'], 'title' => $brief['title']]);
+      AISB_Archer_Sitemap_Rules::remember_source($url, $crawl['pages'], $crawl['collapsed'], ['brief' => $brief['text'], 'title' => $brief['title'], 'logo' => $brief['logo']]);
     }
 
     if (mb_strlen($brief['text']) < 80 && !$crawl['pages']) {

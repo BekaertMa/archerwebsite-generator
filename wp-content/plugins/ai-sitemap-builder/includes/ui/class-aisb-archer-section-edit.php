@@ -28,7 +28,7 @@ class AISB_Archer_Section_Edit {
   private function guard(): int {
     if (!is_user_logged_in()) wp_send_json_error(['message' => 'Niet aangemeld'], 401);
     $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
-    if (!$nonce || (!wp_verify_nonce($nonce, 'aisb_wf_nonce') && !wp_verify_nonce($nonce, 'aisb_nonce_action'))) {
+    if (!$nonce || (!wp_verify_nonce($nonce, 'aisb_wf_nonce') && !wp_verify_nonce($nonce, 'aisb_nonce_action') && !wp_verify_nonce($nonce, 'aisb_sg_nonce'))) {
       wp_send_json_error(['message' => 'Ongeldige sessie, herlaad de pagina'], 403);
     }
     $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;

@@ -448,6 +448,10 @@ class AISB_Archer_Generate {
       update_post_meta($project_id, 'aisb_project_brief', wp_kses_post(mb_substr($brief, 0, 12000)));
       update_post_meta($project_id, 'aisb_project_languages', wp_json_encode($languages));
     }
+    // Bestaande website: het logo meteen in de stijlgids (als er nog geen logo is).
+    if ($mode === 'url' && !empty($src['logo']) && class_exists('AISB_Archer_Logo')) {
+      AISB_Archer_Logo::store((int) $project_id, (string) $src['logo']);
+    }
     $settings = $this->settings();
     $save = $this->ajax_call('aisb_create_sitemap_version', [(int) $project_id, $data, [
       'source' => 'ai',

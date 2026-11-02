@@ -227,6 +227,7 @@ class AISB_Archer_Chrome {
     $menu = $ctx['menu'];
     $groups = $ctx['footer']['groups'];
 
+    $credited = false;
     $has_button = false;
     foreach ($nodes as $n) if (($n['name'] ?? '') === 'button') $has_button = true;
 
@@ -241,6 +242,7 @@ class AISB_Archer_Chrome {
       }
       if ($name === 'logo') {
         $is_ph = !empty($s['logo']['isPlaceholder']) || preg_match('/placeholder/i', (string) ($s['logo']['url'] ?? ''));
+        // Logo uit de stijlgids (ook een data-URI: Bricks toont die gewoon), anders de naam.
         if ($ctx['logo'] !== '' && $is_ph) {
           $s['logo'] = ['url' => $ctx['logo'], 'external' => true];
           unset($s['logoInverse']);
@@ -288,12 +290,48 @@ class AISB_Archer_Chrome {
         } else {
           $remove[] = (string) $n['id'];
         }
-      } elseif ($region === 'footer' && in_array($name, ['text-basic', 'text'], true) && preg_match('/©|&copy;|copyright/i', (string) ($s['text'] ?? ''))) {
-        $s['text'] = '© ' . $ctx['year'] . ' ' . $ctx['name'];
+      } elseif ($region === 'footer' && !$credited && in_array($name, ['text-basic', 'text'], true) && preg_match('/©|&copy;|copyright/i', (string) ($s['text'] ?? ''))) {
+        $s['text'] = self::credit($ctx);
+        $s['_cssClasses'] = trim((string) ($s['_cssClasses'] ?? '') . ' archer-credit');
+        $credited = true;
       }
       $nodes[$i]['settings'] = $s;
     }
-    return $remove ? self::remove($nodes, $remove) : $nodes;
+    $nodes = $remove ? self::remove($nodes, $remove) : $nodes;
+    // Altijd onderaan: "Website door Archer Websites", ook als het sjabloon geen copyrightregel heeft.
+    if ($region === 'footer' && !$credited) $nodes = self::add_credit($nodes, $ctx);
+    return $nodes;
+  }
+
+  const CREDIT = 'Website door <a href="https://archerwebsites.be" target="_blank" rel="noopener">Archer Websites</a>';
+
+  public static function credit(array $ctx): string {
+    return '© ' . $ctx['year'] . ' ' . esc_html($ctx['name']) . ' · ' . self::CREDIT;
+  }
+
+  /** Een creditregel als laatste element van de footer (in de container van de bovenste sectie). */
+  private static function add_credit(array $nodes, array $ctx): array {
+    $root = null;
+    foreach ($nodes as $i => $n) if (empty($n['parent'])) { $root = $i; break; }
+    if ($root === null) return $nodes;
+    $parent = $root;
+    foreach ((array) ($nodes[$root]['children'] ?? []) as $cid) {
+      foreach ($nodes as $i => $n) {
+        if ((string) ($n['id'] ?? '') === (string) $cid && ($n['name'] ?? '') === 'container') $parent = $i;
+      }
+    }
+    $taken = array_flip(array_map(fn($n) => (string) ($n['id'] ?? ''), $nodes));
+    do { $id = 'arcr' . substr(md5((string) wp_rand()), 0, 2); } while (isset($taken[$id]));
+    $nodes[$parent]['children'] = array_values(array_merge((array) ($nodes[$parent]['children'] ?? []), [$id]));
+    $nodes[] = [
+      'id' => $id,
+      'name' => 'text-basic',
+      'parent' => $nodes[$parent]['id'],
+      'children' => [],
+      'settings' => ['text' => self::credit($ctx), 'tag' => 'p', '_cssClasses' => 'archer-credit'],
+      'label' => 'Archer credit',
+    ];
+    return $nodes;
   }
 
   /** Elementen en hun kinderen weghalen, ook uit de children van hun ouder. */
