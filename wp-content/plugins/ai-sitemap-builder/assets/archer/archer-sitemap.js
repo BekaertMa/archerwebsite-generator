@@ -36,14 +36,40 @@
 
     /* ── Weergave kiezen ─────────────────────────────────── */
 
+    // Weergaven: canvas (standaard, zoals Relume), lijst, en de oude boomstructuur (Archer-team).
+    const seg = card.querySelector(".archer-seg");
+    const listBtn = card.querySelector('[data-archer-sitemap-view="list"]');
+    const treeBtn = card.querySelector('[data-archer-sitemap-view="tree"]');
+    if (seg && listBtn && !card.querySelector('[data-archer-sitemap-view="canvas"]')) {
+      const cBtn = document.createElement("button");
+      cBtn.type = "button";
+      cBtn.className = "archer-seg-btn";
+      cBtn.setAttribute("data-archer-sitemap-view", "canvas");
+      cBtn.textContent = "Canvas";
+      seg.insertBefore(cBtn, listBtn);
+      listBtn.textContent = "Lijst";
+      if (treeBtn) treeBtn.classList.add("archer-staff-only");
+    }
+    let currentView = "canvas";
+    try {
+      const saved = localStorage.getItem("archer_sitemap_view");
+      if (saved === "list" || saved === "canvas") currentView = saved;
+    } catch (e) {}
+
     const setView = (v) => {
-      card.setAttribute("data-archer-view", v);
+      currentView = v;
+      if (v !== "tree") {
+        try { localStorage.setItem("archer_sitemap_view", v); } catch (e) {}
+      }
+      card.setAttribute("data-archer-view", v === "canvas" ? "list" : v);
+      card.setAttribute("data-archer-layout", v);
       document.querySelectorAll("[data-archer-sitemap-view]").forEach((b) => {
         const on = b.getAttribute("data-archer-sitemap-view") === v;
         b.classList.toggle("is-active", on);
         b.setAttribute("aria-pressed", on ? "true" : "false");
       });
       if (treeEl) treeEl.hidden = v !== "tree";
+      if (v === "canvas") view.fitted = false;
       if (v === "tree") {
         app.renderCanvas && app.renderCanvas();
         requestAnimationFrame(() => app.fitToView && app.fitToView());
@@ -55,6 +81,149 @@
       b.addEventListener("click", () => setView(b.getAttribute("data-archer-sitemap-view"))),
     );
     card.setAttribute("data-archer-view", "list");
+    card.setAttribute("data-archer-layout", currentView);
+
+    document.querySelectorAll("[data-archer-sitemap-view]").forEach((b) => {
+      const on = b.getAttribute("data-archer-sitemap-view") === currentView;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    /* ── Canvas ──────────────────────────────────────────── */
+
+    const view = { tx: 0, ty: 0, scale: 1, fitted: false };
+    const vp = document.createElement("div");
+    vp.className = "archer-smap-viewport";
+    vp.innerHTML =
+      '<div class="archer-smap-inner"><div class="archer-smap-tree" data-archer-smap-tree></div></div>' +
+      '<div class="archer-cv-zoom archer-smap-zoom">' +
+      '<button type="button" data-archer-smap-zoom="out" aria-label="Uitzoomen">−</button>' +
+      '<span data-archer-smap-level>100%</span>' +
+      '<button type="button" data-archer-smap-zoom="in" aria-label="Inzoomen">+</button>' +
+      '<button type="button" data-archer-smap-zoom="fit">Passend</button></div>' +
+      '<div class="archer-smap-hint">Sleep om te verschuiven · Ctrl + scroll om te zoomen</div>';
+    const gridEl = document.createElement("div");
+    gridEl.className = "archer-sitemap-grid";
+    listEl.append(vp, gridEl);
+    const innerEl = vp.querySelector(".archer-smap-inner");
+    const treeBox = vp.querySelector("[data-archer-smap-tree]");
+    const levelEl = vp.querySelector("[data-archer-smap-level]");
+
+    const applyView = () => {
+      innerEl.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+      levelEl.textContent = Math.round(view.scale * 100) + "%";
+    };
+    const zoomAt = (next, cx, cy) => {
+      next = Math.max(0.25, Math.min(1.5, next));
+      const wx = (cx - view.tx) / view.scale;
+      const wy = (cy - view.ty) / view.scale;
+      view.scale = next;
+      view.tx = cx - wx * next;
+      view.ty = cy - wy * next;
+      applyView();
+    };
+    const fit = () => {
+      const w = vp.clientWidth;
+      const tw = treeBox.offsetWidth;
+      if (!w || !tw) return false;
+      const scale = Math.max(0.35, Math.min(1, (w - 48) / tw));
+      view.scale = scale;
+      // De startpagina staat in het midden van de boom: die komt in het midden van het beeld.
+      view.tx = (w - tw * scale) / 2;
+      view.ty = 24;
+      applyView();
+      return true;
+    };
+    vp.querySelector(".archer-smap-zoom").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-archer-smap-zoom]");
+      if (!b) return;
+      const z = b.getAttribute("data-archer-smap-zoom");
+      const cx = vp.clientWidth / 2;
+      const cy = Math.min(vp.clientHeight / 2, 240);
+      if (z === "in") zoomAt(view.scale * 1.2, cx, cy);
+      else if (z === "out") zoomAt(view.scale / 1.2, cx, cy);
+      else fit();
+    });
+    // Verschuiven: slepen op de achtergrond (niet op kaarten of knoppen).
+    let pan = null;
+    vp.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".archer-page-card, .archer-add-page-card, .archer-smap-zoom, button, a, input, textarea, select, label, form")) return;
+      pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, id: e.pointerId };
+      vp.setPointerCapture(e.pointerId);
+      vp.classList.add("is-panning");
+      e.preventDefault();
+    });
+    vp.addEventListener("pointermove", (e) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      view.tx = pan.tx + (e.clientX - pan.x);
+      view.ty = pan.ty + (e.clientY - pan.y);
+      applyView();
+    });
+    const endPan = (e) => {
+      if (!pan) return;
+      try { vp.releasePointerCapture(pan.id); } catch (err) {}
+      pan = null;
+      vp.classList.remove("is-panning");
+    };
+    vp.addEventListener("pointerup", endPan);
+    vp.addEventListener("pointercancel", endPan);
+    // Scrollen verschuift het canvas; Ctrl/Cmd + scroll (of knijpen) zoomt.
+    vp.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const r = vp.getBoundingClientRect();
+        if (e.ctrlKey || e.metaKey) {
+          zoomAt(view.scale * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
+        } else {
+          view.tx -= e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
+          view.ty -= e.shiftKey && !e.deltaX ? 0 : e.deltaY;
+          applyView();
+        }
+      },
+      { passive: false },
+    );
+    // Focus in een formulier mag de viewport niet laten verspringen.
+    vp.addEventListener("scroll", () => {
+      vp.scrollTop = 0;
+      vp.scrollLeft = 0;
+    });
+
+    /** Boom: home bovenaan, hoofdpagina's in een rij, subpagina's eronder gestapeld. */
+    const treeHtml = () => {
+      const pages = state.pages || [];
+      const bySlug = {};
+      pages.forEach((p) => (bySlug[p.slug] = p));
+      const kids = {};
+      pages.forEach((p) => {
+        if (p.slug === "home") return;
+        let par = p.parent_slug && bySlug[p.parent_slug] && p.parent_slug !== p.slug ? p.parent_slug : "home";
+        (kids[par] = kids[par] || []).push(p);
+      });
+      const seen = new Set();
+      const branch = (p) => {
+        if (seen.has(p.slug)) return "";
+        seen.add(p.slug);
+        const ch = (kids[p.slug] || []).filter((c) => !seen.has(c.slug));
+        return (
+          `<div class="archer-smap-node">${pageCard(p)}</div>` +
+          (ch.length ? `<ul class="archer-smap-stack">${ch.map((c) => `<li>${branch(c)}</li>`).join("")}</ul>` : "")
+        );
+      };
+      const home = bySlug.home;
+      if (home) seen.add("home");
+      const top = (kids.home || []).filter((p) => !seen.has(p.slug));
+      const cols = top.map((p) => `<li class="archer-smap-col">${branch(p)}</li>`).join("");
+      // Pagina's die nergens onder hangen (lussen in de data) achteraan.
+      const rest = pages.filter((p) => !seen.has(p.slug)).map((p) => `<li class="archer-smap-col">${branch(p)}</li>`).join("");
+      return (
+        `<div class="archer-smap-root">` +
+        (home ? `<div class="archer-smap-node archer-smap-home">${pageCard(home)}</div>` : "") +
+        `<ul class="archer-smap-row">${cols}${rest}<li class="archer-smap-col archer-smap-col-add"><div class="archer-smap-node">${addPageCard()}</div></li></ul>` +
+        `</div>`
+      );
+    };
 
     /* ── State-hulp ──────────────────────────────────────── */
 
@@ -277,11 +446,25 @@
 
     const render = () => {
       if (!state.data || !Array.isArray(state.pages)) {
-        listEl.innerHTML = "";
+        treeBox.innerHTML = "";
+        gridEl.innerHTML = "";
         return;
       }
       const pages = orderPages();
-      listEl.innerHTML = pages.map(pageCard).join("") + addPageCard();
+      const asCanvas = currentView === "canvas";
+      vp.hidden = !asCanvas;
+      gridEl.hidden = asCanvas;
+      if (asCanvas) {
+        treeBox.innerHTML = treeHtml();
+        gridEl.innerHTML = "";
+        if (!view.fitted) {
+          view.fitted = fit();
+          if (!view.fitted) setTimeout(() => { if (!view.fitted) view.fitted = fit(); }, 120);
+        }
+      } else {
+        treeBox.innerHTML = "";
+        gridEl.innerHTML = pages.map(pageCard).join("") + addPageCard();
+      }
 
       const total = pages.reduce((n, p) => n + (Array.isArray(p.sections) ? p.sections.length : 0), 0);
       const aside = card.querySelector("[data-archer-head-aside]");
@@ -290,7 +473,7 @@
       }
       if (openForm) {
         const f = listEl.querySelector("form input, form select");
-        f && f.focus();
+        f && f.focus({ preventScroll: true });
       }
     };
 
@@ -326,7 +509,7 @@
         page.sections = arr;
         syncPage(slug);
         afterChange();
-        listEl.querySelector(`[data-act="${act}"][data-slug="${CSS.escape(slug)}"][data-idx="${to}"]`)?.focus();
+        listEl.querySelector(`[data-act="${act}"][data-slug="${CSS.escape(slug)}"][data-idx="${to}"]`)?.focus({ preventScroll: true });
         return;
       }
       if (act === "sec-del") {
@@ -454,6 +637,14 @@
       app.setStatus = function (html) {
         let h = html;
         if (typeof h === "string") for (const [re, to] of map) if (re.test(h)) { h = h.replace(re, to); break; }
+        // Project laden mislukt: niet een lege pagina tonen, maar het startscherm met de melding.
+        if (typeof h === "string" && /Could not load|Failed to load|aisb-error/i.test(h) && (!app.outWrap || app.outWrap.style.display === "none")) {
+          const shell = document.querySelector(".archer-shell");
+          if (shell && shell.hasAttribute("data-archer-has-project")) {
+            shell.removeAttribute("data-archer-has-project");
+            h = '<div class="aisb-error">Deze website kon niet geladen worden. Controleer of je aangemeld bent met het account dat de website maakte, of open ze opnieuw via Mijn websites.</div>';
+          }
+        }
         return origSetStatus.call(this, h);
       };
     }
