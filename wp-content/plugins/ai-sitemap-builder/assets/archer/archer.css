@@ -1016,3 +1016,8 @@ body.archer-app .aisb-sg-iframe-wrap iframe.aisb-sg-section-iframe { pointer-eve
 .archer-smap-tree .archer-page-card.is-dragging { opacity: 0.45; }
 .archer-smap-tree .archer-page-card.is-drop-target { outline: 3px dashed var(--ar-teal); outline-offset: 4px; }
 body.archer-app .archer-shell .archer-btn.archer-btn-sm.is-active { background: var(--ar-navy); border-color: var(--ar-navy); color: #fff; }
+
+/* ── Stijl: één pagina, gewoon scrollen (geen canvas) ─── */
+body.archer-app .archer-shell .aisb-sg-canvas.archer-sg-pageview { overflow-y: auto !important; overflow-x: hidden !important; cursor: default !important; height: calc(100vh - 210px) !important; min-height: 480px; background: var(--ar-bg); }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-canvas-inner { transform: none !important; position: static !important; display: block !important; width: auto !important; height: auto !important; padding: 0 !important; }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; }

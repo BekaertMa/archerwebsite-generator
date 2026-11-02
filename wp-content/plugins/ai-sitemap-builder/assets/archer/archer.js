@@ -1850,6 +1850,45 @@
       SG.goToWizardStep(view === "photos" ? "3" : "1");
     };
     show();
+    // Stockfoto's vullen elke <img> in volgorde: het logo eerst uit de pagina halen, anders wordt dat een foto.
+    if (typeof SG.injectImagesIntoIframe === "function" && !SG.injectImagesIntoIframe._archer) {
+      const origInject = SG.injectImagesIntoIframe;
+      SG.injectImagesIntoIframe = function (iframe) {
+        let held = [];
+        try {
+          const doc = iframe.contentDocument;
+          held = Array.from(doc.querySelectorAll(".brxe-logo img, img.bricks-site-logo")).map((img) => {
+            const mark = doc.createComment("archer-logo");
+            img.replaceWith(mark);
+            return [img, mark];
+          });
+        } catch (e) {}
+        try {
+          return origInject.apply(this, arguments);
+        } finally {
+          held.forEach(([img, mark]) => {
+            mark.replaceWith(img);
+            if (SG.guide && SG.guide.logoUrl) {
+              img.src = SG.guide.logoUrl;
+              img.srcset = "";
+            }
+          });
+        }
+      };
+      SG.injectImagesIntoIframe._archer = true;
+    }
+    // Foto's: de stap opent vaak voor de wireframes geladen zijn; dan telde de stijlgids 0 fotovakken.
+    if (view === "photos") {
+      let tries = 0;
+      const waitPages = setInterval(() => {
+        tries++;
+        const pages = Array.isArray(SG.wireframePages) ? SG.wireframePages : [];
+        if (pages.length || tries > 60) {
+          clearInterval(waitPages);
+          if (pages.length && !SG.imagesLoaded && typeof SG.autoAssignImages === "function") SG.autoAssignImages();
+        }
+      }, 500);
+    }
 
     // Teksten van de wizard in gewone taal.
     const swap = [
@@ -1862,7 +1901,7 @@
       ["[data-colour-mode='logo']", "Uit een logo of foto"],
       ["[data-colour-mode='manual']", "Zelf kiezen"],
       [".aisb-sg-preview-label", "Live voorbeeld"],
-      [".aisb-sg-preview-hint", "Scroll · Ctrl + scroll om te zoomen"],
+      [".aisb-sg-preview-hint", "Klik op een tekst om ze aan te passen · kleurschema rechtsboven in een sectie"],
     ];
     swap.forEach(([sel, txt]) => {
       const el = $(sel, panel);
@@ -1910,33 +1949,41 @@
     const fillPick = () => {
       const pages = SG.wireframePages || [];
       if (!pages.length) return;
-      if (focusSlug !== "__all" && !pages.some((p) => p.slug === focusSlug)) focusSlug = pages[0].slug;
+      if (!pages.some((p) => p.slug === focusSlug)) focusSlug = pages[0].slug;
       pick.innerHTML =
-        pages.map((p) => `<option value="${esc(p.slug)}">${esc(p.title || p.slug)}</option>`).join("") +
-        `<option value="__all">Alle pagina's</option>`;
+        pages.map((p) => `<option value="${esc(p.slug)}">${esc(p.title || p.slug)}</option>`).join("");
       pick.value = focusSlug;
       pick.hidden = false;
     };
-    // Zoomt in op één pagina: zo breed als het voorbeeld, bovenaan beginnen.
+    // Geen canvas meer: één pagina over de volle breedte, gewoon scrollen; wisselen met de keuzelijst.
     const focusPage = (container) => {
       const canvas = $(".aisb-sg-canvas", container);
       const innerEl = canvas && $(".aisb-sg-canvas-inner", canvas);
-      const st = canvas && canvas._sgState;
-      if (!st || !innerEl) return;
-      if (focusSlug === "__all") {
-        if (container._archerFitAll) container._archerFitAll();
-        return;
-      }
-      const rect = canvas.getBoundingClientRect();
-      if (!rect.width) return;
-      const idx = Math.max(0, (SG.wireframePages || []).findIndex((p) => p.slug === focusSlug));
-      const card = $$(".aisb-sg-page-card", innerEl)[idx];
-      if (!card || !card.offsetWidth) return;
-      const pad = 16;
-      st.scale = Math.max(0.05, Math.min(1, (rect.width - pad * 2) / card.offsetWidth));
-      st.translateX = (rect.width - card.offsetWidth * st.scale) / 2 - card.offsetLeft * st.scale;
-      st.translateY = pad - card.offsetTop * st.scale;
-      innerEl.style.transform = `translate(${st.translateX}px, ${st.translateY}px) scale(${st.scale})`;
+      if (!canvas || !innerEl) return;
+      canvas.classList.add("archer-sg-pageview");
+      const pages = SG.wireframePages || [];
+      const idx = Math.max(0, pages.findIndex((p) => p.slug === focusSlug));
+      const cards = $$(".aisb-sg-page-card", innerEl);
+      cards.forEach((c, i) => (c.style.display = i === idx ? "" : "none"));
+      const card = cards[idx];
+      if (!card) return;
+      card.style.zoom = "";
+      const w = canvas.clientWidth;
+      const cw = card.offsetWidth;
+      if (!w || !cw) return;
+      card.style.zoom = String(Math.min(1, (w - 4) / cw));
+    };
+    // Het canvas van de stijlgids zoomt en verschuift met het wiel: hier gewoon scrollen.
+    const plainScroll = (container) => {
+      if (!container || container._archerScroll) return;
+      container._archerScroll = true;
+      ["wheel", "mousedown", "pointerdown"].forEach((type) =>
+        container.addEventListener(type, (e) => {
+          if (!e.target.closest || !e.target.closest(".aisb-sg-canvas")) return;
+          if (type === "wheel" && (e.ctrlKey || e.metaKey)) e.preventDefault();
+          e.stopPropagation();
+        }, { capture: true, passive: false }),
+      );
     };
     const setupCanvas = (container) => {
       if (!container || !$(".aisb-sg-canvas", container)) return;
@@ -1946,6 +1993,7 @@
         container._archerFitAll = container._sgFitToView;
       }
       container._archerFocus = () => focusPage(container);
+      plainScroll(container);
       container._sgFitToView = container._archerFocus; // ook bij het wisselen van kleuren naar lettertypes
       fillPick();
       requestAnimationFrame(() => focusPage(container));
@@ -2448,7 +2496,7 @@
       if (!doc || !doc.body || doc._archerSchemeClick) return;
       doc._archerSchemeClick = true;
       const hover = doc.createElement("style");
-      hover.textContent = "#aisb-preview{cursor:pointer}html:hover #aisb-preview{outline:3px solid #14b8a6;outline-offset:-3px}";
+      hover.textContent = ".brxe-heading:hover,.brxe-text-basic:hover,.brxe-text:hover,.brxe-button:hover,.brxe-text-link:hover{outline:1px dashed #14b8a6;outline-offset:4px;cursor:text}";
       doc.head.appendChild(hover);
       // Zoals Relume: bij hover de kleurschema's als stalen bovenaan de sectie.
       const barCss = doc.createElement("style");
@@ -2474,13 +2522,98 @@
         saveGuide();
         schemeStatus(iframe);
       });
+      // Klikken: teksten rechtstreeks aanpassen (kleurschema's via de balk rechtsboven).
       doc.addEventListener("click", (e) => {
         if (e.target.closest && e.target.closest("#archer-scheme-bar")) return;
         e.preventDefault();
         e.stopPropagation();
-        cycleScheme(iframe);
+        startTextEdit(iframe, e.target);
       }, true);      renderSchemeBar(iframe);
     }
+    /* Teksten aanpassen in het voorbeeld (Stijl): klik, typ, klik ernaast of Enter om te bewaren. */
+    const EDIT_SEL = ".brxe-heading, .brxe-text-basic, .brxe-text, .brxe-button, .brxe-text-link";
+    const editable = (iframe) => {
+      const i = sectionInfo(iframe);
+      const page = (SG.wireframePages || []).find((p) => p.slug === iframe._pageSlug);
+      const sec = page && page.sections ? page.sections[iframe._sectionIdx] : null;
+      const id = Number(String(iframe.src || "").split("aisb_bricks_preview=").pop().split("&")[0]) || 0;
+      const ai = sec && Number(sec.ai_wireframe_id || 0);
+      return id && ai && ai === id ? { postId: id, slug: i.slug, global: i.global } : null;
+    };
+    function startTextEdit(iframe, target) {
+      const doc = iframe.contentDocument;
+      const el = target && target.closest && target.closest(EDIT_SEL);
+      if (!el || el.closest(".archer-credit") || !/^brxe-[a-z0-9]+$/i.test(el.id || "") || el.isContentEditable) return;
+      const info = editable(iframe);
+      const status = $("[data-scheme-status]", panel);
+      if (!info) {
+        if (status) status.textContent = "De header pas je aan in de sitemap (het menu), niet hier.";
+        return;
+      }
+      const name = (el.className.match(/brxe-([a-z-]+)/) || [])[1] || "text";
+      const single = name === "heading" || name === "button" || name === "text-link";
+      // Bij knoppen en links: alleen de tekst, niet een icoon.
+      const box = name === "button" || name === "text-link" ? el.querySelector("span:not(:empty)") || el : el;
+      const before = box.innerHTML;
+      box.setAttribute("contenteditable", single ? "plaintext-only" : "true");
+      box.classList.add("archer-editing");
+      if (!doc.getElementById("archer-edit-css")) {
+        const st = doc.createElement("style");
+        st.id = "archer-edit-css";
+        st.textContent = ".archer-editing{outline:2px dashed #14b8a6 !important;outline-offset:4px;cursor:text !important}" +
+          `${EDIT_SEL}{cursor:text}`;
+        doc.head.appendChild(st);
+      }
+      box.focus();
+      const done = async (save) => {
+        box.removeEventListener("blur", onBlur);
+        box.removeEventListener("keydown", onKey);
+        box.removeAttribute("contenteditable");
+        box.classList.remove("archer-editing");
+        if (!save) { box.innerHTML = before; return; }
+        const value = single ? box.textContent.trim() : box.innerHTML.trim();
+        if (value === before.trim() || !value) { if (!value) box.innerHTML = before; return; }
+        if (status) status.textContent = "Tekst bewaren…";
+        // Footer: dezelfde tekst op de andere pagina's.
+        const sync = [];
+        if (info.global === "footer") {
+          (SG.wireframePages || []).forEach((p) => (p.sections || []).forEach((x) => {
+            if (String(x.type || "").toLowerCase() === "footer" && x.ai_wireframe_id && Number(x.ai_wireframe_id) !== info.postId) sync.push({ page_slug: p.slug, post_id: Number(x.ai_wireframe_id) });
+          }));
+        }
+        try {
+          const out = await SG.post("aisb_archer_section_edit", {
+            project_id: SG.projectId,
+            page_slug: info.slug,
+            post_id: info.postId,
+            ops: JSON.stringify([{ op: "text", id: el.id.slice(5), key: "text", value }]),
+            sync: JSON.stringify(sync),
+          });
+          if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Bewaren mislukt");
+          if (info.global) {
+            (SG.allIframes || []).forEach((f) => {
+              if (f === iframe || sectionInfo(f).global !== info.global) return;
+              try {
+                const twin = f.contentDocument.getElementById(el.id);
+                if (twin) (twin.querySelector("span:not(:empty)") && box !== el ? twin.querySelector("span:not(:empty)") : twin).innerHTML = box.innerHTML;
+              } catch (err) {}
+            });
+          }
+          if (status) status.textContent = "Tekst bewaard.";
+        } catch (err) {
+          box.innerHTML = before;
+          if (status) status.textContent = err.message || "Bewaren mislukt.";
+        }
+      };
+      const onBlur = () => done(true);
+      const onKey = (ev) => {
+        if (ev.key === "Escape") { ev.preventDefault(); done(false); }
+        else if (ev.key === "Enter" && (single || !ev.shiftKey) && single) { ev.preventDefault(); box.blur(); }
+      };
+      box.addEventListener("blur", onBlur);
+      box.addEventListener("keydown", onKey);
+    }
+
     function renderSchemeBar(iframe) {
       let doc;
       try {
