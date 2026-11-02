@@ -415,7 +415,10 @@ class AISB_Archer_Taste {
       . 'body{caret-color:' . $accent . ';}'
       . ':focus-visible{outline:2px solid ' . $accent . ' !important;outline-offset:3px;}'
       . 'a{text-underline-offset:0.18em;text-decoration-thickness:from-font;}'
-      . '.brxe-counter,table,.brxe-pricing-tables{font-variant-numeric:tabular-nums;}';
+      . '.brxe-counter,table,.brxe-pricing-tables{font-variant-numeric:tabular-nums;}'
+      // Tekst over een foto die de hele sectie vult: altijd wit (de overlay van het ontwerp zorgt voor contrast).
+      . '.archer-cover.brxe-section :is(h1,h2,h3,h4,h5,h6,.brxe-heading,p,li,.brxe-text,.brxe-text-basic,.brxe-rich-text){color:#fff !important;}'
+      . '.archer-cover.brxe-section :is(.brxe-container,.brxe-block){background-color:transparent !important;}';
   }
 
   public function preview_house_css(): void {
