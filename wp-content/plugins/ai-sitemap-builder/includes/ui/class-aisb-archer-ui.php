@@ -8,6 +8,7 @@ require_once __DIR__ . '/class-aisb-archer-taste.php';
 require_once __DIR__ . '/class-aisb-archer-template-import.php';
 require_once __DIR__ . '/class-aisb-archer-chrome.php';
 require_once __DIR__ . '/class-aisb-archer-logo.php';
+require_once __DIR__ . '/class-aisb-archer-stock.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -54,6 +55,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Taste())->init();
     (new AISB_Archer_Template_Import())->init();
     (new AISB_Archer_Chrome())->init();
+    (new AISB_Archer_Stock())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
@@ -269,7 +271,7 @@ class AISB_Archer_UI {
       'sitemap'    => ['Je sitemap', "Dit zijn de pagina's van de website en de secties op elke pagina. Voeg secties of pagina's toe en schrap wat niet nodig is. Alles wordt automatisch bewaard."],
       'wireframes' => ['Je wireframes', "Zo komen de pagina's eruit te zien, nog zonder kleur of foto's. Kies per sectie een ander voorbeeld, zet vast wat goed is of pas de tekst aan. Alles wordt automatisch bewaard."],
       'style'      => ['Kies je stijl', 'De inhoud blijft dezelfde. Wat je hier kiest, zie je meteen op echte secties van de website.'],
-      'photos'     => ["Je foto's", "We plaatsten al passende stockfoto's van Unsplash. Vervang ze door eigen foto's wanneer je wil, ook na het publiceren."],
+      'photos'     => ["Je foto's", "We plaatsten al passende stockfoto's van " . (AISB_Archer_Stock::pexels_key() ? 'Unsplash en Pexels' : 'Unsplash') . ". Vervang ze door eigen foto's wanneer je wil, ook na het publiceren."],
       'publish'    => ['Bijna klaar: publiceer de website', 'Bekijk de website nog eens volledig. Publiceer daarna op een eigen webadres bij Archer.'],
     ];
     if (!isset($heads[$key])) return '';
