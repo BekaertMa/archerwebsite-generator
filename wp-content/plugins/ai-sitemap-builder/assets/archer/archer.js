@@ -523,6 +523,9 @@
     let parentOf = null; // slug => ouderslug, uit de sitemap
     let firstCanvas = true;
     let canvasStale = false;
+    const sitemapSections = {}; // slug => [{ name, type }] uit de sitemap, voor de skeletten
+    const genPending = new Set(); // pagina's waarvan de wireframe gemaakt wordt
+    const genFailed = new Set();
 
     // Ouders uit de sitemap, voor de volgorde en de kruimel boven elke kolom.
     if (typeof wf.postCore === "function" && wf.state.sitemapId) {
@@ -533,7 +536,13 @@
           parentOf = {};
           list.forEach((p) => {
             const slug = (p.slug || "").toString().replace(/^\//, "");
-            if (slug) parentOf[slug] = (p.parent_slug || "").toString().replace(/^\//, "");
+            if (slug) {
+              parentOf[slug] = (p.parent_slug || "").toString().replace(/^\//, "");
+              sitemapSections[slug] = (Array.isArray(p.sections) ? p.sections : []).map((x) => ({
+                name: x.section_name || "",
+                type: x.section_type || "",
+              }));
+            }
           });
           if (wf.state.pages.length && !isOpen()) wf.renderWhiteboard();
         })
@@ -587,7 +596,7 @@
       el.setAttribute("data-archer-cv-uuid", s.uuid || "");
       const id = s.ai_wireframe_id || s.bricks_template_id;
       el.innerHTML =
-        '<div class="archer-cv-sec-label"><strong></strong><span></span></div>' +
+        '<div class="archer-cv-sec-label" aria-hidden="true"><strong></strong><span></span></div>' +
         (id
           ? '<div class="aisb-wf-body archer-cv-body"><div class="aisb-wf-iframe-wrap"></div></div>'
           : '<div class="archer-cv-placeholder"></div>') +
@@ -645,11 +654,43 @@
       return [p.title, crumb].join("|");
     }
 
+    /** Skeletsecties zolang de wireframe gemaakt wordt: dezelfde secties als in de sitemap. */
+    function skeletonHtml(slug) {
+      const list = (sitemapSections[slug] && sitemapSections[slug].length
+        ? sitemapSections[slug]
+        : [{ type: "Headers" }, { type: "Hero Sections" }, { type: "Feature Sections" }, { type: "Content Sections" }, { type: "CTA Sections" }, { type: "Footers" }]
+      ).slice();
+      const head = list.filter((x) => /^(headers|megamenu)/i.test(x.type));
+      const foot = list.filter((x) => /^footers/i.test(x.type));
+      const mid = list.filter((x) => !/^(headers|megamenu|footers)/i.test(x.type));
+      return head.concat(mid, foot)
+        .map((x) => {
+          const t = (x.type || "").toLowerCase();
+          const kind = /^(headers|megamenu)/.test(t) ? "is-header" : /^footers/.test(t) ? "is-footer" : /^hero|banner/.test(t) ? "is-hero" : /cta|logo/.test(t) ? "is-short" : "";
+          const label = x.name || (labels[x.type] || x.type || "").replace(/ Sections?$/, "");
+          return `<div class="archer-cv-skel ${kind}"><span>${esc(label)}</span></div>`;
+        })
+        .join("");
+    }
+
     function renderColumn(col, p, order) {
       const model = wf.state.pageModels[p.slug];
-      const sections = (model && model.sections) || [];
+      const pendingNow = genPending.has(p.slug);
+      const sections = pendingNow ? [] : (model && model.sections) || [];
       col.style.order = String(order);
-      col.classList.toggle("is-empty", !sections.length);
+      col.classList.toggle("is-pending", pendingNow);
+      col.classList.toggle("is-failed", genFailed.has(p.slug));
+      col.classList.toggle("is-empty", !sections.length && !pendingNow);
+      let skel = $(".archer-cv-skeleton", col);
+      if (pendingNow && !skel) {
+        skel = document.createElement("div");
+        skel.className = "archer-cv-skeleton";
+        skel.setAttribute("aria-hidden", "true");
+        skel.innerHTML = skeletonHtml(p.slug);
+        $(".archer-cv-sections", col).before(skel);
+      } else if (!pendingNow && skel) {
+        skel.remove();
+      }
       col.classList.toggle("is-child", depthOf(p.slug) > 0);
       if (col.getAttribute("data-archer-cv-sig") !== columnSig(p)) {
         col.setAttribute("data-archer-cv-sig", columnSig(p));
@@ -658,7 +699,9 @@
         $(".archer-cv-title", col).textContent = p.title || p.slug;
         $("[data-archer-cv-open]", col).setAttribute("aria-label", "Pagina " + (p.title || p.slug) + " bewerken");
       }
-      $(".archer-cv-meta", col).textContent = "/" + (p.slug === "home" ? "" : p.slug) + " · " + (sections.length ? sections.length + " secties" : "nog leeg");
+      $(".archer-cv-meta", col).textContent =
+        "/" + (p.slug === "home" ? "" : p.slug) + " · " +
+        (pendingNow ? "wireframe wordt gemaakt…" : sections.length ? sections.length + " secties" : genFailed.has(p.slug) ? "mislukt" : "nog leeg");
 
       const list = $(".archer-cv-sections", col);
       const existing = {};
@@ -677,7 +720,9 @@
       Object.keys(existing).forEach((k) => !used.has(k) && existing[k].remove());
 
       const empty = $(".archer-cv-empty", col);
-      empty.hidden = !!sections.length;
+      empty.hidden = !!sections.length || pendingNow;
+      $(".archer-cv-empty p", col).textContent = genFailed.has(p.slug) ? "Deze wireframe lukte niet." : "Nog geen wireframe voor deze pagina.";
+      $("[data-archer-cv-gen]", col).textContent = genFailed.has(p.slug) ? "Opnieuw proberen" : "Maak wireframe";
     }
 
     function columnEl(p) {
@@ -704,6 +749,123 @@
       '<button type="button" data-archer-zoom="in" aria-label="Inzoomen">+</button>' +
       '<button type="button" data-archer-zoom="fit">Passend</button>';
     wb.appendChild(zoom);
+
+    /* ── Wireframes maken, zoals Relume: alle kolommen tegelijk, met skeletten ── */
+
+    const progress = document.createElement("div");
+    progress.className = "archer-smap-progress archer-cv-progress";
+    progress.hidden = true;
+    wb.appendChild(progress);
+    progress.addEventListener("mousedown", (e) => e.stopPropagation());
+    let genTotal = 0;
+    let genDone = 0;
+    const setGenProgress = () => {
+      if (!genTotal) { progress.hidden = true; return; }
+      progress.hidden = false;
+      const left = genTotal - genDone;
+      const pct = Math.round((genDone / genTotal) * 100);
+      progress.innerHTML =
+        (left > 0
+          ? `<span class="archer-smap-spinner" aria-hidden="true"></span><span>Wireframes maken · <strong>${genDone}</strong> van ${genTotal} pagina's</span>`
+          : genFailed.size
+            ? `<span>${genTotal - genFailed.size} van ${genTotal} klaar, ${genFailed.size} mislukt.</span><button type="button" class="archer-link-btn" data-archer-gen-retry>Opnieuw proberen</button>`
+            : `<span>Klaar: ${genTotal} wireframes.</span>`) +
+        `<span class="archer-smap-bar"><span style="width:${pct}%"></span></span>`;
+      if (left === 0 && !genFailed.size) setTimeout(() => { if (!genPending.size) { progress.hidden = true; genTotal = 0; genDone = 0; } }, 4000);
+    };
+    progress.addEventListener("click", (e) => {
+      if (!e.target.closest("[data-archer-gen-retry]")) return;
+      const slugs = Array.from(genFailed);
+      genFailed.clear();
+      generatePages(slugs);
+    });
+
+    let genRunning = Promise.resolve();
+    /**
+     * Maakt de wireframes van deze pagina's. Home eerst (de andere pagina's nemen de header en
+     * footer daarvan over), daarna drie pagina's tegelijk. Elke kolom toont skeletsecties tot
+     * zijn wireframe klaar is.
+     */
+    function generatePages(slugs) {
+      slugs = slugs.filter((s) => !genPending.has(s));
+      if (!slugs.length) return genRunning;
+      slugs.forEach((s) => { genPending.add(s); genFailed.delete(s); });
+      genTotal += slugs.length;
+      setGenProgress();
+      if (isOpen()) wf.closeExpandedPage();
+      wf.renderWhiteboard();
+
+      const one = async (slug) => {
+        try {
+          const out = await wf.post("aisb_generate_wireframe_page", {
+            project_id: wf.state.projectId,
+            sitemap_version_id: wf.state.sitemapId,
+            page_slug: slug,
+          });
+          if (!out || !out.success || !out.data || !out.data.wireframe) throw new Error((out && out.data && out.data.message) || "");
+          const w = out.data.wireframe;
+          lastSaved[slug] = JSON.stringify(w);
+          if (normalizeOrder(w)) markDirty(slug);
+          wf.state.pageModels[slug] = w;
+          if (wf.state.pageSlug === slug) wf.state.model = w;
+        } catch (e) {
+          genFailed.add(slug);
+        }
+        genPending.delete(slug);
+        genDone++;
+        setGenProgress();
+        redrawPage(slug);
+        if (wf.btn.generateAll) wf.btn.generateAll.textContent = anyGenerated() ? "Alle pagina's opnieuw maken" : "Maak alle pagina's";
+      };
+
+      const order = slugs.slice().sort((a, b) => (a === "home" ? -1 : b === "home" ? 1 : 0));
+      genRunning = genRunning.then(async () => {
+        const hasHeader = wf.state.pages.some((p) => p.slug !== "home" && !genPending.has(p.slug) && (wf.state.pageModels[p.slug]?.sections || []).length);
+        let rest = order;
+        if (order[0] === "home" || !hasHeader) {
+          await one(order[0]);
+          rest = order.slice(1);
+        }
+        let next = 0;
+        const worker = async () => {
+          while (next < rest.length) await one(rest[next++]);
+        };
+        await Promise.all([worker(), worker(), worker()]);
+      });
+      return genRunning;
+    }
+    UI.generateWireframes = generatePages;
+
+    // De knoppen van de module gebruiken nu deze generatie.
+    if (wf.btn.generateAll) {
+      wf.btn.generateAll.addEventListener(
+        "click",
+        (e) => {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          flushWf().then(() => generatePages(wf.state.pages.map((p) => p.slug)));
+        },
+        true,
+      );
+    }
+    if (wf.btn.generate) {
+      wf.btn.generate.addEventListener(
+        "click",
+        (e) => {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const slug = wf.state.pageSlug;
+          if (!slug) return;
+          const reopen = isOpen();
+          flushWf()
+            .then(() => generatePages([slug]))
+            .then(() => {
+              if (reopen && wf.state.pageModels[slug]) wf.openExpandedPage(slug);
+            });
+        },
+        true,
+      );
+    }
     zoom.addEventListener("mousedown", (e) => e.stopPropagation());
     const zoomLevel = $("[data-archer-zoom-level]", zoom);
     const showZoom = () => (zoomLevel.textContent = Math.round(wf.canvas.scale * 100) + "%");
@@ -827,6 +989,9 @@
       if (firstCanvas && pages.length) {
         firstCanvas = false;
         fitPending = true;
+        if (!anyGenerated() && !wf.root.hasAttribute("data-archer-no-autogen")) {
+          setTimeout(() => generatePages(pages.map((p) => p.slug)), 300);
+        }
       }
       // setTimeout in plaats van requestAnimationFrame: werkt ook in een achtergrondtab.
       if (fitPending) setTimeout(() => wf.fitToView(), 60);
@@ -867,9 +1032,7 @@
       }
       if (e.target.closest("[data-archer-cv-gen]")) {
         await flushWf();
-        wf.state.pageSlug = slug;
-        wf.state.model = wf.state.pageModels[slug] || { sections: [] };
-        wf.btn.generate && wf.btn.generate.click();
+        generatePages([slug]);
         return;
       }
       const btn = e.target.closest("[data-archer-cv-act]");
