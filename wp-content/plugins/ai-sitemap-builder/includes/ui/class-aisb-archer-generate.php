@@ -18,6 +18,7 @@ class AISB_Archer_Generate {
   public function init(): void {
     add_action('wp_ajax_aisb_archer_plan', [$this, 'ajax_plan']);
     add_action('wp_ajax_aisb_archer_sections', [$this, 'ajax_sections']);
+    add_action('wp_ajax_aisb_archer_menu', [$this, 'ajax_menu']);
     add_filter('aisb_wireframe_section_types', [$this, 'wireframe_types'], 10, 4);
     // Elke opgeslagen wireframe-sectie: geen kleuren, spans of style-attributen in de teksten.
     add_filter('sanitize_post_meta__bricks_page_content_2_for_ai_wireframe', [__CLASS__, 'clean_nodes']);
@@ -578,6 +579,42 @@ PROMPT;
   }
 
   /* ───────────────────────── 2. Secties per pagina ───────────────────────── */
+
+  /**
+   * Menuvoorstel met AI: hoofdmenu (hoogstens 6 items) met submenu's, groepen zonder eigen pagina
+   * waar dat helpt, en een knop (meestal contact). Valt terug op het vaste voorstel.
+   */
+  public function ajax_menu(): void {
+    $this->check();
+    @set_time_limit(90);
+    $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
+    if (!$project_id || !$this->can_access($project_id)) wp_send_json_error(['message' => 'Geen toegang tot dit project.'], 403);
+    $data = json_decode((string) wp_unslash($_POST['sitemap'] ?? ''), true);
+    if (!is_array($data) || !is_array($data['sitemap'] ?? null)) wp_send_json_error(['message' => 'Ongeldige sitemap.'], 400);
+    $pages = AISB_Archer_Chrome::pages($data);
+    $fallback = AISB_Archer_Chrome::proposal($pages);
+
+    $list = [];
+    foreach ($pages as $p) {
+      if (!AISB_Archer_Chrome::menu_page($p)) continue;
+      $list[] = ['slug' => $p['slug'], 'title' => AISB_Archer_Chrome::label($p), 'parent' => $p['parent'], 'type' => $p['type']];
+    }
+    if (count($list) < 2) wp_send_json_success(['menu' => $fallback]);
+    $languages = json_decode((string) get_post_meta($project_id, 'aisb_project_languages', true), true);
+    $lang = self::lang_name(is_array($languages) ? $languages : ['Dutch']);
+    $system = 'You design the main navigation of a small-business website. Return JSON only: '
+      . '{"cta":"slug or empty","items":[{"slug":"page slug, or empty for a group label without its own page","label":"menu label","children":[{"slug":"page slug","label":"menu label"}]}]}. '
+      . 'Rules: at most 6 top-level items; group related pages under one item (an existing overview page, or a short group label with an empty slug) instead of listing everything at top level; '
+      . 'children only one level deep, at most 8 per item; use only slugs from the list; every slug at most once; keep the order a visitor expects (offer first, about and contact last); '
+      . 'the contact page is the "cta" (a button in the header) and not also a menu item; labels 1 to 3 words in ' . $lang . ', no punctuation; '
+      . 'pages that do not fit may be left out (they stay in the footer).';
+    $user = wp_json_encode(['website' => (string) ($data['website_name'] ?? ''), 'goal' => (string) ($data['website_goal'] ?? ''), 'pages' => $list], JSON_UNESCAPED_UNICODE);
+    $res = $this->ai_multi(['m' => ['system' => $system, 'user' => $user]], 'plan', 60)['m'] ?? null;
+    if (!is_array($res) || empty($res['items'])) wp_send_json_success(['menu' => $fallback, 'ai' => false]);
+    $menu = AISB_Archer_Chrome::menu(['archer_menu' => ['items' => $res['items'], 'cta' => $res['cta'] ?? '']] + $data, $pages);
+    if (!$menu['items']) wp_send_json_success(['menu' => $fallback, 'ai' => false]);
+    wp_send_json_success(['menu' => ['source' => 'ai', 'cta' => $menu['cta'], 'items' => array_slice($menu['items'], 0, AISB_Archer_Chrome::MAX_TOP)], 'ai' => true]);
+  }
 
   public function ajax_sections(): void {
     $this->check();

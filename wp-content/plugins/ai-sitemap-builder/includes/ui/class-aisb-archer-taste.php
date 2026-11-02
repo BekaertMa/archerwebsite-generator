@@ -404,8 +404,35 @@ class AISB_Archer_Taste {
     return $out;
   }
 
+  /** Hoeken van knoppen en velden, voor de hele website gelijk (stijlstap: guide.radius). */
+  const RADIUS = ['sharp' => '0px', 'soft' => '6px', 'round' => '999px'];
+
+  public static function radius_of($guide): string {
+    $r = is_array($guide) ? (string) ($guide['radius'] ?? '') : '';
+    return self::RADIUS[$r] ?? self::RADIUS['soft'];
+  }
+
+  /**
+   * Eén ontwerp voor de hele website, al in de wireframes: sjablonen uit verschillende bronnen
+   * krijgen dezelfde knoppen (hoeken, grootte, gewicht), velden en titelgroottes.
+   */
+  public static function system_css($guide = null): string {
+    $r = self::radius_of($guide);
+    // Hoge specificiteit maar geen !important: een keuze per element (stap Ontwerp, #brxe-...) blijft winnen.
+    $btn = 'html body :is(.brxe-button.bricks-button.bricks-button,.brxe-form.brxe-form.brxe-form button[type=submit].bricks-button.bricks-button)';
+    $not = ':not(:is(.archer-header,.archer-footer) *)';
+    return ':root{--archer-radius:' . $r . ';}'
+      // px in plaats van rem: de Brixies-sjablonen zetten de basis op 62,5% (1rem = 10px).
+      . $btn . '{border-radius:var(--archer-radius);font-size:16px;line-height:1.2;padding:.85em 1.5em;font-weight:600;text-transform:none;letter-spacing:normal;}'
+      // Bricks-optie "rond" (circle) zet 100px met !important in de laag "bricks": daar overschrijven.
+      . '@layer bricks{html body .bricks-button.circle.circle{border-radius:var(--archer-radius) !important;}}'
+      . 'html body .brxe-form.brxe-form :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border-radius:min(var(--archer-radius),10px);}'
+      . 'html body :is(h1.brxe-heading.brxe-heading,h1)' . $not . '{font-size:clamp(40px,26px + 2.4vw,56px);line-height:1.08;}'
+      . 'html body :is(h2.brxe-heading.brxe-heading,h2)' . $not . '{font-size:clamp(32px,24px + 1.3vw,42px);line-height:1.15;}';
+  }
+
   /** CSS-huisregels voor voorbeeld en gepubliceerde site: geen schaduwen op wat stil staat. */
-  public static function house_css(): string {
+  public static function house_css($guide = null): string {
     $float = '.brx-dropdown-content,.brx-submenu-toggle,.brxe-offcanvas .brx-offcanvas-inner,.bricks-mobile-menu-wrapper,.brx-popup-content,[role="dialog"],[role="menu"]';
     $accent = 'var(--bricks-color-primary, currentColor)';
     return 'body :not(' . $float . '){box-shadow:none !important;text-shadow:none !important;}'
@@ -418,11 +445,20 @@ class AISB_Archer_Taste {
       . '.brxe-counter,table,.brxe-pricing-tables{font-variant-numeric:tabular-nums;}'
       // Tekst over een foto die de hele sectie vult: altijd wit (de overlay van het ontwerp zorgt voor contrast).
       . '.archer-cover.brxe-section :is(h1,h2,h3,h4,h5,h6,.brxe-heading,p,li,.brxe-text,.brxe-text-basic,.brxe-rich-text){color:#fff !important;}'
-      . '.archer-cover.brxe-section :is(.brxe-container,.brxe-block){background-color:transparent !important;}';
+      . '.archer-cover.brxe-section :is(.brxe-container,.brxe-block){background-color:transparent !important;}'
+      . self::system_css($guide);
   }
 
   public function preview_house_css(): void {
     if (empty($_GET['aisb_bricks_preview'])) return;
-    echo '<style id="archer-house">' . self::house_css() . '</style>';
+    $guide = null;
+    $pid = (int) ($_GET['aisb_project'] ?? 0);
+    if ($pid && is_user_logged_in()) {
+      $p = get_post($pid);
+      if ($p && $p->post_type === 'aisb_project' && ((int) $p->post_author === get_current_user_id() || current_user_can('manage_options'))) {
+        $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
+      }
+    }
+    echo '<style id="archer-house">' . self::house_css($guide) . '</style>';
   }
 }

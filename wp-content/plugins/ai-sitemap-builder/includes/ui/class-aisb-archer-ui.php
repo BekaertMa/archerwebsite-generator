@@ -6,6 +6,7 @@ require_once __DIR__ . '/class-aisb-archer-generate.php';
 require_once __DIR__ . '/class-aisb-archer-section-edit.php';
 require_once __DIR__ . '/class-aisb-archer-taste.php';
 require_once __DIR__ . '/class-aisb-archer-template-import.php';
+require_once __DIR__ . '/class-aisb-archer-chrome.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -51,6 +52,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Section_Edit())->init();
     (new AISB_Archer_Taste())->init();
     (new AISB_Archer_Template_Import())->init();
+    (new AISB_Archer_Chrome())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
