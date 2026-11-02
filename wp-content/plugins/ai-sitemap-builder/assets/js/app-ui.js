@@ -568,6 +568,9 @@
 
     // NOTE: These event listeners are registered each time nodeHtml is called
     // (existing behavior preserved from the original monolithic file).
+    // Archer: deze listeners horen maar een keer geregistreerd te worden.
+    if (!app.__archerNodeListeners) {
+    app.__archerNodeListeners = true;
 
     nodesEl.addEventListener("dragover", (e) => {
       if (!app.miniDrag.active) return;
@@ -724,6 +727,8 @@
       clearMiniDropClasses();
       app.miniDrag = { active: false, slug: null, fromIdx: null };
     });
+
+    }
 
     const isFormOpen = state.openInlineFormFor === page.slug;
 
