@@ -802,6 +802,10 @@ class AISB_Wireframes {
   public function ajax_shuffle_section_layout(): void {
     $this->require_login();
     $this->check_nonce();
+    // Ander voorbeeld = ander sjabloon met nieuwe AI-tekst (anders blijft de oude sectie zichtbaar).
+    set_time_limit(180);
+    ignore_user_abort(true);
+    $regen = false;
     $project_id = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
     $sitemap_version_id = isset($_POST['sitemap_version_id']) ? (int)$_POST['sitemap_version_id'] : 0;
     $page_slug = isset($_POST['page_slug']) ? sanitize_title(wp_unslash($_POST['page_slug'])) : '';
@@ -831,6 +835,12 @@ class AISB_Wireframes {
 
       $bricks_tpl = $this->bricks->pick_bricks_template($type, $bricks_by_type, $used_bricks_ids);
       if ($bricks_tpl) {
+        $old_ai = isset($s['ai_wireframe_id']) ? (int) $s['ai_wireframe_id'] : 0;
+        if ($old_ai > 0) {
+          wp_trash_post($old_ai);
+          $model['sections'][$i]['ai_wireframe_id'] = null;
+          $regen = true;
+        }
         $model['sections'][$i]['layout_key']            = 'bricks_' . $bricks_tpl['id'];
         $model['sections'][$i]['bricks_template_id']    = $bricks_tpl['id'];
         $model['sections'][$i]['bricks_template_title'] = $bricks_tpl['title'];
@@ -855,6 +865,10 @@ class AISB_Wireframes {
     }
 
     $this->save_model($project_id, $sitemap_version_id, $page_slug, $model, true);
+    if ($regen) {
+      $model = $this->ai->populate_bricks_content_with_ai($model, $project_id, $sitemap_version_id, $page_slug, [$uuid]);
+      $this->save_model($project_id, $sitemap_version_id, $page_slug, $model, true);
+    }
     wp_send_json_success(['wireframe' => $model]);
   }
 
