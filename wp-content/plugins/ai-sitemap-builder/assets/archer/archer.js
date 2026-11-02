@@ -1946,7 +1946,11 @@
       box.innerHTML = '<div class="archer-taste-head"><h4>Stijlrichting</h4>' +
         '<button type="button" class="archer-link-btn" data-taste-more>Andere richtingen</button></div>' +
         '<p class="archer-taste-intro">Kleuren en lettertypes die samen kloppen. Je kan daarna alles nog aanpassen.</p>' +
-        '<div class="archer-taste-list" data-taste-list><p class="archer-muted">Richtingen laden…</p></div>';
+        '<div class="archer-taste-list" data-taste-list><p class="archer-muted">Richtingen laden…</p></div>' +
+        '<div class="archer-taste-tools"><span>Los schudden:</span>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-taste-shuffle="palette">Andere kleuren</button>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-taste-shuffle="type">Andere letters</button></div>' +
+        '<p class="archer-taste-status" data-taste-status aria-live="polite"></p>';
       const host = anchor ? anchor.closest("div") : null;
       if (host && host.parentElement) host.parentElement.insertBefore(box, host);
       else colourPanel.prepend(box);
@@ -1980,28 +1984,64 @@
         { cls: "body", label: "Lopende tekst", fontFamily: b, fontSize: "18px", lineHeight: "1.55", sample: "Gewone tekst leest rustig, met genoeg ruimte tussen de regels." },
         { cls: "small", label: "Kleine tekst", fontFamily: b, fontSize: "14px", lineHeight: "1.5", sample: "Kleine tekst voor details." },
       ];
-      const apply = (d) => {
-        if (Array.isArray(SG.guide)) SG.guide = {};
-        SG.extractedColours = d.colours.map((c) => ({ name: c.name, hex: c.hex }));
+      const setColours = (colours) => {
+        SG.extractedColours = colours.map((c) => ({ name: c.name, hex: c.hex }));
         if (SG.lockedColours) SG.lockedColours.clear();
         [SG.el.extractedSwatches, SG.el.manualSwatches].forEach((c) => c && SG.renderSwatchRow(c, SG.extractedColours));
         if (SG.el.extractedContainer) SG.el.extractedContainer.style.display = "";
-        SG.guide.headingFont = d.headingFont;
-        SG.guide.bodyFont = d.bodyFont;
-        SG.guide._aiHeadingFont = d.headingFont;
-        SG.guide._aiBodyFont = d.bodyFont;
+      };
+      const setFonts = (h, b) => {
+        SG.guide.headingFont = h;
+        SG.guide.bodyFont = b;
+        SG.guide._aiHeadingFont = h;
+        SG.guide._aiBodyFont = b;
         if (Array.isArray(SG.guide.typography) && SG.guide.typography.length) {
-          SG.guide.typography.forEach((t) => (t.fontFamily = t.cls === "body" || t.cls === "small" ? d.bodyFont : d.headingFont));
+          SG.guide.typography.forEach((t) => (t.fontFamily = t.cls === "body" || t.cls === "small" ? b : h));
         } else {
-          SG.guide.typography = defaultScale(d.headingFont, d.bodyFont);
+          SG.guide.typography = defaultScale(h, b);
         }
-        SG.guide.tasteDirection = { id: d.id, palette: d.palette.id, type: d.type.id, round };
         SG.fontsAssigned = true;
-        if (SG.loadGoogleFonts) SG.loadGoogleFonts(d.headingFont, d.bodyFont);
+        if (SG.loadGoogleFonts) SG.loadGoogleFonts(h, b);
         if (SG.renderTypography) SG.renderTypography(SG.guide.typography);
         if (SG.el.typographyResult) SG.el.typographyResult.style.display = "";
         if (SG.el.typographyStatus) SG.el.typographyStatus.style.display = "none";
         if (SG.initFontPickers) SG.initFontPickers();
+      };
+      const apply = (d) => {
+        if (Array.isArray(SG.guide)) SG.guide = {};
+        setColours(d.colours);
+        setFonts(d.headingFont, d.bodyFont);
+        SG.guide.tasteDirection = { id: d.id, palette: d.palette.id, type: d.type.id, round };
+        SG.applyOverridesToAllIframes();
+        render();
+      };
+      const status = (t) => ($("[data-taste-status]", box).textContent = t || "");
+      // Zoals Relume: alleen de kleuren of alleen de letters wisselen; het andere blijft staan.
+      const shuffleOne = async (kind) => {
+        if (Array.isArray(SG.guide)) SG.guide = {};
+        const cur = SG.guide.tasteDirection || (dealt[0] ? { id: dealt[0].id, palette: "", type: "", round } : null);
+        if (!cur) return;
+        const seen = (SG.guide.tasteSeen = SG.guide.tasteSeen || { palette: [], type: [] });
+        const exclude = Array.from(new Set([cur[kind]].concat(seen[kind] || []))).filter(Boolean).slice(-20);
+        let out;
+        try {
+          out = await SG.post("aisb_archer_taste_shuffle", { project_id: SG.projectId, kind, direction: cur.id, exclude: JSON.stringify(exclude) });
+        } catch (e) {
+          out = null;
+        }
+        if (!out || !out.success) return status("Geen andere keuze gevonden.");
+        const d = out.data;
+        if (kind === "palette") {
+          setColours(d.colours);
+          cur.palette = d.palette.id;
+          status("Kleuren: " + d.name + ". De letters bleven staan.");
+        } else {
+          setFonts(d.headingFont, d.bodyFont);
+          cur.type = d.type.id;
+          status("Letters: " + d.headingFont + (d.bodyFont !== d.headingFont ? " + " + d.bodyFont : "") + ". De kleuren bleven staan.");
+        }
+        seen[kind] = (seen[kind] || []).concat(cur[kind]).slice(-20);
+        SG.guide.tasteDirection = cur;
         SG.applyOverridesToAllIframes();
         render();
       };
@@ -2025,6 +2065,8 @@
       box.addEventListener("click", (e) => {
         const card = e.target.closest("[data-taste-idx]");
         if (card) return apply(dealt[Number(card.getAttribute("data-taste-idx"))]);
+        const sh = e.target.closest("[data-taste-shuffle]");
+        if (sh) return shuffleOne(sh.getAttribute("data-taste-shuffle"));
         if (e.target.closest("[data-taste-more]")) {
           round++;
           load(false);
@@ -2184,16 +2226,242 @@
         const size = parseFloat(cs.fontSize) || 16;
         const large = size >= 24 || (size >= 18.6 && Number(cs.fontWeight) >= 700);
         const need = large ? 3 : 4.5;
-        if (ratio(fg, bg) >= need) return;
+        if (ratio(fg, bg) >= need) {
+          // impeccable: grijze tekst op een gekleurde achtergrond wordt getint in die kleur.
+          if (!el.matches("h1,h2,h3,h4,h5,h6,.brxe-heading,.bricks-button,.brxe-button,a") && hslOf(bg).s > 0.3 && lum(bg) < 0.9 && hslOf(fg).s < 0.08) {
+            const t = tintedFor(bg).find((c) => ratio(c, bg) >= need);
+            if (t) fixes.push([el, t, false]);
+          }
+          return;
+        }
         fixes.push([el, pickColour(bg, need, cand), el.matches(".bricks-button,.brxe-button")]);
       });
       fixes.forEach(([el, c, isBtn]) => mark(el, `color:${css(c)} !important;` + (isBtn ? `border-color:${css(c)} !important;` : "")));
       style.textContent = rules.join("");
     }
+    /* Kleurschema per sectie (zoals Relume): klik op een sectie om de achtergrond te wisselen. */
+    const SCHEMES = [
+      ["ground", "Grond", "Light"],
+      ["tone", "Toon", "Neutral"],
+      ["field", "Vlak", "Secondary"],
+      ["accent", "Accent", "Primary"],
+      ["ink", "Inkt", "Dark"],
+    ];
+    const palHex = (role) => {
+      const pal = SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || [];
+      return ((pal.find((c) => c.name === role) || {}).hex || "").toLowerCase();
+    };
+    const schemeList = () => {
+      const seen = new Set();
+      return SCHEMES.map(([id, name, role]) => ({ id, name, hex: palHex(role) })).filter((x) => /^#[0-9a-f]{6}$/.test(x.hex) && !seen.has(x.hex) && seen.add(x.hex));
+    };
+    const hsl2rgb = (h, s, l) => {
+      const k = (n) => (n + h / 30) % 12;
+      const a = s * Math.min(l, 1 - l);
+      const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+      return [f(0) * 255, f(8) * 255, f(4) * 255, 1];
+    };
+    const hslOf = (c) => {
+      const [r, g, b] = c.slice(0, 3).map((v) => v / 255);
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const l = (mx + mn) / 2;
+      let h = 0, s = 0;
+      if (mx !== mn) {
+        const d = mx - mn;
+        s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+        h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h *= 60;
+      }
+      return { h, s, l };
+    };
+    /** impeccable: op een gekleurde achtergrond is tekst getint in die kleur, nooit grijs. */
+    const tintedFor = (bg) => {
+      const { h, s } = hslOf(bg);
+      const sat = Math.min(0.45, Math.max(0.18, s * 0.6));
+      return lum(bg) > 0.4 ? [hsl2rgb(h, sat, 0.14), hsl2rgb(h, sat, 0.2)] : [hsl2rgb(h, sat, 0.95), hsl2rgb(h, sat, 0.9)];
+    };
+    const sectionInfo = (iframe) => {
+      const page = (SG.wireframePages || []).find((p) => p.slug === iframe._pageSlug);
+      const sec = page && page.sections ? page.sections[iframe._sectionIdx] : null;
+      const type = String(iframe._sectionType || (sec && sec.type) || "").toLowerCase();
+      return { slug: iframe._pageSlug, uuid: sec && sec.uuid, global: /^(header|footer)$/.test(type) ? type : null };
+    };
+    const schemeStore = () => {
+      if (Array.isArray(SG.guide)) SG.guide = {};
+      const st = SG.guide.sectionSchemes && typeof SG.guide.sectionSchemes === "object" && !Array.isArray(SG.guide.sectionSchemes) ? SG.guide.sectionSchemes : {};
+      if (!st.global || Array.isArray(st.global)) st.global = {};
+      if (!st.pages || Array.isArray(st.pages)) st.pages = {};
+      SG.guide.sectionSchemes = st;
+      return st;
+    };
+    const getScheme = (iframe) => {
+      const i = sectionInfo(iframe);
+      const st = schemeStore();
+      if (i.global) return st.global[i.global] || "";
+      return (i.uuid && st.pages[i.slug] && st.pages[i.slug][i.uuid]) || "";
+    };
+    const setScheme = (iframe, id) => {
+      const i = sectionInfo(iframe);
+      const st = schemeStore();
+      if (i.global) {
+        if (id) st.global[i.global] = id;
+        else delete st.global[i.global];
+        return;
+      }
+      if (!i.uuid) return;
+      st.pages[i.slug] = st.pages[i.slug] || {};
+      if (id) st.pages[i.slug][i.uuid] = id;
+      else delete st.pages[i.slug][i.uuid];
+    };
+    function applyScheme(iframe) {
+      let doc;
+      try {
+        doc = iframe.contentDocument;
+      } catch (e) {
+        return;
+      }
+      if (!doc || !doc.head) return;
+      let st = doc.getElementById("archer-scheme");
+      if (!st) {
+        st = doc.createElement("style");
+        st.id = "archer-scheme";
+      }
+      doc.head.appendChild(st); // altijd na de stijl van de stijlgids
+      const id = getScheme(iframe);
+      const s = id && schemeList().find((x) => x.id === id);
+      if (!s) {
+        st.textContent = "";
+        return;
+      }
+      const bg = hexCol(s.hex);
+      const cand = paletteCandidates();
+      const head = pickColour(bg, 4.5, cand);
+      const body = pickColour(bg, 4.5, hslOf(bg).s > 0.25 ? tintedFor(bg).concat(cand) : cand);
+      const sel = ".brxe-section:not([style*='background-image']),.brxe-container:not([style*='background-image']),.brxe-block:not([style*='background-image'])";
+      st.textContent =
+        `${sel}{background-color:${s.hex} !important;}body{background-color:${s.hex} !important;}` +
+        `h1,h2,h3,h4,h5,h6,.brxe-heading{color:${css(head)} !important;}` +
+        `body,p,.brxe-text,.brxe-text-basic,.brxe-rich-text,li{color:${css(body)} !important;}`;
+    }
+    const schemeView = view !== "photos";
+    function hookSchemeClicks(iframe) {
+      if (!schemeView) return;
+      let doc;
+      try {
+        doc = iframe.contentDocument;
+      } catch (e) {
+        return;
+      }
+      if (!doc || !doc.body || doc._archerSchemeClick) return;
+      doc._archerSchemeClick = true;
+      const hover = doc.createElement("style");
+      hover.textContent = "#aisb-preview{cursor:pointer}html:hover #aisb-preview{outline:3px solid #14b8a6;outline-offset:-3px}";
+      doc.head.appendChild(hover);
+      doc.body.title = "Klik voor een ander kleurschema";
+      doc.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cycleScheme(iframe);
+      }, true);
+    }
+    const reinjectFor = (iframe) => {
+      const i = sectionInfo(iframe);
+      (SG.allIframes || []).forEach((f) => {
+        if (!f._loaded) return;
+        const j = sectionInfo(f);
+        if (f === iframe || (i.global && j.global === i.global)) SG.injectOverrideIntoIframe(f);
+      });
+    };
+    const saveGuide = () => SG.saveDraft && SG.saveDraft();
+    function cycleScheme(iframe) {
+      const list = schemeList();
+      if (!list.length) return;
+      const cur = getScheme(iframe);
+      const ids = list.map((x) => x.id).concat([""]);
+      const next = ids[(ids.indexOf(cur) + 1) % ids.length];
+      setScheme(iframe, next);
+      reinjectFor(iframe);
+      saveGuide();
+      const nm = (list.find((x) => x.id === next) || {}).name;
+      const st = $("[data-scheme-status]", panel);
+      if (st) st.textContent = next ? "Kleurschema: " + nm + "." : "Kleurschema: standaard.";
+    }
+    /** Alle secties van de getoonde pagina een schema geven (spatiebalk of knop), zonder twee keer hetzelfde na elkaar. */
+    function shuffleSchemes() {
+      const list = schemeList();
+      if (!list.length) return;
+      const slug = pick.value;
+      const frames = (SG.allIframes || []).filter((f) => f._loaded && (slug === "__all" || f._pageSlug === slug)).sort((a, b) => (a._pageSlug === b._pageSlug ? a._sectionIdx - b._sectionIdx : 0));
+      let prev = "";
+      frames.forEach((f) => {
+        const i = sectionInfo(f);
+        if (i.global === "header") {
+          prev = getScheme(f) || "ground";
+          return;
+        }
+        let opts = list.map((x) => x.id).filter((id) => id !== prev);
+        if (i.global === "footer") {
+          // De footer sluit de pagina af: het donkerste schema.
+          const dark = list.slice().sort((a, b) => lum(hexCol(a.hex)) - lum(hexCol(b.hex)))[0];
+          if (dark) opts = [dark.id];
+        }
+        const id = opts[Math.floor(Math.random() * opts.length)] || "";
+        setScheme(f, id);
+        prev = id;
+      });
+      frames.forEach((f) => SG.injectOverrideIntoIframe(f));
+      saveGuide();
+      const st = $("[data-scheme-status]", panel);
+      if (st) st.textContent = "Nieuwe kleurschema's. Klik op een sectie om er één te wisselen.";
+    }
+    function resetSchemes() {
+      const st = schemeStore();
+      const slug = pick.value;
+      if (slug === "__all") {
+        st.pages = {};
+        st.global = {};
+      } else {
+        delete st.pages[slug];
+      }
+      (SG.allIframes || []).forEach((f) => f._loaded && SG.injectOverrideIntoIframe(f));
+      saveGuide();
+      const s2 = $("[data-scheme-status]", panel);
+      if (s2) s2.textContent = "Standaard kleurschema's.";
+    }
+    if (schemeView) {
+      const colourPanel = $("[data-wizard-panel='1']", panel);
+      const tasteBox = $(".archer-taste", panel);
+      const sbox = document.createElement("section");
+      sbox.className = "archer-scheme-box";
+      sbox.setAttribute("aria-label", "Kleurschema per sectie");
+      sbox.innerHTML =
+        '<div class="archer-taste-head"><h4>Kleurschema per sectie</h4></div>' +
+        '<p class="archer-taste-intro">Klik in het voorbeeld op een sectie om haar achtergrond te wisselen: grond, toon, vlak, accent of inkt. Met de spatiebalk boven het voorbeeld schud je de hele pagina.</p>' +
+        '<div class="archer-taste-tools"><button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-scheme-shuffle>Schud deze pagina</button>' +
+        '<button type="button" class="archer-link-btn" data-scheme-reset>Standaard</button></div>' +
+        '<p class="archer-taste-status" data-scheme-status aria-live="polite"></p>';
+      if (tasteBox) tasteBox.after(sbox);
+      else if (colourPanel) colourPanel.prepend(sbox);
+      sbox.addEventListener("click", (e) => {
+        if (e.target.closest("[data-scheme-shuffle]")) shuffleSchemes();
+        if (e.target.closest("[data-scheme-reset]")) resetSchemes();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.code !== "Space" || e.target.closest && e.target.closest("input, textarea, select, button, [contenteditable]")) return;
+        const c = $(".aisb-sg-canvas", panel);
+        if (!c || !c.matches(":hover")) return;
+        e.preventDefault();
+        shuffleSchemes();
+      });
+    }
+    UI.sectionSchemes = { cycle: cycleScheme, shuffle: shuffleSchemes, reset: resetSchemes };
+
     if (typeof SG.injectOverrideIntoIframe === "function") {
       const origInject = SG.injectOverrideIntoIframe;
       SG.injectOverrideIntoIframe = function (iframe) {
         const r = origInject.apply(this, arguments);
+        applyScheme(iframe);
+        hookSchemeClicks(iframe);
         // Kort uitgesteld: bij het slepen in de kleurkiezer maar één keer per frame meten.
         clearTimeout(iframe._archerContrastTimer);
         clearTimeout(iframe._archerContrastLate);

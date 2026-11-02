@@ -981,3 +981,7 @@ body.archer-app .archer-shell .aisb-sg-split-right { flex: 1 1 auto; min-width: 
 .archer-taste-chips span { display: block; height: 100%; }
 .archer-taste-card strong { font-size: 17px; font-weight: 700; line-height: 1.2; color: var(--ar-navy); }
 .archer-taste-meta { font-size: 12px; color: var(--ar-muted); }
+.archer-taste-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--ar-muted); }
+body.archer-app .archer-shell .archer-btn.archer-btn-sm { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+.archer-taste-status { margin: 0; min-height: 18px; font-size: 13px; color: var(--ar-teal); }
+.archer-scheme-box { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; padding-top: 14px; border-top: 1px solid var(--ar-line); }
