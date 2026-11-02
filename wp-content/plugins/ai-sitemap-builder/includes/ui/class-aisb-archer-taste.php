@@ -99,7 +99,11 @@ class AISB_Archer_Taste {
       $used_t[$t['id']] = 1;
       $out[] = [
         'id' => $d['id'],
-        'name' => $d['name'],
+        // De naam beschrijft wat je krijgt (het palet); de richting zelf gaat over compositie,
+        // en die komt in Archer uit de sjablonen.
+        'name' => $p['name_nl'] ?? $p['name'],
+        'direction' => $d['name'],
+        'typeNote' => self::type_label($t),
         'palette' => $p,
         'colourNote' => self::palette_label($p),
         'type' => $t,
@@ -109,6 +113,16 @@ class AISB_Archer_Taste {
       ];
     }
     return ['sector' => $sector, 'round' => $round, 'directions' => $out];
+  }
+
+  private static function type_label(array $t): string {
+    $labels = [
+      'grotesk-tight' => 'strak schreefloos', 'grotesk-light' => 'licht schreefloos', 'condensed-heavy' => 'smal en krachtig',
+      'extended-heavy' => 'breed en krachtig', 'heavy-black' => 'zwaar en luid', 'serif-display' => 'klassieke schreef',
+      'serif-light-large' => 'fijne schreef', 'serif-text' => 'leesbare schreef', 'slab' => 'blokschreef',
+      'geometric' => 'geometrisch', 'rounded-friendly' => 'rond en vriendelijk',
+    ];
+    return $labels[$t['class']] ?? 'eigen letter';
   }
 
   private static function palette_label(array $p): string {
