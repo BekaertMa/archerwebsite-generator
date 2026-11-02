@@ -335,6 +335,9 @@ class AISB_InstaWP {
       ], $status);
     }
 
+    if (class_exists('AISB_Archer_UI')) {
+      AISB_Archer_UI::remember_publish($project_id, $result);
+    }
     wp_send_json_success($result);
   }
 
