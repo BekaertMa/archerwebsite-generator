@@ -333,6 +333,93 @@ class AISB_Archer_Generate {
     return $body;
   }
 
+  /** Na zoveel seconden zonder antwoord gaat dezelfde AI-vraag een tweede keer uit (het eerste antwoord telt). */
+  private const HEDGE_AFTER = ['copy' => 12.0, 'sections' => 15.0, 'plan' => 20.0];
+
+  /**
+   * Zoals Requests::request_multiple, maar met een reservevraag voor trage antwoorden: een AI-antwoord
+   * duurt meestal 3 tot 8 s, af en toe meer dan een minuut. Wie na $hedge_after seconden nog niet
+   * klaar is, krijgt een tweede, identieke vraag; het eerste geldige antwoord wint en de andere
+   * wordt afgebroken. Geeft key => \WpOrg\Requests\Response (of een Exception) terug.
+   */
+  private static function hedged_multi(array $reqs, int $timeout, float $hedge_after): array {
+    if (!$reqs) return [];
+    if (!function_exists('curl_multi_init') || !class_exists('\WpOrg\Requests\Response')) {
+      return \WpOrg\Requests\Requests::request_multiple($reqs, ['timeout' => $timeout, 'connect_timeout' => 10]);
+    }
+    $mh = curl_multi_init();
+    $handles = [];
+    $ca = ABSPATH . WPINC . '/certificates/ca-bundle.crt';
+    $start = microtime(true);
+    $add = function ($key) use ($reqs, $timeout, $mh, $ca, &$handles): void {
+      $r = $reqs[$key];
+      $ch = curl_init((string) $r['url']);
+      $hdr = [];
+      foreach ((array) ($r['headers'] ?? []) as $hk => $hv) $hdr[] = $hk . ': ' . $hv;
+      curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => (string) $r['data'],
+        CURLOPT_HTTPHEADER => $hdr,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_CAINFO => $ca,
+      ]);
+      curl_multi_add_handle($mh, $ch);
+      $handles[spl_object_id($ch)] = ['key' => $key, 'ch' => $ch];
+    };
+    foreach (array_keys($reqs) as $key) $add($key);
+    $done = [];
+    $hedged = [];
+    do {
+      curl_multi_exec($mh, $running);
+      while ($info = curl_multi_info_read($mh)) {
+        $ch = $info['handle'];
+        $id = spl_object_id($ch);
+        if (!isset($handles[$id])) continue;
+        $key = $handles[$id]['key'];
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $body = (string) curl_multi_getcontent($ch);
+        $err = $info['result'] === CURLE_OK ? '' : curl_error($ch);
+        curl_multi_remove_handle($mh, $ch);
+        curl_close($ch);
+        unset($handles[$id]);
+        if (isset($done[$key])) continue;
+        $ok = $err === '' && $code >= 200 && $code < 300;
+        $sibling = false;
+        foreach ($handles as $h) if ($h['key'] === $key) $sibling = true;
+        if (!$ok && $sibling) continue; // de reservevraag loopt nog
+        if ($err !== '') {
+          $done[$key] = new \Exception($err);
+        } else {
+          $resp = new \WpOrg\Requests\Response();
+          $resp->status_code = $code;
+          $resp->body = $body;
+          $resp->success = $ok;
+          $done[$key] = $resp;
+        }
+        if (!empty($hedged[$key])) error_log(sprintf('[AISB] Archer: AI-vraag %s klaar na %.1fs (met reservevraag).', $key, microtime(true) - $start));
+        // De andere vraag voor dezelfde key is niet meer nodig.
+        foreach ($handles as $oid => $h) {
+          if ($h['key'] !== $key) continue;
+          curl_multi_remove_handle($mh, $h['ch']);
+          curl_close($h['ch']);
+          unset($handles[$oid]);
+        }
+      }
+      if (microtime(true) - $start > $hedge_after) {
+        foreach (array_keys($reqs) as $key) {
+          if (isset($done[$key]) || !empty($hedged[$key])) continue;
+          $hedged[$key] = true;
+          $add($key);
+        }
+      }
+      if ($handles && curl_multi_select($mh, 0.25) === -1) usleep(100000);
+    } while ($handles);
+    curl_multi_close($mh);
+    return $done;
+  }
+
   /**
    * Meerdere AI-vragen tegelijk. Lukt een model niet (bv. niet beschikbaar voor deze sleutel),
    * dan volgt een tweede poging met het model uit de instellingen.
@@ -355,7 +442,7 @@ class AISB_Archer_Generate {
       foreach ($todo as $k => $c) {
         $reqs[$k] = ['url' => $endpoint, 'type' => 'POST', 'headers' => $headers, 'data' => wp_json_encode($this->request_body($model, $c['system'], $c['user']))];
       }
-      $responses = \WpOrg\Requests\Requests::request_multiple($reqs, ['timeout' => $timeout, 'connect_timeout' => 10]);
+      $responses = self::hedged_multi($reqs, $timeout, self::HEDGE_AFTER[$task] ?? 15.0);
       $retry = [];
       foreach ($todo as $k => $c) {
         $r = $responses[$k] ?? null;
