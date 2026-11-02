@@ -76,11 +76,21 @@ class AISB_Archer_Section_Edit {
     $project_id = $this->guard();
     $post_id = isset($_POST['post_id']) ? (int) $_POST['post_id'] : 0;
     if (!$this->kind($post_id, $project_id)) wp_send_json_error(['message' => 'Sectie niet gevonden'], 404);
-    wp_send_json_success(['nodes' => $this->schema($this->nodes($post_id))]);
+    wp_send_json_success(['nodes' => $this->schema($this->nodes($post_id), $post_id)]);
   }
 
   /** Alleen wat het paneel nodig heeft: structuur, naam, label en teksten. */
-  private function schema(array $nodes): array {
+  private function schema(array $nodes, int $post_id = 0): array {
+    // Placeholdertekst van het sjabloon: bepaalt hoe lang een tekst mag zijn.
+    $tpl = get_post_type($post_id) === 'bricks_template' ? $post_id : (int) get_post_meta($post_id, '_aisb_source_template_id', true);
+    $orig = [];
+    $by_label = [];
+    foreach (($tpl ? $this->nodes($tpl) : []) as $t) {
+      $txt = $t['settings']['text'] ?? null;
+      if (!is_string($txt)) continue;
+      $orig[(string) $t['id']] = $txt;
+      $by_label[($t['name'] ?? '') . '|' . ($t['label'] ?? '')] = $by_label[($t['name'] ?? '') . '|' . ($t['label'] ?? '')] ?? $txt;
+    }
     $out = [];
     foreach ($nodes as $n) {
       if (!is_array($n) || empty($n['id'])) continue;
@@ -97,6 +107,9 @@ class AISB_Archer_Section_Edit {
         if (isset($s[$k]) && is_string($s[$k]) && trim($s[$k]) !== '') {
           $row['key'] = $k;
           $row['text'] = $s[$k];
+          $row['mode'] = AISB_Archer_Generate::mode_for($row['name']);
+          $ph = $orig[$row['id']] ?? ($by_label[$row['name'] . '|' . $row['label']] ?? '');
+          $row['max'] = $ph !== '' ? AISB_Archer_Generate::text_limit($row['name'], $ph) : 0;
           break;
         }
       }
@@ -153,7 +166,7 @@ class AISB_Archer_Section_Edit {
       }
     }
 
-    wp_send_json_success(['post_id' => $post_id, 'synced' => (object) $synced, 'nodes' => $this->schema($nodes), 'applied' => $done]);
+    wp_send_json_success(['post_id' => $post_id, 'synced' => (object) $synced, 'nodes' => $this->schema($nodes, $post_id), 'applied' => $done]);
   }
 
   private function index(array $nodes): array {
@@ -189,7 +202,8 @@ class AISB_Archer_Section_Edit {
     if ($type === 'text') {
       if (!isset($ix[$id])) return false;
       $key = in_array($op['key'] ?? '', self::TEXT_KEYS, true) ? $op['key'] : 'text';
-      $nodes[$ix[$id]]['settings'][$key] = wp_kses_post((string) ($op['value'] ?? ''));
+      $name = (string) ($nodes[$ix[$id]]['name'] ?? '');
+      $nodes[$ix[$id]]['settings'][$key] = AISB_Archer_Generate::clean_markup((string) ($op['value'] ?? ''), AISB_Archer_Generate::mode_for($name));
       return true;
     }
 

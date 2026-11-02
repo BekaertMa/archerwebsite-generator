@@ -19,6 +19,25 @@ class AISB_Archer_Generate {
     add_action('wp_ajax_aisb_archer_plan', [$this, 'ajax_plan']);
     add_action('wp_ajax_aisb_archer_sections', [$this, 'ajax_sections']);
     add_filter('aisb_wireframe_section_types', [$this, 'wireframe_types'], 10, 4);
+    // Elke opgeslagen wireframe-sectie: geen kleuren, spans of style-attributen in de teksten.
+    add_filter('sanitize_post_meta__bricks_page_content_2_for_ai_wireframe', [__CLASS__, 'clean_nodes']);
+  }
+
+  /** Kuist de teksten van alle Bricks-elementen van een wireframe-sectie op. */
+  public static function clean_nodes($nodes) {
+    if (!is_array($nodes)) return $nodes;
+    foreach ($nodes as &$n) {
+      if (!is_array($n) || empty($n['settings']) || !is_array($n['settings'])) continue;
+      $name = (string) ($n['name'] ?? '');
+      if (!in_array($name, ['heading', 'text-basic', 'text', 'button', 'text-link'], true)) continue;
+      foreach (['text', 'title', 'subtitle', 'description', 'content'] as $k) {
+        if (isset($n['settings'][$k]) && is_string($n['settings'][$k])) {
+          $n['settings'][$k] = self::clean_markup($n['settings'][$k], self::mode_for($name));
+        }
+      }
+    }
+    unset($n);
+    return $nodes;
   }
 
   /* ───────────────────────── Wireframes volgen de sitemap ───────────────────────── */
@@ -90,10 +109,16 @@ class AISB_Archer_Generate {
     if (!$to_translate || !class_exists('WpOrg\\Requests\\Requests')) return null;
     $self = new self();
     $base = preg_replace('/Target JSON:\n.*$/s', '', $prompt);
+    $base .= "\nLENGTH: every text must fit the slot of the placeholder it replaces in the design. LIMITS gives the maximum number of words per module id. Write each text so it naturally fits within that many words: choose a shorter formulation instead of cutting a longer one. Every text is a complete phrase or sentence that stands on its own; never continue a sentence in the next module and never stop mid-sentence. Headings are short and punchy (a hero title is a few words, not a sentence about everything the company does). Short labels (stats, taglines, list items) are 1 to 4 words.\n"
+      . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n\n";
     $system = 'Return valid JSON only. No markdown. No explanation.';
     $calls = [];
+    $limits = [];
     foreach ($to_translate as $key => $section) {
-      $calls[(string) $key] = ['system' => $system, 'user' => $base . "Target JSON:\n" . wp_json_encode([$key => $section])];
+      $limits[$key] = self::limits_for($section);
+      $calls[(string) $key] = ['system' => $system, 'user' => $base
+        . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
+        . "Target JSON:\n" . wp_json_encode([$key => $section])];
     }
     $answers = $self->ai_multi($calls, 'copy', 90);
     $out = [];
@@ -103,7 +128,128 @@ class AISB_Archer_Generate {
       elseif (isset($ans['modules'])) $out[$key] = $ans;
       elseif (count($ans) === 1 && is_array(reset($ans)) && isset(reset($ans)['modules'])) $out[$key] = reset($ans);
     }
-    return $out ?: null;
+    if (!$out) return null;
+
+    // Opkuisen (geen opmaak of kleuren) en te lange teksten laten inkorten.
+    $too_long = [];
+    foreach ($out as $key => &$sec) {
+      foreach ((array) ($sec['modules'] ?? []) as $mid => $mod) {
+        $type = (string) ($to_translate[$key]['modules'][$mid]['type'] ?? ($mod['type'] ?? ''));
+        $first = true;
+        foreach ((array) ($mod['settings'] ?? []) as $sk => $val) {
+          if (!is_string($val)) continue;
+          $clean = self::clean_markup($val, self::mode_for($type));
+          $sec['modules'][$mid]['settings'][$sk] = $clean;
+          $max = $first ? ($limits[$key][$mid] ?? 0) : 0;
+          $first = false;
+          $plain = wp_strip_all_tags($clean);
+          // Te lang, of afgebroken ("…herstellingen en", "airco-onder").
+          $cut_off = (bool) preg_match('/(\s(en|of|het|de|een|uit|voor|van|met|op|in|aan|te|om|bij|and|or|the|to|for|with|et|ou|pour|y|und|oder|mit)|[-,:;])$/iu', trim($plain));
+          if ($max && (mb_strlen($plain) > $max || $cut_off)) {
+            // Modellen tellen niet exact: vraag wat korter dan nodig.
+            $too_long[$key][$mid . '|' . $sk] = ['text' => wp_strip_all_tags($clean), 'max' => (int) floor($max * 0.85), 'limit' => $max];
+          }
+        }
+      }
+    }
+    unset($sec);
+    if ($too_long) {
+      $calls = [];
+      foreach ($too_long as $key => $items) {
+        $calls[$key] = ['system' => $system, 'user' =>
+          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off: finish the thought in fewer words. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
+          . "Return JSON: {\"<id>\": \"<shortened text>\"} with the same ids.\n\n" . wp_json_encode($items)];
+      }
+      $short = $self->ai_multi($calls, 'copy', 45);
+      foreach ($too_long as $key => $items) {
+        $ans = $short[$key] ?? null;
+        foreach ($items as $ref => $item) {
+          [$mid, $sk] = explode('|', $ref, 2);
+          $new = (is_array($ans) && isset($ans[$ref]) && is_string($ans[$ref])) ? trim(wp_strip_all_tags($ans[$ref])) : $item['text'];
+          if ($new === '' ) $new = $item['text'];
+          // Iets te lang mag (beter dan een afgebroken zin); veel te lang wordt netjes ingekort.
+          $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $item['limit'] * 1.1 ? $new : self::trim_to($new, $item['limit']);
+        }
+      }
+    }
+    return $out;
+  }
+
+  /* ───────────────────────── Tekstlengte en opmaak ───────────────────────── */
+
+  /** Soort tekstveld: 'inline' (titel, knop: platte tekst), 'basic' (korte tekst), 'rich' (teksteditor). */
+  public static function mode_for(string $name): string {
+    if (in_array($name, ['heading', 'button', 'text-link', 'icon-box', 'counter'], true)) return 'inline';
+    if ($name === 'text') return 'rich';
+    return 'basic';
+  }
+
+  /**
+   * Maximaal aantal tekens voor een tekst in de plaats van de placeholder van het sjabloon.
+   * Zo blijft de tekst passen bij de opmaak (een grote hero-titel krijgt geen hele zin).
+   */
+  public static function text_limit(string $name, string $placeholder): int {
+    $len = mb_strlen(trim(html_entity_decode(wp_strip_all_tags($placeholder), ENT_QUOTES, 'UTF-8')));
+    if ($name === 'heading') return $len ? (int) max(24, min(80, round($len * 1.3))) : 60;
+    if (in_array($name, ['button', 'text-link'], true)) return $len ? (int) max(16, min(28, round($len * 1.6))) : 24;
+    if ($len === 0) return 0;
+    if ($len <= 30) return (int) max(22, round($len * 1.6)); // labels, taglines
+    return (int) min(600, round($len * 1.2));
+  }
+
+  /** Limieten per module (eerste teksteigenschap) voor één sectie van de wireframe-AI. */
+  private static function limits_for(array $section): array {
+    $out = [];
+    foreach ((array) ($section['modules'] ?? []) as $mid => $mod) {
+      foreach ((array) ($mod['settings'] ?? []) as $val) {
+        if (!is_string($val)) continue;
+        $max = self::text_limit((string) ($mod['type'] ?? ''), $val);
+        if ($max) $out[$mid] = $max;
+        break;
+      }
+    }
+    return $out;
+  }
+
+  /** Inkorten op een zinseinde of woordgrens, zonder afgekapte woorden. */
+  public static function trim_to(string $text, int $max): string {
+    $text = trim(preg_replace('/\s+/u', ' ', $text));
+    if ($max <= 0 || mb_strlen($text) <= $max) return $text;
+    $cut = mb_substr($text, 0, $max);
+    if (preg_match('/^(.*[.!?])\s/u', $cut . ' ', $m) && mb_strlen($m[1]) >= $max * 0.6) return $m[1];
+    $sp = mb_strrpos($cut, ' ');
+    $cut = $sp !== false && $sp > $max * 0.5 ? mb_substr($cut, 0, $sp) : $cut;
+    // Geen losse verbindingswoorden op het einde ("…herstellingen en").
+    $stop = '(en|of|het|de|een|uit|voor|van|met|op|in|aan|te|om|bij|and|or|the|a|to|of|for|with|et|ou|le|la|les|du|des|pour|y|o|el|los|las|und|oder|der|die|das|mit)';
+    for ($i = 0; $i < 3; $i++) $cut = preg_replace('/[\s,;:–—-]+' . $stop . '$/iu', '', rtrim($cut, " ,;:-–—"));
+    return rtrim($cut, " ,;:-–—");
+  }
+
+  /**
+   * Opmaak opkuisen: geen style-attributen, kleuren of spans (dat komt pas in de stijlstap).
+   * inline: platte tekst; basic: vet, cursief en regeleinden; rich: ook alinea's, lijsten en links.
+   */
+  public static function clean_markup(string $html, string $mode): string {
+    $html = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $html);
+    $html = preg_replace('/<\s*b(\s[^>]*)?>/i', '<strong>', $html);
+    $html = preg_replace('/<\s*\/\s*b\s*>/i', '</strong>', $html);
+    $html = preg_replace('/<\s*i(\s[^>]*)?>/i', '<em>', $html);
+    $html = preg_replace('/<\s*\/\s*i\s*>/i', '</em>', $html);
+    if ($mode === 'inline') {
+      $html = preg_replace('/<br\s*\/?>/i', ' ', $html);
+      return trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags($html, false)));
+    }
+    if ($mode === 'basic') {
+      $html = preg_replace('/<\s*(p|div)(\s[^>]*)?>/i', '<br>', $html);
+      $html = preg_replace('/<\s*\/\s*(p|div)\s*>/i', '<br>', $html);
+      $allowed = ['strong' => [], 'em' => [], 'br' => []];
+    } else {
+      $allowed = ['p' => [], 'br' => [], 'strong' => [], 'em' => [], 'ul' => [], 'ol' => [], 'li' => [], 'a' => ['href' => true]];
+    }
+    $html = wp_kses($html, $allowed);
+    $html = preg_replace('/(<br>\s*){3,}/i', '<br><br>', $html);
+    $html = preg_replace('/^(\s|<br>)+|(\s|<br>)+$/i', '', $html);
+    return trim($html);
   }
 
   /* ───────────────────────── Hulp ───────────────────────── */
