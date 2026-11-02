@@ -11,6 +11,10 @@ if (!defined('ABSPATH')) exit;
  * - Teksten: de copy-regels en de lijst met stockzinnen, voor de AI-teksten van de wireframes.
  * - Secties: de huisregels die op sjabloonniveau kunnen (geen labels boven titels, geen dunne
  *   lijnen, geen icoon bovenaan kaarten, geen 01/02/03, geen schaduwen op wat stil staat).
+ *
+ * Aangevuld met regels uit de "craft floor" van impeccable (github.com/pbakaus/impeccable,
+ * Apache-2.0): browseroppervlakken (selectie, cursor, focus, links) in de kleuren van de site,
+ * getinte in plaats van grijze tekst op gekleurde achtergronden (archer.js), cijfers in kolommen.
  */
 class AISB_Archer_Taste {
 
@@ -18,6 +22,7 @@ class AISB_Archer_Taste {
 
   public function init(): void {
     add_action('wp_ajax_aisb_archer_taste_deal', [$this, 'ajax_deal']);
+    add_action('wp_ajax_aisb_archer_taste_shuffle', [$this, 'ajax_shuffle']);
     add_action('wp_head', [$this, 'preview_house_css'], 99);
   }
 
@@ -152,6 +157,89 @@ class AISB_Archer_Taste {
     ];
   }
 
+  /** Een ander palet of een andere lettertypeset binnen dezelfde richting (het andere blijft staan). */
+  public static function shuffle(string $direction_id, string $kind, array $exclude, int $seed): ?array {
+    $lib = self::library();
+    $d = null;
+    foreach ($lib['directions'] as $x) if ($x['id'] === $direction_id) $d = $x;
+    $state = $seed & 0x7fffffff;
+    if ($kind === 'palette') {
+      $pool = $d ? array_values(array_filter($lib['palettes'], fn($p) => in_array($p['id'], $d['palettes'], true) || array_intersect($p['tags'], $d['paletteTags']))) : $lib['palettes'];
+      $left = array_values(array_filter($pool, fn($p) => !in_array($p['id'], $exclude, true)));
+      if (!$left) $left = array_values(array_filter($lib['palettes'], fn($p) => !in_array($p['id'], $exclude, true)));
+      if (!$left) return null;
+      $p = $left[self::rnd($state, count($left))];
+      return ['palette' => $p, 'name' => $p['name_nl'] ?? $p['name'], 'colourNote' => self::palette_label($p), 'colours' => self::roles($p)];
+    }
+    $pool = $d ? array_values(array_filter($lib['types'], fn($t) => in_array($t['id'], $d['type'], true) || in_array($t['class'], $d['typeClasses'], true))) : $lib['types'];
+    $left = array_values(array_filter($pool, fn($t) => !in_array($t['id'], $exclude, true)));
+    if (!$left) $left = array_values(array_filter($lib['types'], fn($t) => !in_array($t['id'], $exclude, true)));
+    if (!$left) return null;
+    $t = $left[self::rnd($state, count($left))];
+    return ['type' => $t, 'typeNote' => self::type_label($t), 'headingFont' => $t['display']['family'], 'bodyFont' => $t['text']['family']];
+  }
+
+  private function guard_sg(): int {
+    if (!is_user_logged_in()) wp_send_json_error(['message' => 'Meld je eerst aan.'], 401);
+    $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+    $ok = false;
+    foreach (['aisb_sg_nonce', 'aisb_wf_nonce', 'aisb_nonce_action'] as $action) {
+      if ($nonce && wp_verify_nonce($nonce, $action)) $ok = true;
+    }
+    if (!$ok) wp_send_json_error(['message' => 'Ongeldige sessie, herlaad de pagina'], 403);
+    $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
+    $p = $project_id ? get_post($project_id) : null;
+    if (!$p || $p->post_type !== 'aisb_project') wp_send_json_error(['message' => 'Project niet gevonden'], 404);
+    if ((int) $p->post_author !== get_current_user_id() && !current_user_can('manage_options')) wp_send_json_error(['message' => 'Geen toegang'], 403);
+    return $project_id;
+  }
+
+  public function ajax_shuffle(): void {
+    $this->guard_sg();
+    $kind = (isset($_POST['kind']) && $_POST['kind'] === 'type') ? 'type' : 'palette';
+    $dir = sanitize_key(wp_unslash($_POST['direction'] ?? ''));
+    $exclude = array_map('sanitize_key', (array) json_decode(wp_unslash($_POST['exclude'] ?? '[]'), true));
+    $out = self::shuffle($dir, $kind, $exclude, random_int(1, PHP_INT_MAX >> 1));
+    if (!$out) wp_send_json_error(['message' => 'Geen andere keuze meer'], 404);
+    wp_send_json_success($out);
+  }
+
+  /* ───────────────────────── Kleurschema per sectie ───────────────────────── */
+
+  /** Schema-id → kleurrol in de stijlgids (zelfde lijst als in archer.js). */
+  const SCHEME_ROLE = ['ground' => 'Light', 'tone' => 'Neutral', 'field' => 'Secondary', 'accent' => 'Primary', 'ink' => 'Dark'];
+
+  /**
+   * Zet de gekozen kleurschema's (stijlgids → sectionSchemes) als bg_color op de secties van de
+   * export, zodat de gepubliceerde site dezelfde achtergronden krijgt als het voorbeeld.
+   */
+  public static function apply_schemes_to_export(array $pages, array $guide): array {
+    $map = isset($guide['sectionSchemes']) && is_array($guide['sectionSchemes']) ? $guide['sectionSchemes'] : [];
+    if (!$map) return $pages;
+    $colour = function (string $role) use ($guide): string {
+      foreach ((array) ($guide['colours'] ?? []) as $c) {
+        if (is_array($c) && ($c['name'] ?? '') === $role && preg_match('/^#[0-9a-f]{6}$/i', (string) ($c['hex'] ?? ''))) return (string) $c['hex'];
+      }
+      return '';
+    };
+    foreach ($pages as &$page) {
+      $slug = (string) ($page['slug'] ?? '');
+      foreach ($page['sections'] as &$sec) {
+        if (!is_array($sec)) continue;
+        $type = strtolower((string) ($sec['type'] ?? ''));
+        $id = '';
+        if (in_array($type, ['header', 'footer'], true)) $id = (string) ($map['global'][$type] ?? '');
+        elseif (!empty($sec['uuid'])) $id = (string) ($map['pages'][$slug][(string) $sec['uuid']] ?? '');
+        if ($id === '' || !isset(self::SCHEME_ROLE[$id])) continue;
+        $hex = $colour(self::SCHEME_ROLE[$id]);
+        if ($hex !== '') $sec['bg_color'] = $hex;
+      }
+      unset($sec);
+    }
+    unset($page);
+    return $pages;
+  }
+
   public function ajax_deal(): void {
     if (!is_user_logged_in()) wp_send_json_error(['message' => 'Meld je eerst aan.'], 401);
     $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
@@ -268,8 +356,15 @@ class AISB_Archer_Taste {
   /** CSS-huisregels voor voorbeeld en gepubliceerde site: geen schaduwen op wat stil staat. */
   public static function house_css(): string {
     $float = '.brx-dropdown-content,.brx-submenu-toggle,.brxe-offcanvas .brx-offcanvas-inner,.bricks-mobile-menu-wrapper,.brx-popup-content,[role="dialog"],[role="menu"]';
+    $accent = 'var(--bricks-color-primary, currentColor)';
     return 'body :not(' . $float . '){box-shadow:none !important;text-shadow:none !important;}'
-      . 'h1,h2,h3,.brxe-heading{text-wrap:balance;}p,.brxe-text-basic{text-wrap:pretty;}';
+      . 'h1,h2,h3,.brxe-heading{text-wrap:balance;}p,.brxe-text-basic{text-wrap:pretty;}'
+      // impeccable: browseroppervlakken (selectie, cursor, focus, links) in de stijl van de site, cijfers in kolommen.
+      . '::selection{background:' . $accent . ';color:var(--bricks-color-light, #fff);}'
+      . 'body{caret-color:' . $accent . ';}'
+      . ':focus-visible{outline:2px solid ' . $accent . ' !important;outline-offset:3px;}'
+      . 'a{text-underline-offset:0.18em;text-decoration-thickness:from-font;}'
+      . '.brxe-counter,table,.brxe-pricing-tables{font-variant-numeric:tabular-nums;}';
   }
 
   public function preview_house_css(): void {
