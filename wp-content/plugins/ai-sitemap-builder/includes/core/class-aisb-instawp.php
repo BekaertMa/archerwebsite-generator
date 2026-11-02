@@ -610,6 +610,10 @@ class AISB_InstaWP {
     if (class_exists('AISB_Archer_Taste')) {
       $pages = AISB_Archer_Taste::apply_schemes_to_export($pages, isset($export['style_guide']) && is_array($export['style_guide']) ? $export['style_guide'] : []);
     }
+    // Archer: header en footer met de naam, het menu en de footergroepen van deze website.
+    if (class_exists('AISB_Archer_Chrome')) {
+      $pages = AISB_Archer_Chrome::apply_to_export($pages, (int) $project->ID);
+    }
     if (empty($pages)) {
       return new WP_Error('aisb_instawp_empty_export', 'The live export does not contain any publishable pages.', ['status' => 400]);
     }
@@ -757,7 +761,7 @@ class AISB_InstaWP {
       'colours' => $colours,
       'images' => $images,
       // Archer: huisregels van tasteskill (geen schaduwen op wat stil staat), ook op de gepubliceerde site.
-      'houseCss' => class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::house_css() : '',
+      'houseCss' => class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::house_css($guide) : '',
     ];
   }
 
@@ -1141,12 +1145,22 @@ class AISB_InstaWP {
       $nav_menu_id = $this->configure_remote_nav_menu($clone, $site, $nav_menu_items, $menu_label, $timeout);
     }
 
-    if ($nav_menu_id > 0 && !empty($bricks_injections)) {
+    // Archer: menu's volgens de sitemap (hoofdmenu met submenu's, footergroepen, juridisch).
+    $archer_menu_ids = [];
+    if (class_exists('AISB_Archer_Chrome')) {
+      foreach (AISB_Archer_Chrome::publish_menus((int) $project->ID, $published_pages) as $archer_role => $archer_items) {
+        $archer_mid = $this->configure_remote_nav_menu($clone, $site, $archer_items, ($project_name !== '' ? $project_name : 'Site') . ' ' . $archer_role, $timeout);
+        if ($archer_mid > 0) $archer_menu_ids[$archer_role] = $archer_mid;
+      }
+    }
+
+    if (($nav_menu_id > 0 || $archer_menu_ids) && !empty($bricks_injections)) {
       foreach ($bricks_injections as $injection_index => $injection) {
         $payload = is_array($injection['payload'] ?? null) ? $injection['payload'] : [];
         foreach (['content', 'header', 'footer'] as $region) {
           if (isset($payload[$region]) && is_array($payload[$region])) {
             $payload[$region] = $this->set_nav_menu_id_in_nodes($payload[$region], $nav_menu_id);
+            if ($archer_menu_ids) $payload[$region] = AISB_Archer_Chrome::set_menu_ids($payload[$region], $archer_menu_ids);
           }
         }
         $bricks_injections[$injection_index]['payload'] = $payload;
@@ -1507,6 +1521,7 @@ class AISB_InstaWP {
     error_log('[AISB] Nav menu REST: menu aangemaakt id=' . $menu_id . ' naam=' . $menu_name);
 
     // Menu-items toevoegen
+    $created_ids = [];
     foreach ($menu_items as $order => $item) {
       $object_id = (int) ($item['object_id'] ?? 0);
       $title     = sanitize_text_field((string) ($item['title'] ?? ''));
@@ -1518,6 +1533,10 @@ class AISB_InstaWP {
         'status'     => 'publish',
         'menu_order' => $order + 1,
       ];
+      // Archer: submenu (index van het ouder-item in dezelfde lijst).
+      if (isset($item['parent']) && (int) $item['parent'] >= 0 && !empty($created_ids[(int) $item['parent']])) {
+        $item_body['parent'] = $created_ids[(int) $item['parent']];
+      }
 
       if ($object_id > 0) {
         $item_body['type']      = 'post_type';
@@ -1546,6 +1565,8 @@ class AISB_InstaWP {
       if ($item_code !== 200 && $item_code !== 201) {
         error_log('[AISB] Nav menu REST: item "' . $title . '" HTTP ' . $item_code . ': ' . substr((string) ($item_response['body'] ?? ''), 0, 200));
       }
+      $created_item = json_decode((string) ($item_response['body'] ?? ''), true);
+      if (is_array($created_item) && !empty($created_item['id'])) $created_ids[$order] = (int) $created_item['id'];
     }
 
     // Probeer het menu toe te wijzen aan beschikbare theme locaties (niet fataal)
@@ -1775,6 +1796,7 @@ class AISB_InstaWP {
     }
 
     $position = 0;
+    $db_ids = [];
     foreach ($menu_items as $item) {
       $position++;
       $object_id = (int) ($item['object_id'] ?? 0);
@@ -1828,7 +1850,7 @@ class AISB_InstaWP {
 
       $meta_values = [
         '_menu_item_type'             => $is_post ? 'post_type' : 'custom',
-        '_menu_item_menu_item_parent' => '0',
+        '_menu_item_menu_item_parent' => (string) ((isset($item['parent']) && (int) $item['parent'] >= 0 && !empty($db_ids[(int) $item['parent']])) ? $db_ids[(int) $item['parent']] : 0),
         '_menu_item_object_id'        => $is_post ? (string) $object_id : '0',
         '_menu_item_object'           => $is_post ? 'page' : 'custom',
         '_menu_item_target'           => '',
@@ -1837,6 +1859,7 @@ class AISB_InstaWP {
         '_menu_item_url'              => $is_post ? '' : $url,
       ];
 
+      $db_ids[$position - 1] = $menu_item_id;
       foreach ($meta_values as $meta_key => $meta_value) {
         $stored = $this->upsert_meta_value($connection, $prefix, $menu_item_id, $meta_key, (string) $meta_value);
         if (is_wp_error($stored)) {
