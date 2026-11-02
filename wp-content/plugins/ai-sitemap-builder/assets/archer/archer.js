@@ -854,7 +854,7 @@
     let genRunning = Promise.resolve();
     /**
      * Maakt de wireframes van deze pagina's. Home eerst (de andere pagina's nemen de header en
-     * footer daarvan over), daarna drie pagina's tegelijk. Elke kolom toont skeletsecties tot
+     * footer daarvan over), daarna zes pagina's tegelijk. Elke kolom toont skeletsecties tot
      * zijn wireframe klaar is.
      */
     function generatePages(slugs) {
@@ -901,7 +901,8 @@
         const worker = async () => {
           while (next < rest.length) await one(rest[next++]);
         };
-        await Promise.all([worker(), worker(), worker()]);
+        // Zes tegelijk (was drie); de site praat HTTP/2, dus de browser remt niet af.
+        await Promise.all(Array.from({ length: 6 }, worker));
       });
       return genRunning;
     }
@@ -3008,6 +3009,12 @@
     try { initWireframes(); } catch (e) { console.error("[Archer] wireframes", e); }
     try { initStyleGuide(); } catch (e) { console.error("[Archer] stijl", e); }
     try { initPublish(); } catch (e) { console.error("[Archer] publiceren", e); }
+
+    // De website op InstaWP al klonen zodra de klant aan de stijl begint: publiceren slaat
+    // het klonen dan over (de server antwoordt meteen en kloont op de achtergrond verder).
+    if (CFG.projectId && CFG.step >= 3 && !Number(CFG.published)) {
+      UI.post("aisb_archer_prewarm", { project_id: CFG.projectId }).catch((err) => console.warn("[Archer] site klaarzetten", err));
+    }
 
     // Waarschuwen bij sluiten met onbewaarde wijzigingen.
     window.addEventListener("beforeunload", (e) => {
