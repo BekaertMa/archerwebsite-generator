@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) exit;
  * uit beide bronnen, en valt één bron weg, dan vult de andere aan. Zonder Pexels-sleutel
  * blijft alles zoals het was (alleen Unsplash).
  *
- * Sleutel: constante AISB_PEXELS_KEY in wp-config.php, of Instellingen → Archer stockfoto's.
+ * Sleutel: Instellingen → AI Sitemap Builder → Stockfoto's, of de constante AISB_PEXELS_KEY in wp-config.php.
  * De sleutel gaat nooit naar de browser.
  */
 class AISB_Archer_Stock {
@@ -19,8 +19,7 @@ class AISB_Archer_Stock {
   public function init(): void {
     add_action('wp_ajax_aisb_get_unsplash_images', [$this, 'ajax_auto'], 1);
     add_action('wp_ajax_aisb_search_similar_images', [$this, 'ajax_search'], 1);
-    add_action('admin_menu', [$this, 'menu']);
-    add_action('admin_init', [$this, 'register']);
+    add_action('admin_init', [$this, 'register'], 20);
   }
 
   public static function pexels_key(): string {
@@ -38,30 +37,25 @@ class AISB_Archer_Stock {
 
   /* ───────────────────────── Instellingen ───────────────────────── */
 
+  /**
+   * Veld op de bestaande pagina Instellingen → AI Sitemap Builder. Het hoort bij dezelfde
+   * settings-groep, zodat de knop "Wijzigingen opslaan" van die pagina het mee bewaart.
+   */
   public function register(): void {
-    register_setting('archer_stock', self::OPTION, ['type' => 'string', 'sanitize_callback' => fn($v) => sanitize_text_field((string) $v), 'show_in_rest' => false]);
+    register_setting('aisb_settings_group', self::OPTION, ['type' => 'string', 'sanitize_callback' => fn($v) => sanitize_text_field((string) $v), 'show_in_rest' => false, 'default' => '']);
+    add_settings_section('aisb_stock', "Stockfoto's", function () {
+      echo '<p>Met een Pexels-sleutel komen de stockfoto\'s in de stap Foto\'s uit Unsplash én Pexels. Een gratis sleutel vraag je aan op <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>. Leeg laten om alleen Unsplash te gebruiken.</p>';
+    }, 'ai-sitemap-builder');
+    add_settings_field('archer_pexels_key', 'Pexels API Key', [$this, 'field'], 'ai-sitemap-builder', 'aisb_stock', ['label_for' => 'archer_pexels_key']);
   }
 
-  public function menu(): void {
-    add_options_page('Archer stockfoto\'s', 'Archer stockfoto\'s', 'manage_options', 'archer-stock', [$this, 'page']);
-  }
-
-  public function page(): void {
-    if (!current_user_can('manage_options')) return;
-    $const = defined('AISB_PEXELS_KEY') && AISB_PEXELS_KEY;
-    echo '<div class="wrap"><h1>Archer stockfoto\'s</h1>';
-    echo '<p>Met een Pexels-sleutel komen de stockfoto\'s in de stap Foto\'s uit Unsplash én Pexels. Een gratis sleutel vraag je aan op <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>.</p>';
-    if ($const) {
-      echo '<p><strong>De sleutel staat in wp-config.php (AISB_PEXELS_KEY).</strong></p></div>';
+  public function field(): void {
+    if (defined('AISB_PEXELS_KEY') && AISB_PEXELS_KEY) {
+      echo '<p><strong>Ingesteld in wp-config.php (AISB_PEXELS_KEY).</strong> Die waarde gaat voor.</p>';
       return;
     }
-    echo '<form method="post" action="options.php">';
-    settings_fields('archer_stock');
-    echo '<table class="form-table"><tr><th scope="row"><label for="archer_pexels_key">Pexels API-sleutel</label></th><td>';
     echo '<input type="password" id="archer_pexels_key" name="' . esc_attr(self::OPTION) . '" value="' . esc_attr((string) get_option(self::OPTION, '')) . '" class="regular-text" autocomplete="off">';
-    echo '<p class="description">Leeg laten om alleen Unsplash te gebruiken.</p></td></tr></table>';
-    submit_button('Bewaren');
-    echo '</form></div>';
+    echo '<p class="description">' . (self::unsplash_key() ? 'Unsplash staat aan (AISB_UNSPLASH_KEY in wp-config.php).' : 'Er is geen Unsplash-sleutel ingesteld.') . '</p>';
   }
 
   /* ───────────────────────── Toegang ───────────────────────── */
