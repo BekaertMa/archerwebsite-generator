@@ -876,9 +876,15 @@
           if (!out || !out.success || !out.data || !out.data.wireframe) throw new Error((out && out.data && out.data.message) || "");
           const w = out.data.wireframe;
           lastSaved[slug] = JSON.stringify(w);
+          // Header en footer zoals Home (de server zet ze ook zo na het bewaren).
+          if (slug !== "home" && wf.state.pageModels.home) {
+            applyChrome(w, chromeOf(wf.state.pageModels.home));
+            lastSaved[slug] = JSON.stringify(w);
+          }
           if (normalizeOrder(w)) markDirty(slug);
           wf.state.pageModels[slug] = w;
           if (wf.state.pageSlug === slug) wf.state.model = w;
+          if (slug === "home") spreadChrome("home", w);
         } catch (e) {
           genFailed.add(slug);
         }
@@ -1090,6 +1096,65 @@
       const col = $(`.archer-cv-col[data-archer-cv-page="${CSS.escape(slug)}"]`, inner);
       if (p && col) renderColumn(col, p, Number(col.style.order) || 0);
       renderTabs();
+    };
+
+    /* ── Header en footer: overal die van Home ─────────────────────── */
+
+    const chromeOf = (model) => {
+      const out = {};
+      ((model && model.sections) || []).forEach((sec) => {
+        const t = String((sec && sec.type) || "").toLowerCase();
+        if (t === "header" && !out.header) out.header = sec;
+        if (t === "footer") out.footer = sec;
+      });
+      return out;
+    };
+    const sameSection = (a, b) => {
+      const strip = (x) => JSON.stringify(Object.assign({}, x, { uuid: "" }));
+      return strip(a) === strip(b);
+    };
+    /** Zet header en footer van `model` gelijk aan die van `src`; true als er iets veranderde. */
+    const applyChrome = (model, src) => {
+      if (!model || !Array.isArray(model.sections) || !src) return false;
+      let changed = false;
+      const headerIdx = model.sections.findIndex((x) => String((x && x.type) || "").toLowerCase() === "header");
+      let footerIdx = -1;
+      model.sections.forEach((x, i) => { if (String((x && x.type) || "").toLowerCase() === "footer") footerIdx = i; });
+      [["header", headerIdx], ["footer", footerIdx]].forEach(([t, i]) => {
+        if (i < 0 || !src[t] || sameSection(model.sections[i], src[t])) return;
+        model.sections[i] = Object.assign(JSON.parse(JSON.stringify(src[t])), { uuid: model.sections[i].uuid });
+        changed = true;
+      });
+      return changed;
+    };
+    /** De header en footer van `sourceSlug` op alle andere pagina's (de server doet hetzelfde). */
+    const spreadChrome = (sourceSlug, sourceModel, onlyType) => {
+      const src = chromeOf(sourceModel || modelOf(sourceSlug));
+      if (onlyType === "header") delete src.footer;
+      if (onlyType === "footer") delete src.header;
+      if (!src.header && !src.footer) return;
+      (wf.state.pages || []).forEach((p) => {
+        if (p.slug === sourceSlug) return;
+        const m = modelOf(p.slug);
+        if (applyChrome(m, src)) {
+          lastSaved[p.slug] = JSON.stringify(m); // de server zette dezelfde wijziging al
+          redrawPage(p.slug);
+        }
+      });
+    };
+    UI.spreadChrome = spreadChrome;
+    // Een ander voorbeeld voor de header of footer (op het canvas of in de paginaweergave) geldt voor alle pagina's.
+    const chromePost = wf.post.bind(wf);
+    wf.post = async function (action, data) {
+      const out = await chromePost(action, data);
+      if ((action === "aisb_shuffle_section_layout" || action === "aisb_replace_section_type") && out && out.success && data && data.page_slug) {
+        const w = out.data && out.data.wireframe;
+        const sec = w && (w.sections || []).find((x) => x && x.uuid === data.uuid);
+        if (sec && ["header", "footer"].includes(String(sec.type || "").toLowerCase())) {
+          setTimeout(() => spreadChrome(data.page_slug, w, String(sec.type).toLowerCase()), 0);
+        }
+      }
+      return out;
     };
 
     let undo = null;
