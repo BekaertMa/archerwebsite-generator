@@ -752,6 +752,8 @@ class AISB_InstaWP {
       'logoUrl' => $this->convert_local_url_to_data_uri(trim((string) ($guide['logoUrl'] ?? ''))),
       'colours' => $colours,
       'images' => $images,
+      // Archer: huisregels van tasteskill (geen schaduwen op wat stil staat), ook op de gepubliceerde site.
+      'houseCss' => class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::house_css() : '',
     ];
   }
 
@@ -3884,6 +3886,7 @@ class AISB_InstaWP {
       css +=
         ".brxe-icon-svg svg,.brxe-icon svg{color:" + accent + " !important;fill:" + accent + " !important;}";
     }
+    if (guide.houseCss) css += String(guide.houseCss);
     css += "img[data-aisb-logo='1']{max-height:60px !important;width:auto !important;object-fit:contain !important;}";
     return css;
   }
