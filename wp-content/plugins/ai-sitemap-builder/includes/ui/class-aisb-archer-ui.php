@@ -588,6 +588,15 @@ class AISB_Archer_UI {
       }
     }
 
+    // Header altijd eerst, footer altijd laatst.
+    if (class_exists('AISB_Archer_Sitemap_Rules')) {
+      foreach ($data['sitemap'] as $i => $page) {
+        if (is_array($page) && is_array($page['sections'] ?? null)) {
+          $data['sitemap'][$i]['sections'] = AISB_Archer_Sitemap_Rules::order_sections($page['sections']);
+        }
+      }
+    }
+
     // wp_slash: update_post_meta haalt backslashes weg, wat \u00eb en \" in JSON kapotmaakt.
     update_post_meta($sitemap_id, 'aisb_sitemap_json', wp_slash(wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
     update_post_meta($sitemap_id, 'aisb_sitemap_status', 'edited');
