@@ -37,6 +37,8 @@ class AISB_Archer_Generate {
       }
     }
     unset($n);
+    // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
+    if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
     return $nodes;
   }
 
@@ -110,7 +112,8 @@ class AISB_Archer_Generate {
     $self = new self();
     $base = preg_replace('/Target JSON:\n.*$/s', '', $prompt);
     $base .= "\nLENGTH: every text must fit the slot of the placeholder it replaces in the design. LIMITS gives the maximum number of words per module id. Write each text so it naturally fits within that many words: choose a shorter formulation instead of cutting a longer one. Every text is a complete phrase or sentence that stands on its own; never continue a sentence in the next module and never stop mid-sentence. Headings are short and punchy (a hero title is a few words, not a sentence about everything the company does). Short labels (stats, taglines, list items) are 1 to 4 words.\n"
-      . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n\n";
+      . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n"
+      . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n";
     $system = 'Return valid JSON only. No markdown. No explanation.';
     $calls = [];
     $limits = [];
@@ -145,7 +148,9 @@ class AISB_Archer_Generate {
           $plain = wp_strip_all_tags($clean);
           // Te lang, of afgebroken ("…herstellingen en", "airco-onder").
           $cut_off = (bool) preg_match('/(\s(en|of|het|de|een|uit|voor|van|met|op|in|aan|te|om|bij|and|or|the|to|for|with|et|ou|pour|y|und|oder|mit)|[-,:;])$/iu', trim($plain));
-          if ($max && (mb_strlen($plain) > $max || $cut_off)) {
+          $stock = class_exists('AISB_Archer_Taste') && AISB_Archer_Taste::stock_phrase($plain);
+          if ($stock && !$max) $max = (int) max(20, ceil(mb_strlen($plain) * 1.1));
+          if ($max && (mb_strlen($plain) > $max || $cut_off || $stock)) {
             // Modellen tellen niet exact: vraag wat korter dan nodig.
             $too_long[$key][$mid . '|' . $sk] = ['text' => wp_strip_all_tags($clean), 'max' => (int) floor($max * 0.85), 'limit' => $max];
           }
@@ -157,7 +162,7 @@ class AISB_Archer_Generate {
       $calls = [];
       foreach ($too_long as $key => $items) {
         $calls[$key] = ['system' => $system, 'user' =>
-          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off: finish the thought in fewer words. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
+          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off, some use stock marketing phrases ('ontdek', 'welkom bij', 'uw partner', 'op maat', 'naadloos', 'lees meer', em dashes): finish the thought in fewer words and say the specific thing instead. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
           . "Return JSON: {\"<id>\": \"<shortened text>\"} with the same ids.\n\n" . wp_json_encode($items)];
       }
       $short = $self->ai_multi($calls, 'copy', 45);
