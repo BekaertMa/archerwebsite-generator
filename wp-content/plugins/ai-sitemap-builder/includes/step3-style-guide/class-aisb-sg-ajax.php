@@ -34,7 +34,7 @@ class AISB_SG_Ajax {
 
     if (!is_array($data)) wp_send_json_error(['message' => 'Invalid style_guide_json'], 400);
 
-    update_post_meta($project_id, 'aisb_style_guide', wp_json_encode($data, JSON_UNESCAPED_SLASHES));
+    update_post_meta($project_id, 'aisb_style_guide', wp_slash(wp_json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)));
     wp_send_json_success(['ok' => 1]);
   }
 
