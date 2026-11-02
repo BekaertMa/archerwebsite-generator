@@ -1298,16 +1298,71 @@
         return { byId, repeats, media, buttons, texts };
       }
 
-      const plain = (v) => /<[a-z][^>]*>/i.test(v) ? v : v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+      // Opmaak zoals in de server (AISB_Archer_Generate::clean_markup): geen kleuren, spans of style.
+      const ALLOWED = { basic: ["STRONG", "EM", "BR"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A"] };
+      function cleanHtml(html, mode) {
+        const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
+        if (mode === "inline") {
+          doc.body.querySelectorAll("br").forEach((b) => b.replaceWith(" "));
+          return doc.body.textContent.replace(/\s+/g, " ").trim();
+        }
+        const allowed = ALLOWED[mode] || ALLOWED.basic;
+        const walk = (node) => {
+          Array.from(node.childNodes).forEach((c) => {
+            if (c.nodeType === 3) return;
+            if (c.nodeType !== 1) return c.remove();
+            if (/^(SCRIPT|STYLE)$/.test(c.tagName)) return c.remove();
+            walk(c);
+            let tag = c.tagName === "B" ? "STRONG" : c.tagName === "I" ? "EM" : c.tagName;
+            if (/^(DIV|P)$/.test(tag)) {
+              if (mode === "basic") {
+                if (c.previousSibling) c.before(doc.createElement("br"));
+                return c.replaceWith(...c.childNodes);
+              }
+              tag = "P";
+            }
+            if (!allowed.includes(tag)) return c.replaceWith(...c.childNodes);
+            const el = doc.createElement(tag);
+            const href = c.getAttribute("href") || "";
+            if (tag === "A" && /^(https?:|mailto:|tel:|\/|#)/i.test(href)) el.setAttribute("href", href);
+            el.append(...c.childNodes);
+            c.replaceWith(el);
+          });
+        };
+        walk(doc.body);
+        return doc.body.innerHTML.replace(/(<br>\s*){3,}/g, "<br><br>").replace(/^(\s|<br>)+|(\s|<br>)+$/g, "").trim();
+      }
+      const plainLen = (html) => {
+        const d = new DOMParser().parseFromString("<body>" + html + "</body>", "text/html");
+        return d.body.textContent.replace(/\s+/g, " ").trim().length;
+      };
+      const countText = (len, max) => (max ? `${len} / ${max}` : `${len}`);
+
       function fieldHtml(n) {
-        const v = plain(n.text || "");
+        const mode = n.mode || (n.name === "heading" || n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
+        const v = cleanHtml(n.text || "", mode);
+        const len = plainLen(v);
         const lab = /tagline|eyebrow/i.test(n.label || "") ? "Tagline" : TEXT_NAMES[n.name] + (n.tag && /^h\d$/.test(n.tag) ? " (" + n.tag.toUpperCase() + ")" : "");
-        const long = n.name !== "heading" && n.name !== "button" && (v.length > 60 || n.name === "text");
+        const tools =
+          mode === "inline"
+            ? ""
+            : `<div class="archer-ed-tb" role="toolbar" aria-label="Opmaak">` +
+              `<button type="button" data-ed-cmd="bold" aria-label="Vet" title="Vet"><strong>B</strong></button>` +
+              `<button type="button" data-ed-cmd="italic" aria-label="Cursief" title="Cursief"><em>I</em></button>` +
+              (mode === "rich" ? `<button type="button" data-ed-cmd="insertUnorderedList" aria-label="Opsomming" title="Opsomming">•</button>` : "") +
+              `</div>`;
         return (
-          `<label class="aisb-label" for="archer-ed-${n.id}">${esc(lab)}</label>` +
-          (long
-            ? `<textarea id="archer-ed-${n.id}" rows="${Math.min(6, Math.max(2, Math.ceil(v.length / 48)))}" data-ed-text="${n.id}" data-ed-key="${n.key || "text"}">${esc(v)}</textarea>`
-            : `<input type="text" id="archer-ed-${n.id}" value="${esc(v)}" data-ed-text="${n.id}" data-ed-key="${n.key || "text"}">`)
+          `<div class="archer-ed-field">` +
+          `<div class="archer-ed-labelrow"><span class="aisb-label" id="archer-ed-l-${n.id}">${esc(lab)}</span>` +
+          `<span class="archer-ed-len${n.max && len > n.max ? " is-over" : ""}" data-ed-len="${n.id}" title="${n.max ? "Aanbevolen maximum: " + n.max + " tekens" : ""}">${countText(len, n.max)}</span></div>` +
+          tools +
+          `<div class="archer-ed-rte is-${mode}" id="archer-ed-${n.id}" contenteditable="true" role="textbox" spellcheck="true"` +
+          ` aria-labelledby="archer-ed-l-${n.id}"${mode === "inline" ? "" : ' aria-multiline="true"'}` +
+          ` data-ed-text="${n.id}" data-ed-key="${n.key || "text"}" data-ed-mode="${mode}" data-ed-max="${n.max || 0}">` +
+          (mode === "inline" ? esc(v) : v) +
+          `</div>` +
+          (n.max ? `<p class="archer-ed-hint" data-ed-hint="${n.id}"${len > n.max ? "" : " hidden"}>Langer dan aanbevolen voor deze plek in het ontwerp.</p>` : "") +
+          `</div>`
         );
       }
 
@@ -1472,7 +1527,9 @@
         mine.nodes = d.nodes;
         const touched = [];
         // Nieuwe kopie (sjabloon) of bijgewerkte header/footer op andere pagina's: modellen bijwerken.
+        let idChanged = false;
         if (Number(d.post_id) !== Number(mine.postId)) {
+          idChanged = true;
           s.ai_wireframe_id = Number(d.post_id);
           mine.postId = Number(d.post_id);
           markDirty(mine.slug);
@@ -1504,7 +1561,7 @@
         if (sel === mine) {
           const el = secElOf(mine.uuid);
           if (el) el.classList.add("is-editing");
-          render();
+          if (reload || idChanged) render(); // na een tekstwijziging niet: de cursor blijft staan
           setStatus("Bewaard.");
         }
       }
@@ -1533,7 +1590,7 @@
       }
 
       // Teksten: meteen zichtbaar in het voorbeeld, even later bewaard.
-      function liveText(id, value) {
+      function liveText(id, value, mode) {
         const doc = docOf(sel.uuid);
         const el = domOf(doc, id);
         if (!el) return;
@@ -1542,10 +1599,10 @@
           const t = Array.from(el.childNodes).find((c) => c.nodeType === 3 && c.textContent.trim());
           if (t) t.textContent = value;
           else el.insertBefore(doc.createTextNode(value), el.firstChild);
-        } else if (/<[a-z][^>]*>/i.test(value)) {
-          el.innerHTML = value.replace(/<script[\s\S]*?<\/script>/gi, "");
-        } else {
+        } else if (mode === "inline") {
           el.textContent = value;
+        } else {
+          el.innerHTML = value; // al opgekuist door cleanHtml
         }
         const f = $("iframe", secElOf(sel.uuid));
         if (f) measureIframe(f);
@@ -1568,8 +1625,20 @@
         const f = e.target.closest("[data-ed-text]");
         if (!f || !sel) return;
         const id = f.getAttribute("data-ed-text");
-        textQueue[id] = { key: f.getAttribute("data-ed-key") || "text", value: f.value };
-        liveText(id, f.value);
+        const mode = f.getAttribute("data-ed-mode") || "basic";
+        const value = cleanHtml(mode === "inline" ? esc(f.textContent) : f.innerHTML, mode);
+        textQueue[id] = { key: f.getAttribute("data-ed-key") || "text", value };
+        // Tekenteller en waarschuwing bij een te lange tekst.
+        const max = Number(f.getAttribute("data-ed-max")) || 0;
+        const len = plainLen(mode === "inline" ? esc(value) : value);
+        const lenEl = $(`[data-ed-len="${id}"]`, panel);
+        if (lenEl) {
+          lenEl.textContent = countText(len, max);
+          lenEl.classList.toggle("is-over", !!max && len > max);
+        }
+        const hint = $(`[data-ed-hint="${id}"]`, panel);
+        if (hint) hint.hidden = !(max && len > max);
+        liveText(id, value, mode);
         setStatus("");
         clearTimeout(textTimer);
         textTimer = setTimeout(flushText, 800);
@@ -1608,7 +1677,39 @@
           return send([{ op: "cols", id: r.id, n }], true);
         }
       });
-      panel.addEventListener("mousedown", (e) => e.stopPropagation());
+      panel.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        // Opmaakknoppen: de selectie in het tekstveld behouden.
+        const b = e.target.closest("[data-ed-cmd]");
+        if (!b) return;
+        e.preventDefault();
+        const f = b.closest(".archer-ed-field");
+        const rte = f && $("[data-ed-text]", f);
+        if (rte && document.activeElement !== rte) rte.focus();
+        document.execCommand(b.getAttribute("data-ed-cmd"), false, null);
+      });
+      panel.addEventListener("focusin", (e) => {
+        if (e.target.getAttribute && e.target.getAttribute("data-ed-mode") === "rich") document.execCommand("defaultParagraphSeparator", false, "p");
+      });
+      panel.addEventListener("keydown", (e) => {
+        const f = e.target.closest && e.target.closest("[data-ed-text]");
+        if (!f || e.key !== "Enter") return;
+        const mode = f.getAttribute("data-ed-mode");
+        if (mode === "inline") {
+          e.preventDefault(); // titels en knoppen: één regel
+        } else if (mode === "basic") {
+          e.preventDefault();
+          document.execCommand("insertLineBreak");
+        }
+      });
+      // Plakken: alleen de tekst, zonder opmaak of kleuren van elders.
+      panel.addEventListener("paste", (e) => {
+        if (!e.target.closest || !e.target.closest("[data-ed-text]")) return;
+        e.preventDefault();
+        const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+        const f = e.target.closest("[data-ed-text]");
+        document.execCommand("insertText", false, f.getAttribute("data-ed-mode") === "inline" ? t.replace(/\s+/g, " ") : t);
+      });
       panel.addEventListener("wheel", (e) => e.stopPropagation());
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && sel && !(e.target.closest && e.target.closest("input, textarea"))) close();

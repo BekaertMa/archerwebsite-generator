@@ -915,3 +915,27 @@ details.archer-ed-item > summary { cursor: pointer; list-style: revert; text-tra
   .archer-cv-shell { flex-direction: column; }
   .archer-cv-shell > .archer-cv-panel { flex: 0 0 auto; width: auto; height: auto; min-height: 0; max-height: 70vh; border: 1px solid var(--ar-line); border-radius: 0 0 var(--ar-radius-lg) var(--ar-radius-lg); }
 }
+/* Tekstvelden zonder HTML: zoals een kleine teksteditor */
+.archer-ed-field { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.archer-ed-labelrow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.archer-ed-labelrow .aisb-label { margin: 0; }
+.archer-ed-len { font-size: 12px; color: var(--ar-muted-2); font-variant-numeric: tabular-nums; }
+.archer-ed-len.is-over { color: var(--ar-danger); font-weight: 600; }
+.archer-ed-hint { margin: 0; font-size: 12px; color: var(--ar-danger); }
+.archer-ed-hint[hidden] { display: none; }
+.archer-ed-tb { display: flex; gap: 2px; }
+.archer-ed-tb button {
+  width: 30px; height: 28px; border: 1px solid var(--ar-line-2); border-radius: 6px; background: #fff;
+  font: 400 14px/1 var(--ar-font); color: var(--ar-navy); cursor: pointer;
+}
+.archer-ed-tb button:hover { background: var(--ar-bg-2); }
+.archer-ed-rte {
+  min-height: 40px; box-sizing: border-box; font: 400 14px/1.45 var(--ar-font); color: var(--ar-ink);
+  border: 1px solid var(--ar-line-2); border-radius: 10px; padding: 9px 11px; background: #fff;
+  overflow-wrap: anywhere; cursor: text;
+}
+.archer-ed-rte.is-basic, .archer-ed-rte.is-rich { min-height: 64px; }
+.archer-ed-rte.is-inline { white-space: nowrap; overflow-x: auto; }
+.archer-ed-rte:focus { outline: 2px solid var(--ar-teal); outline-offset: 0; border-color: var(--ar-teal); }
+.archer-ed-rte p { margin: 0 0 6px; }
+.archer-ed-rte ul { margin: 0 0 6px 18px; padding: 0; }
