@@ -1021,3 +1021,15 @@ body.archer-app .archer-shell .archer-btn.archer-btn-sm.is-active { background: 
 body.archer-app .archer-shell .aisb-sg-canvas.archer-sg-pageview { overflow-y: auto !important; overflow-x: hidden !important; cursor: default !important; height: calc(100vh - 210px) !important; min-height: 480px; background: var(--ar-bg); }
 body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-canvas-inner { transform: none !important; position: static !important; display: block !important; width: auto !important; height: auto !important; padding: 0 !important; }
 body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; }
+
+/* ── Foto's: overzicht in 2 kolommen, 5px tussenruimte ── */
+body.archer-app .archer-shell [data-images-grid],
+body.archer-app .archer-shell [data-uploaded-grid-inner] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+body.archer-app .archer-shell [data-images-grid] > .aisb-sg-empty-state,
+body.archer-app .archer-shell [data-images-grid] > .aisb-sg-img-loader { grid-column: 1 / -1; }
+body.archer-app .archer-shell [data-images-grid] .aisb-sg-auto-card,
+body.archer-app .archer-shell [data-uploaded-grid-inner] .aisb-sg-auto-card { margin: 0; border-radius: 6px; }
+body.archer-app .archer-shell [data-images-grid] .aisb-sg-auto-card img,
+body.archer-app .archer-shell [data-uploaded-grid-inner] .aisb-sg-auto-card img { height: auto; aspect-ratio: 4 / 3; }
+.archer-stock-credit { margin: 6px 0 0; font-size: 11px; color: var(--ar-muted); }
+.archer-stock-credit a { color: inherit; }
