@@ -2154,11 +2154,30 @@
     };
     const css = (c) => `rgb(${c.slice(0, 3).map(Math.round).join(",")})`;
     /** Achtergrond achter een element; null als er een afbeelding achter zit (niet te meten). */
+    // Een foto of video die de hele sectie vult (absoluut, achter de tekst): daar beslist het ontwerp (overlay), niet de kleur.
+    const coverCache = new WeakMap();
+    const hasCoverMedia = (x, win) => {
+      if (coverCache.has(x)) return coverCache.get(x);
+      let yes = false;
+      const r = x.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        for (const ch of x.children) {
+          if (!/^(IMG|FIGURE|PICTURE|VIDEO)$/.test(ch.tagName) && !ch.querySelector(":scope > img, :scope > video")) continue;
+          if (win.getComputedStyle(ch).position !== "absolute") continue;
+          const c = ch.getBoundingClientRect();
+          if (c.width * c.height >= r.width * r.height * 0.8) { yes = true; break; }
+        }
+      }
+      if (yes) coverCache.set(x, yes); // nee niet onthouden: de foto kan nog aan het laden zijn
+      return yes;
+    };
     const bgOf = (el, win) => {
+      if (el.closest && el.closest(".archer-cover")) return null;
       const layers = [];
       for (let x = el; x && x.nodeType === 1; x = x.parentElement) {
         const cs = win.getComputedStyle(x);
         if (cs.backgroundImage && cs.backgroundImage !== "none" && !/gradient/.test(cs.backgroundImage)) return null;
+        if (hasCoverMedia(x, win)) return null;
         const c = parseCol(cs.backgroundColor);
         if (c && c[3] > 0.02) {
           layers.push(c);
