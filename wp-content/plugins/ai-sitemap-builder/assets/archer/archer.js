@@ -1935,6 +1935,134 @@
     });
     window.addEventListener("resize", () => containers().forEach(focusPage));
 
+    /* Stijlrichtingen (tasteskill): palet + lettertypes die samen kloppen, per sector. */
+    (function tasteDirections() {
+      const colourPanel = $("[data-wizard-panel='1']", panel);
+      const anchor = colourPanel && ($(".aisb-sg-subtabs", colourPanel) || $("[data-colour-mode]", colourPanel));
+      if (!colourPanel || !SG.projectId || typeof SG.post !== "function") return;
+      const box = document.createElement("section");
+      box.className = "archer-taste";
+      box.setAttribute("aria-label", "Stijlrichting");
+      box.innerHTML = '<div class="archer-taste-head"><h4>Stijlrichting</h4>' +
+        '<button type="button" class="archer-link-btn" data-taste-more>Andere richtingen</button></div>' +
+        '<p class="archer-taste-intro">Kleuren en lettertypes die samen kloppen. Je kan daarna alles nog aanpassen.</p>' +
+        '<div class="archer-taste-list" data-taste-list><p class="archer-muted">Richtingen laden…</p></div>';
+      const host = anchor ? anchor.closest("div") : null;
+      if (host && host.parentElement) host.parentElement.insertBefore(box, host);
+      else colourPanel.prepend(box);
+      let round = Number((SG.guide && SG.guide.tasteDirection && SG.guide.tasteDirection.round) || 0);
+      let dealt = [];
+      const fontLink = document.createElement("link");
+      fontLink.rel = "stylesheet";
+      document.head.appendChild(fontLink);
+      const chips = (p) =>
+        [p.bg, p.surface, p.ink, p.accent, (p.fields && p.fields[0] && p.fields[0].bg) || p.muted]
+          .filter(Boolean)
+          .map((c) => `<span style="background:${esc(c)}"></span>`)
+          .join("");
+      const render = () => {
+        const cur = SG.guide && SG.guide.tasteDirection;
+        $("[data-taste-list]", box).innerHTML = dealt
+          .map((d, i) => {
+            const on = cur && cur.id === d.id && cur.palette === d.palette.id && cur.type === d.type.id;
+            return `<button type="button" class="archer-taste-card${on ? " is-active" : ""}" data-taste-idx="${i}" aria-pressed="${on ? "true" : "false"}">` +
+              `<span class="archer-taste-chips" aria-hidden="true">${chips(d.palette)}</span>` +
+              `<strong style="font-family:'${esc(d.headingFont)}',sans-serif">${esc(d.name)}</strong>` +
+              `<span class="archer-taste-meta">${esc(d.colourNote)} · ${esc(d.headingFont)}${d.bodyFont !== d.headingFont ? " + " + esc(d.bodyFont) : ""}</span>` +
+              `</button>`;
+          })
+          .join("");
+      };
+      const defaultScale = (h, b) => [
+        { cls: "h1", label: "Titel (H1)", fontFamily: h, fontSize: "56px", lineHeight: "1.05", sample: "Een titel in twee regels" },
+        { cls: "h2", label: "Sectietitel (H2)", fontFamily: h, fontSize: "40px", lineHeight: "1.1", sample: "Wat we doen" },
+        { cls: "h3", label: "Tussentitel (H3)", fontFamily: h, fontSize: "26px", lineHeight: "1.2", sample: "Onderhoud en herstellingen" },
+        { cls: "body", label: "Lopende tekst", fontFamily: b, fontSize: "18px", lineHeight: "1.55", sample: "Gewone tekst leest rustig, met genoeg ruimte tussen de regels." },
+        { cls: "small", label: "Kleine tekst", fontFamily: b, fontSize: "14px", lineHeight: "1.5", sample: "Kleine tekst voor details." },
+      ];
+      const apply = (d) => {
+        if (Array.isArray(SG.guide)) SG.guide = {};
+        SG.extractedColours = d.colours.map((c) => ({ name: c.name, hex: c.hex }));
+        if (SG.lockedColours) SG.lockedColours.clear();
+        [SG.el.extractedSwatches, SG.el.manualSwatches].forEach((c) => c && SG.renderSwatchRow(c, SG.extractedColours));
+        if (SG.el.extractedContainer) SG.el.extractedContainer.style.display = "";
+        SG.guide.headingFont = d.headingFont;
+        SG.guide.bodyFont = d.bodyFont;
+        SG.guide._aiHeadingFont = d.headingFont;
+        SG.guide._aiBodyFont = d.bodyFont;
+        if (Array.isArray(SG.guide.typography) && SG.guide.typography.length) {
+          SG.guide.typography.forEach((t) => (t.fontFamily = t.cls === "body" || t.cls === "small" ? d.bodyFont : d.headingFont));
+        } else {
+          SG.guide.typography = defaultScale(d.headingFont, d.bodyFont);
+        }
+        SG.guide.tasteDirection = { id: d.id, palette: d.palette.id, type: d.type.id, round };
+        SG.fontsAssigned = true;
+        if (SG.loadGoogleFonts) SG.loadGoogleFonts(d.headingFont, d.bodyFont);
+        if (SG.renderTypography) SG.renderTypography(SG.guide.typography);
+        if (SG.el.typographyResult) SG.el.typographyResult.style.display = "";
+        if (SG.el.typographyStatus) SG.el.typographyStatus.style.display = "none";
+        if (SG.initFontPickers) SG.initFontPickers();
+        SG.applyOverridesToAllIframes();
+        render();
+      };
+      const load = async (applyFirst) => {
+        let out;
+        try {
+          out = await SG.post("aisb_archer_taste_deal", { project_id: SG.projectId, round });
+        } catch (e) {
+          out = null;
+        }
+        if (!out || !out.success) {
+          $("[data-taste-list]", box).innerHTML = '<p class="archer-danger-text">De stijlrichtingen konden niet geladen worden.</p>';
+          return;
+        }
+        dealt = out.data.directions || [];
+        const fams = Array.from(new Set(dealt.map((d) => d.headingFont))).map((f) => "family=" + f.replace(/ /g, "+") + ":wght@400;700");
+        if (fams.length) fontLink.href = "https://fonts.googleapis.com/css2?" + fams.join("&") + "&display=swap";
+        render();
+        if (applyFirst && dealt[0]) apply(dealt[0]);
+      };
+      box.addEventListener("click", (e) => {
+        const card = e.target.closest("[data-taste-idx]");
+        if (card) return apply(dealt[Number(card.getAttribute("data-taste-idx"))]);
+        if (e.target.closest("[data-taste-more]")) {
+          round++;
+          load(false);
+        }
+      });
+      // Nog geen kleuren: meteen de eerste richting toepassen zodra de stijlgids geladen is.
+      setTimeout(() => {
+        const empty = !(SG.extractedColours && SG.extractedColours.length) && !(SG.guide && SG.guide.colours && SG.guide.colours.length);
+        load(empty);
+      }, 1200);
+    })();
+
+    /* Kleuren uit een logo of foto: rollen op lichtheid, niet op volgorde van voorkomen.
+       (De stijlgids noemt ze Primary, Secondary, Accent, Dark, Light, Neutral in die volgorde.) */
+    if (window.ColorThief && ColorThief.prototype.getPalette && !ColorThief.prototype._archerRoles) {
+      const origPalette = ColorThief.prototype.getPalette;
+      ColorThief.prototype._archerRoles = true;
+      ColorThief.prototype.getPalette = function () {
+        const p = origPalette.apply(this, arguments);
+        if (!Array.isArray(p) || p.length < 6) return p;
+        const info = p.map((c) => {
+          const [r, g, b] = c.map((v) => v / 255);
+          const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+          const l = (mx + mn) / 2;
+          const s = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+          return { c, l: lum([c[0], c[1], c[2], 1]), s };
+        });
+        const take = (arr, fn) => arr.splice(arr.indexOf(arr.reduce((a, b) => (fn(b, a) ? b : a))), 1)[0];
+        const rest = info.slice();
+        const dark = take(rest, (a, b) => a.l < b.l);
+        const light = take(rest, (a, b) => a.l > b.l);
+        const primary = take(rest, (a, b) => a.s > b.s);
+        const neutral = take(rest, (a, b) => a.s < b.s);
+        rest.sort((a, b) => b.s - a.s);
+        return [primary, rest[0], rest[1], dark, light, neutral].concat(rest.slice(2)).map((x) => x.c);
+      };
+    }
+
     /* Altijd genoeg contrast: tekst t.o.v. de achtergrond (WCAG AA) en knoppen t.o.v. de sectie. */
     const parseCol = (s) => {
       const m = /rgba?\(([^)]+)\)/.exec(s || "");
