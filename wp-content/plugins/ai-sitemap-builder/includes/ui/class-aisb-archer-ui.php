@@ -1,6 +1,8 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+require_once __DIR__ . '/class-aisb-archer-sitemap-rules.php';
+
 /**
  * Archer-interface voor de websitebouwer.
  *
@@ -35,6 +37,8 @@ class AISB_Archer_UI {
 
     add_action('wp_ajax_aisb_archer_autosave_sitemap', [$this, 'ajax_autosave_sitemap']);
     add_action('wp_ajax_aisb_archer_site_brief', [$this, 'ajax_site_brief']);
+
+    (new AISB_Archer_Sitemap_Rules())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
@@ -622,7 +626,17 @@ class AISB_Archer_UI {
 
     $html = (string) wp_remote_retrieve_body($res);
     $brief = self::extract_brief($html, $url);
-    if (mb_strlen($brief['text']) < 80) {
+
+    // Volledige paginastructuur van de site, voor het overnemen in de nieuwe sitemap.
+    @set_time_limit(90);
+    $crawl = AISB_Archer_Sitemap_Rules::crawl_site($url, $html);
+    $brief['pages'] = $crawl['pages'];
+    $brief['collapsed'] = $crawl['collapsed'];
+    if ($crawl['pages']) {
+      AISB_Archer_Sitemap_Rules::remember_source($url, $crawl['pages'], $crawl['collapsed']);
+    }
+
+    if (mb_strlen($brief['text']) < 80 && !$crawl['pages']) {
       wp_send_json_error(['message' => 'We vonden te weinig tekst op die pagina. Beschrijf de zaak liever zelf.'], 422);
     }
     wp_send_json_success($brief);
