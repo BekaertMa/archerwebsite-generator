@@ -2,7 +2,7 @@
 /**
  * Plugin Name: AI Sitemap Builder (Shortcode)
  * Description: Shortcode that generates a sitemap + navigation hierarchy + page sections from a prompt using the OpenAI API. Includes a draggable/zoomable canvas with linked connectors and inline add-child forms. Sections are editable (title, description, type).
- * Version: 1.7.6
+ * Version: 1.8.0
  * Author: Archer Websites
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) exit;
  * Dit bestand definieert de plugin-constanten, laadt alle klassen en maakt de
  * service-objecten aan zodra WordPress alle plugins heeft geladen.
  */
-define('AISB_VERSION', '1.7.9');
+define('AISB_VERSION', '1.8.0');
 define('AISB_PLUGIN_FILE', __FILE__);
 define('AISB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AISB_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -54,6 +54,9 @@ require_once __DIR__ . '/includes/step4-design/class-aisb-design-ajax.php';
 require_once __DIR__ . '/includes/step4-design/class-aisb-design-figma.php';
 require_once __DIR__ . '/includes/step4-design/class-aisb-design.php';
 
+// Archer-interface over alle stappen.
+require_once __DIR__ . '/includes/ui/class-aisb-archer-ui.php';
+
 register_activation_hook(__FILE__, ['AISB_Installer', 'activate']);
 
 add_action('plugins_loaded', function () {
@@ -87,4 +90,7 @@ add_action('plugins_loaded', function () {
   $instawp->init();
   $style_guide->init();
   $design->init();
+
+  $archer_ui = new AISB_Archer_UI();
+  $archer_ui->init();
 });

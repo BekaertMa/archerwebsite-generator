@@ -1,0 +1,1035 @@
+/* Archer-interface voor de websitebouwer.
+ * Look uit het Archer SaaS-prototype: navy #090930, teal #1B5A5B, Urbanist + Poppins.
+ * Alles is gescoped op body.archer-app zodat de rest van de site ongemoeid blijft. */
+
+body.archer-app {
+  --ar-navy: #090930;
+  --ar-ink: #2B2B3D;
+  --ar-muted: #4A4D63;
+  --ar-muted-2: #5B5F73;
+  --ar-line: #E2E9F4;
+  --ar-line-2: #C4D3E8;
+  --ar-bg: #F4F7FC;
+  --ar-bg-2: #EEF1F6;
+  --ar-teal: #1B5A5B;
+  --ar-teal-bg: #DCEBEA;
+  --ar-blue: #6591C4;
+  --ar-blue-bg: #E2E9F4;
+  --ar-danger: #B42318;
+  --ar-danger-bg: #FDECEA;
+  --ar-radius: 16px;
+  --ar-radius-lg: 20px;
+  --ar-shadow: 0 12px 32px rgba(9, 9, 48, 0.08);
+  --ar-font: "Poppins", system-ui, sans-serif;
+  --ar-display: "Urbanist", "Poppins", system-ui, sans-serif;
+  --ar-admin-bar: var(--wp-admin--admin-bar--height, 0px);
+  background: var(--ar-bg) !important;
+  color: var(--ar-ink);
+}
+
+/* De app neemt de volledige breedte; de Bricks-header en -footer verdwijnen. */
+body.archer-app #brx-header,
+body.archer-app #brx-footer { display: none !important; }
+body.archer-app #brx-content,
+body.archer-app #brx-content > .brxe-section,
+body.archer-app #brx-content .brxe-section:has(.archer-shell),
+body.archer-app #brx-content .brxe-container:has(.archer-shell),
+body.archer-app #brx-content .brxe-shortcode:has(.archer-shell) {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  display: block !important;
+}
+
+body.archer-app .archer-shell,
+body.archer-app .archer-shell * { box-sizing: border-box; }
+body.archer-app .archer-shell [hidden] { display: none !important; }
+body.archer-app .archer-shell .archer-sitemap-card[data-archer-view="tree"] .archer-tree-view[hidden] { display: grid !important; }
+
+body.archer-app .archer-shell {
+  font-family: var(--ar-font);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ar-ink);
+  background: var(--ar-bg);
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0 0 80px;
+  min-height: 100vh;
+  /* overflow: hidden uit base.css breekt de sticky topbar; clip niet. */
+  overflow: visible !important;
+  overflow-x: clip !important;
+}
+body.archer-app .archer-shell a { color: var(--ar-navy); }
+body.archer-app .archer-shell a:hover { color: var(--ar-teal); }
+body.archer-app .archer-shell :focus-visible { outline: 3px solid var(--ar-blue); outline-offset: 2px; }
+body.archer-app .archer-shell h1,
+body.archer-app .archer-shell h2,
+body.archer-app .archer-shell h3,
+body.archer-app .archer-shell h4 { font-family: var(--ar-display); color: var(--ar-navy); letter-spacing: 0; }
+
+/* ── Topbar ─────────────────────────────────────────────── */
+
+.archer-topbar {
+  position: sticky;
+  top: var(--ar-admin-bar);
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--ar-line);
+}
+.archer-brand { display: inline-flex; gap: 10px; align-items: center; text-decoration: none; }
+.archer-brand-mark {
+  width: 32px; height: 32px; border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ar-navy); color: #fff;
+  font-family: var(--ar-display); font-weight: 800; font-size: 18px;
+}
+.archer-brand-name { font-family: var(--ar-display); font-weight: 800; font-size: 19px; color: var(--ar-navy); }
+.archer-brand-name span { font-weight: 600; color: var(--ar-muted); margin-left: 4px; }
+.archer-topbar-right { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 14px; font-weight: 500; }
+.archer-toplink { text-decoration: none; }
+.archer-avatar {
+  width: 34px; height: 34px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ar-blue-bg); color: var(--ar-navy); font-weight: 600; font-size: 13px;
+}
+.archer-save-pill {
+  display: inline-flex; gap: 6px; align-items: center;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 13px; font-weight: 600;
+  color: var(--ar-teal); background: var(--ar-teal-bg);
+  max-width: 420px; min-width: 0;
+}
+.archer-save-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.archer-save-pill[data-state="saving"] { color: #0E3550; background: var(--ar-blue-bg); }
+.archer-save-pill[data-state="error"] { color: var(--ar-danger); background: var(--ar-danger-bg); }
+
+/* ── Stappenbalk ────────────────────────────────────────── */
+
+.archer-stepbar {
+  margin: 20px 24px 0;
+  background: #fff;
+  border: 1px solid var(--ar-line);
+  border-radius: var(--ar-radius);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.archer-step-line { flex: none; width: 14px; height: 2px; border-radius: 2px; background: var(--ar-line-2); }
+.archer-step {
+  flex: none;
+  display: inline-flex; gap: 8px; align-items: center;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--ar-muted-2) !important;
+}
+.archer-step:hover { background: var(--ar-bg); }
+.archer-step-dot {
+  flex: none; width: 26px; height: 26px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  border: 1.5px solid #9AA3B8; color: var(--ar-muted-2);
+}
+.archer-step.is-done { color: var(--ar-ink) !important; }
+.archer-step.is-done .archer-step-dot { background: var(--ar-teal); border-color: var(--ar-teal); color: #fff; }
+.archer-step.is-current { background: var(--ar-blue-bg); color: var(--ar-navy) !important; font-weight: 600; }
+.archer-step.is-current .archer-step-dot { background: var(--ar-navy); border-color: var(--ar-navy); color: #fff; }
+.archer-step.is-disabled { opacity: 0.5; pointer-events: none; }
+
+/* ── Hoofdzone en koppen ────────────────────────────────── */
+
+.archer-main { padding: 28px 24px 0; }
+.archer-main > .aisb-step-panel { max-width: 1440px; margin: 0 auto; }
+.archer-page-head {
+  display: flex; flex-wrap: wrap; gap: 16px 24px;
+  align-items: flex-end; justify-content: space-between;
+  margin: 0 0 22px;
+}
+.archer-page-head-text { flex: 1 1 420px; min-width: 0; }
+.archer-page-head-aside { flex: 0 1 auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.archer-page-head-aside:empty { display: none; }
+.archer-eyebrow {
+  display: inline-block;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ar-teal);
+}
+body.archer-app .archer-h1 { font-family: var(--ar-display); font-weight: 800; font-size: 40px; line-height: 1.1; color: var(--ar-navy); margin: 4px 0 8px; }
+body.archer-app .archer-h1-xl { font-size: 52px; line-height: 1.05; margin: 14px 0 16px; }
+body.archer-app .archer-h2 { font-family: var(--ar-display); font-weight: 700; font-size: 22px; color: var(--ar-navy); margin: 0; }
+.archer-lead { font-size: 16px; color: var(--ar-muted); margin: 0; max-width: 760px; }
+.archer-muted { color: var(--ar-muted); }
+.archer-small { font-size: 13px; }
+.archer-sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Kaarten ────────────────────────────────────────────── */
+
+body.archer-app .archer-shell .aisb-card {
+  background: #fff;
+  border: 1px solid var(--ar-line);
+  border-radius: var(--ar-radius-lg);
+  box-shadow: none;
+  padding: 24px;
+  margin: 0 0 20px;
+}
+body.archer-app .archer-shell .aisb-output-card,
+body.archer-app .archer-shell .archer-wf-card,
+body.archer-app .archer-shell .archer-sg-card,
+body.archer-app .archer-shell .archer-publish-card { background: transparent; border: 0; padding: 0; }
+
+/* ── Knoppen ────────────────────────────────────────────── */
+
+body.archer-app .archer-shell .archer-btn,
+body.archer-app .archer-shell .aisb-btn,
+body.archer-app .archer-shell .aisb-btn-secondary {
+  font-family: var(--ar-font);
+  display: inline-flex; gap: 8px; align-items: center; justify-content: center;
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-size: 14px; font-weight: 600; line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  border: 2px solid var(--ar-navy);
+  background: #fff;
+  color: var(--ar-navy);
+  box-shadow: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+body.archer-app .archer-shell .archer-btn-primary,
+body.archer-app .archer-shell .aisb-btn {
+  background: var(--ar-navy);
+  border-color: var(--ar-navy);
+  color: #fff;
+}
+body.archer-app .archer-shell .archer-btn-primary:hover,
+body.archer-app .archer-shell .aisb-btn:hover { background: #1D2150; border-color: #1D2150; color: #fff; }
+body.archer-app .archer-shell .archer-btn-outline,
+body.archer-app .archer-shell .aisb-btn-secondary { background: #fff; color: var(--ar-navy); border-color: var(--ar-navy); }
+body.archer-app .archer-shell .archer-btn-outline:hover,
+body.archer-app .archer-shell .aisb-btn-secondary:hover { background: var(--ar-bg); color: var(--ar-navy); }
+body.archer-app .archer-shell .archer-btn-ghost { border-color: transparent; background: transparent; color: var(--ar-navy); }
+body.archer-app .archer-shell .archer-btn-ghost:hover { background: var(--ar-bg-2); }
+body.archer-app .archer-shell .archer-btn-block { width: 100%; padding: 15px 28px; font-size: 16px; }
+body.archer-app .archer-shell .archer-btn[disabled],
+body.archer-app .archer-shell .aisb-btn[disabled] { opacity: 0.55; cursor: progress; }
+.archer-icon-btn {
+  width: 44px; height: 44px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--ar-line-2); background: #fff; color: var(--ar-muted);
+  cursor: pointer;
+}
+.archer-icon-btn:hover { color: var(--ar-danger); border-color: var(--ar-danger); }
+.archer-link-back { font-weight: 500; text-decoration: none; }
+
+/* Alleen voor het Archer-team. */
+body.archer-app:not(.archer-staff) .archer-staff-only { display: none !important; }
+
+/* ── Velden ─────────────────────────────────────────────── */
+
+body.archer-app .archer-shell .archer-input,
+body.archer-app .archer-shell .aisb-textarea,
+body.archer-app .archer-shell .aisb-select,
+body.archer-app .archer-shell input[type="text"],
+body.archer-app .archer-shell input[type="url"],
+body.archer-app .archer-shell textarea,
+body.archer-app .archer-shell select {
+  font-family: var(--ar-font);
+  font-size: 15px;
+  color: var(--ar-ink);
+  width: 100%;
+  border: 1px solid var(--ar-line-2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fff;
+}
+body.archer-app .archer-shell input[type="color"] { width: 44px; height: 44px; padding: 2px; border-radius: 10px; }
+body.archer-app .archer-shell .aisb-label { font-size: 14px; font-weight: 600; color: var(--ar-navy); display: block; margin: 0 0 6px; }
+
+/* Segmentknop (tabs) */
+.archer-seg { display: flex; gap: 4px; background: var(--ar-bg-2); border-radius: 999px; padding: 4px; }
+.archer-seg-btn {
+  flex: 1 1 0;
+  cursor: pointer;
+  border: 0; border-radius: 999px;
+  padding: 9px 14px; min-height: 40px;
+  font-family: var(--ar-font); font-size: 14px; font-weight: 600;
+  background: transparent; color: var(--ar-muted);
+}
+.archer-seg-btn.is-active { background: var(--ar-navy); color: #fff; }
+.archer-seg-sm { display: inline-flex; }
+.archer-seg-sm .archer-seg-btn { flex: none; padding: 7px 16px; min-height: 36px; font-size: 13px; }
+
+.archer-status:empty { display: none; }
+body.archer-app .archer-shell .aisb-status,
+body.archer-app .archer-shell .aisb-wf-status { font-size: 14px; }
+body.archer-app .archer-shell .aisb-ok,
+body.archer-app .archer-shell .aisb-error {
+  display: block; padding: 10px 14px; border-radius: 12px; font-size: 14px;
+}
+body.archer-app .archer-shell .aisb-ok { background: var(--ar-teal-bg); color: var(--ar-teal); }
+body.archer-app .archer-shell .aisb-error { background: var(--ar-danger-bg); color: var(--ar-danger); }
+
+/* ── Startscherm ────────────────────────────────────────── */
+
+.archer-start {
+  display: flex; flex-wrap: wrap; gap: 48px; align-items: center;
+  max-width: 1200px; margin: 24px auto 0;
+}
+.archer-start-intro { flex: 1 1 440px; min-width: 0; }
+.archer-start-intro .archer-eyebrow { background: var(--ar-teal-bg); padding: 6px 14px; border-radius: 999px; }
+body.archer-app .archer-shell .archer-start-card {
+  flex: 1 1 460px; min-width: 0;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: var(--ar-shadow);
+  padding: 24px;
+}
+.archer-mode-panel { display: flex; flex-direction: column; gap: 8px; }
+.archer-mode-panel[hidden] { display: none; }
+.archer-field-foot { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
+.archer-field-foot .aisb-counter { flex: none; color: var(--ar-muted-2); }
+.archer-more { border-top: 1px solid var(--ar-line); padding-top: 10px; }
+.archer-more summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ar-navy); }
+.archer-more[open] summary { margin-bottom: 12px; }
+.archer-more .aisb-brief-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+
+/* Met een project, of na genereren, verdwijnt het startscherm. */
+.archer-shell[data-archer-has-project] .archer-start,
+.archer-shell.archer-has-output .archer-start { display: none; }
+
+/* ── Werkbalk ───────────────────────────────────────────── */
+
+.archer-toolbar {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  align-items: center; justify-content: space-between;
+  margin: 0 0 16px;
+}
+.archer-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.archer-sitemap-card[data-archer-view="list"] .archer-tree-only { display: none !important; }
+
+/* ── Sitemap: lijstweergave ─────────────────────────────── */
+
+.archer-sitemap-list { display: block; }
+.archer-sitemap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.archer-sitemap-grid[hidden], .archer-smap-viewport[hidden] { display: none !important; }
+.archer-sitemap-card[data-archer-view="tree"] .archer-sitemap-list { display: none; }
+.archer-sitemap-card[data-archer-view="tree"] .archer-tree-view { display: grid !important; }
+.archer-page-card {
+  background: #fff;
+  border: 1px solid var(--ar-line);
+  border-radius: var(--ar-radius-lg);
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 0;
+}
+.archer-page-card.is-child { border-style: dashed; border-color: var(--ar-line-2); }
+.archer-page-card-head { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.archer-page-card-title { font-family: var(--ar-display); font-size: 20px; font-weight: 700; color: var(--ar-navy); margin: 0; line-height: 1.2; word-break: break-word; }
+.archer-page-card-meta { font-size: 12px; color: var(--ar-muted-2); }
+.archer-page-card-purpose { font-size: 13px; color: var(--ar-muted); margin: 0; }
+.archer-sec-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.archer-sec {
+  display: flex; gap: 8px; align-items: flex-start;
+  border: 1px solid var(--ar-line);
+  border-radius: 12px;
+  padding: 8px 8px 8px 12px;
+  background: #fff;
+}
+.archer-sec.is-global { background: var(--ar-bg); border-style: dashed; }
+.archer-sec-body { flex: 1 1 auto; min-width: 0; }
+.archer-sec-type { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ar-teal); }
+.archer-sec.is-global .archer-sec-type { color: var(--ar-muted-2); }
+.archer-sec-name { font-size: 14px; font-weight: 600; color: var(--ar-navy); }
+.archer-sec-desc { font-size: 12px; color: var(--ar-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.archer-sec-tools { flex: none; display: flex; gap: 2px; }
+.archer-sec-tool {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--ar-muted-2); cursor: pointer;
+}
+.archer-sec-tool:hover { background: var(--ar-bg-2); color: var(--ar-navy); }
+.archer-sec-tool.is-danger:hover { background: var(--ar-danger-bg); color: var(--ar-danger); }
+.archer-sec-tool[disabled] { opacity: 0.3; cursor: default; }
+.archer-add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.archer-link-btn {
+  border: 0; background: none; padding: 6px 2px; cursor: pointer;
+  font-family: var(--ar-font); font-size: 13px; font-weight: 600; color: var(--ar-navy);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.archer-link-btn:hover { color: var(--ar-teal); }
+.archer-inline-form {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; border-radius: 14px; background: var(--ar-bg);
+}
+.archer-inline-form .archer-form-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.archer-inline-form .archer-btn { min-height: 38px; padding: 8px 16px; }
+.archer-add-page-card {
+  border: 1px dashed var(--ar-blue);
+  border-radius: var(--ar-radius-lg);
+  padding: 18px;
+  background: transparent;
+  display: flex; flex-direction: column; gap: 10px; justify-content: center;
+  min-height: 140px;
+}
+.archer-add-page-card > button { align-self: flex-start; }
+.archer-stat { font-size: 14px; color: var(--ar-muted); background: #fff; border: 1px solid var(--ar-line); border-radius: 999px; padding: 8px 16px; }
+.archer-stat strong { color: var(--ar-navy); }
+
+/* Boomweergave: oude canvas in de Archer-look */
+body.archer-app .archer-shell .aisb-workspace { border-radius: var(--ar-radius-lg); overflow: hidden; border: 1px solid var(--ar-line); background: #fff; }
+body.archer-app .archer-shell .aisb-node-card { border-radius: 14px; border-color: var(--ar-line); font-family: var(--ar-font); }
+body.archer-app .archer-shell .aisb-node-card.is-active { border-color: var(--ar-navy); box-shadow: 0 0 0 3px var(--ar-blue-bg); }
+
+/* ── Stapvoet ───────────────────────────────────────────── */
+
+.archer-step-footer {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  align-items: center; justify-content: space-between;
+  margin: 28px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--ar-line);
+}
+.archer-step-footer-right { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: flex-end; }
+
+/* ── Dashboard ──────────────────────────────────────────── */
+
+.archer-dashboard { max-width: 1200px; margin: 0 auto; }
+.archer-site-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.archer-site-card {
+  background: #fff; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-lg);
+  padding: 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+}
+.archer-site-card-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+body.archer-app .archer-site-card-title { font-family: var(--ar-display); font-size: 24px; font-weight: 800; color: var(--ar-navy); margin: 0; line-height: 1.15; }
+.archer-site-card-brief {
+  font-size: 14px; color: var(--ar-muted); margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.archer-site-card-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: auto; }
+.archer-site-card-actions .archer-icon-btn { margin-left: auto; }
+.archer-site-url a { font-weight: 600; word-break: break-all; }
+.archer-chip { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+.archer-chip.is-online { color: var(--ar-teal); background: var(--ar-teal-bg); }
+.archer-chip.is-draft { color: #0E3550; background: var(--ar-blue-bg); }
+.archer-progress { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.archer-progress li a {
+  display: inline-flex; gap: 6px; align-items: center;
+  font-size: 12px; font-weight: 500; text-decoration: none;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--ar-line-2); color: var(--ar-muted-2);
+}
+.archer-progress li a::before { content: ""; width: 8px; height: 8px; border-radius: 999px; border: 1.5px solid #9AA3B8; }
+.archer-progress li.is-done a { color: var(--ar-teal); border-color: var(--ar-teal-bg); background: var(--ar-teal-bg); }
+.archer-progress li.is-done a::before { background: var(--ar-teal); border-color: var(--ar-teal); }
+.archer-versions { font-size: 13px; border-top: 1px solid var(--ar-line); padding-top: 8px; }
+.archer-versions summary { cursor: pointer; color: var(--ar-muted); }
+.archer-versions a { display: inline-block; margin: 6px 10px 0 0; }
+.archer-empty {
+  background: #fff; border: 1px dashed var(--ar-line-2); border-radius: var(--ar-radius-lg);
+  padding: 40px 24px; text-align: center; color: var(--ar-muted);
+  display: flex; flex-direction: column; gap: 12px; align-items: center;
+}
+
+/* ── Wireframes ─────────────────────────────────────────── */
+
+.archer-wf-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.archer-wf-tab {
+  cursor: pointer;
+  border: 1px solid var(--ar-line-2); background: #fff; color: var(--ar-navy);
+  padding: 7px 14px; min-height: 38px; border-radius: 999px;
+  font-family: var(--ar-font); font-size: 13px; font-weight: 600;
+  display: inline-flex; gap: 8px; align-items: center;
+}
+.archer-wf-tab .archer-wf-tab-count { font-weight: 500; color: var(--ar-muted-2); }
+.archer-wf-tab.is-active { background: var(--ar-navy); border-color: var(--ar-navy); color: #fff; }
+.archer-wf-tab.is-active .archer-wf-tab-count { color: #C9D6EE; }
+.archer-wf-tab.is-empty { border-style: dashed; }
+body.archer-app .archer-shell .aisb-wf-whiteboard { border-radius: var(--ar-radius-lg); border: 1px solid var(--ar-line); background: #fff; }
+body.archer-app .archer-shell .aisb-wf-page-card { border-radius: 14px; border-color: var(--ar-line); }
+body.archer-app .archer-shell .aisb-wf-page-card.is-active { border-color: var(--ar-navy); }
+.archer-wf-page-head {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  margin: 0 0 14px;
+}
+body.archer-app .archer-shell .aisb-wf-expanded { background: transparent; border: 0; padding: 0; }
+body.archer-app .archer-shell .archer-wf-card { max-width: none; width: 100%; }
+body.archer-app .archer-shell .archer-wf-card .aisb-wf-expanded.is-open {
+  width: 100%; max-width: 1240px; margin: 8px auto 0;
+}
+body.archer-app .archer-shell .archer-wf-card .aisb-wf-sections { display: block; width: 100%; }
+body.archer-app .archer-shell .archer-wf-card .aisb-wf-section,
+body.archer-app .archer-shell .archer-wf-card .aisb-wf-body { width: 100%; }
+body.archer-app .archer-shell .aisb-wf-section {
+  background: #fff;
+  border: 1px solid var(--ar-line);
+  border-radius: var(--ar-radius);
+  overflow: hidden;
+  margin: 0 0 14px;
+}
+body.archer-app .archer-shell .aisb-wf-section:hover { border-color: var(--ar-line-2); }
+body.archer-app .archer-shell .aisb-wf-section-toolbar {
+  position: static;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 8px 10px;
+  background: var(--ar-bg);
+  border-bottom: 1px solid var(--ar-line);
+  opacity: 1;
+}
+.archer-wf-sec-label { margin-right: auto; display: flex; flex-direction: column; line-height: 1.25; padding: 0 6px; min-width: 0; }
+.archer-wf-sec-label strong { font-size: 14px; color: var(--ar-navy); }
+.archer-wf-sec-label span { font-size: 12px; color: var(--ar-muted-2); }
+body.archer-app .archer-shell .aisb-wf-tbtn {
+  font-family: var(--ar-font);
+  min-height: 34px; min-width: 34px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ar-line-2);
+  background: #fff;
+  color: var(--ar-navy);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+body.archer-app .archer-shell .aisb-wf-tbtn:hover { border-color: var(--ar-navy); }
+body.archer-app .archer-shell .aisb-wf-tbtn.active { background: var(--ar-teal); border-color: var(--ar-teal); color: #fff; }
+body.archer-app .archer-shell .aisb-wf-tbtn-del:hover { border-color: var(--ar-danger); color: var(--ar-danger); }
+body.archer-app .archer-shell .aisb-wf-tbtn[disabled] { opacity: 0.35; cursor: default; }
+.archer-wf-pager {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  background: #fff; border: 1px solid var(--ar-line); border-radius: var(--ar-radius);
+  padding: 12px 16px; margin: 4px 0 0;
+}
+.archer-wf-pager:empty { display: none; }
+.archer-wf-pager-pos { font-size: 14px; color: var(--ar-muted); }
+.archer-wf-pager-pos strong { color: var(--ar-navy); }
+
+/* ── Stijl en foto's ────────────────────────────────────── */
+
+body.archer-app .archer-shell .aisb-sg-split { gap: 24px; }
+body.archer-app .archer-shell .aisb-sg-split-left {
+  background: #fff; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-lg); padding: 22px;
+}
+body.archer-app .archer-shell .aisb-sg-split-right {
+  background: #fff; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-lg); padding: 14px; overflow: hidden;
+}
+body.archer-app .archer-shell .aisb-sg-panel-title { font-family: var(--ar-display); font-size: 22px; font-weight: 700; color: var(--ar-navy); margin: 0 0 6px; }
+body.archer-app .archer-shell .aisb-sg-panel-desc { color: var(--ar-muted); font-size: 14px; }
+body.archer-app .archer-shell .aisb-sg-subtabs { display: flex; gap: 4px; background: var(--ar-bg-2); border-radius: 999px; padding: 4px; border: 0; }
+body.archer-app .archer-shell .aisb-sg-subtab {
+  flex: 1 1 0; border: 0; border-radius: 999px; padding: 8px 12px; min-height: 38px;
+  font-family: var(--ar-font); font-size: 13px; font-weight: 600; background: transparent; color: var(--ar-muted); cursor: pointer;
+}
+body.archer-app .archer-shell .aisb-sg-subtab.is-active { background: var(--ar-navy); color: #fff; }
+body.archer-app .archer-shell .aisb-sg-upload-zone { border: 1px dashed var(--ar-blue); border-radius: 14px; background: var(--ar-bg); }
+body.archer-app .archer-shell .aisb-sg-preview-label { font-family: var(--ar-display); font-weight: 700; color: var(--ar-navy); }
+/* De interne wizardbalk wordt vervangen door de stappenbalk van de app. */
+body.archer-app .archer-shell [data-archer-sg-view] .aisb-sg-wizard-nav { display: none; }
+body.archer-app .archer-shell [data-archer-sg-view="photos"] .aisb-sg-wizard-steps { display: none; }
+body.archer-app .archer-shell [data-archer-sg-view="style"] .aisb-sg-wizard-step[data-wizard-step="3"],
+body.archer-app .archer-shell [data-archer-sg-view="style"] .aisb-sg-wizard-steps .aisb-sg-wizard-divider:last-of-type { display: none; }
+body.archer-app .archer-shell .aisb-sg-wizard-step.is-active .aisb-sg-wizard-step-num { background: var(--ar-navy); color: #fff; }
+
+/* ── Publiceren ─────────────────────────────────────────── */
+
+.archer-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 0 0 20px; }
+.archer-summary-card {
+  background: #fff; border: 1px solid var(--ar-line); border-radius: var(--ar-radius);
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.archer-summary-card.is-online { border-color: var(--ar-teal); background: var(--ar-teal-bg); }
+.archer-summary-card strong { font-family: var(--ar-display); font-size: 20px; color: var(--ar-navy); }
+.archer-summary-card a { font-size: 14px; font-weight: 600; word-break: break-all; }
+.archer-summary-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ar-muted-2); }
+.archer-swatches { display: flex; gap: 4px; }
+.archer-swatches span { width: 20px; height: 20px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, 0.08); }
+body.archer-app .archer-shell .aisb-design-wrap { border-radius: var(--ar-radius-lg); overflow: hidden; border: 1px solid var(--ar-line); background: #fff; }
+body.archer-app .archer-shell .aisb-design-toolbar {
+  background: #fff !important;
+  border-bottom: 1px solid var(--ar-line);
+  padding: 12px 16px;
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+}
+body.archer-app .archer-shell .aisb-design-toolbar-title { font-family: var(--ar-display); font-weight: 700; font-size: 18px; color: var(--ar-navy) !important; }
+body.archer-app .archer-shell .aisb-design-toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+body.archer-app .archer-shell .aisb-design-save-btn {
+  font-family: var(--ar-font);
+  min-height: 44px; padding: 10px 18px; border-radius: 999px;
+  border: 2px solid var(--ar-navy) !important; background: #fff !important; color: var(--ar-navy) !important;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+body.archer-app .archer-shell .aisb-design-publish-action {
+  background: var(--ar-navy) !important; color: #fff !important; padding: 10px 26px; font-size: 15px;
+}
+body.archer-app .archer-shell .aisb-design-publish-action.is-saved { background: var(--ar-teal) !important; border-color: var(--ar-teal) !important; }
+body.archer-app:not(.archer-staff) .archer-shell .aisb-figma-export-wrap,
+body.archer-app:not(.archer-staff) .archer-shell .aisb-design-figma-import-btn { display: none !important; }
+body.archer-app.archer-staff .archer-shell .aisb-figma-export-wrap .aisb-design-save-btn,
+body.archer-app.archer-staff .archer-shell .aisb-design-figma-import-btn {
+  border-style: dashed !important; border-width: 1px !important; color: var(--ar-muted) !important; font-weight: 500;
+}
+
+/* ── Modaal (verwijderen) ───────────────────────────────── */
+
+body.archer-app .aisb-delete-modal-dialog { border-radius: var(--ar-radius-lg); font-family: var(--ar-font); }
+body.archer-app .aisb-delete-modal-title { font-family: var(--ar-display); color: var(--ar-navy); }
+
+/* ── Smal scherm ────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .archer-topbar { padding: 10px 16px; }
+  .archer-save-sep, .archer-save-name { display: none; }
+  .archer-stepbar { margin: 14px 16px 0; }
+  .archer-main { padding: 20px 16px 0; }
+  body.archer-app .archer-h1 { font-size: 30px; }
+  body.archer-app .archer-h1-xl { font-size: 36px; }
+  .archer-start { gap: 24px; margin-top: 8px; }
+  .archer-more .aisb-brief-grid { grid-template-columns: 1fr; }
+  .archer-site-grid { grid-template-columns: 1fr; }
+  .archer-sitemap-grid { grid-template-columns: 1fr; }
+  body.archer-app .archer-shell .aisb-sg-split { flex-direction: column; }
+}
+
+/* Paginalabels in de sitemap */
+.archer-page-badge {
+  display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+  background: var(--ar-bg); border: 1px solid var(--ar-line); color: var(--ar-muted);
+  font-size: 11px; font-weight: 600; vertical-align: middle; font-family: inherit;
+}
+
+/* ── Wireframes: canvas met alle pagina's naast elkaar ───────────── */
+body.archer-app .archer-shell .aisb-wf-whiteboard {
+  height: calc(100vh - 250px - var(--ar-admin-bar));
+  min-height: 560px;
+  background-color: var(--ar-bg-2);
+  background-image: radial-gradient(circle, rgba(9, 9, 48, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+body.archer-app .archer-shell .aisb-wf-canvas-inner { gap: 32px; padding: 32px; }
+body.archer-app .archer-shell .aisb-wf-page-card.archer-cv-col {
+  width: 360px; padding: 0; cursor: default; overflow: visible;
+  border: 1px solid var(--ar-line); border-radius: 14px; background: #fff;
+  box-shadow: 0 6px 20px rgba(9, 9, 48, 0.06);
+}
+.archer-cv-col.is-child { margin-top: 56px; }
+.archer-cv-col.is-child::before {
+  content: ""; position: absolute; left: -33px; top: -28px; width: 33px; height: 52px;
+  border-left: 2px solid var(--ar-line-2); border-bottom: 2px solid var(--ar-line-2); border-bottom-left-radius: 10px;
+}
+.archer-cv-col { position: relative; }
+.archer-cv-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  padding: 14px 14px 12px; border-bottom: 1px solid var(--ar-line);
+  position: sticky; top: 0; background: #fff; border-radius: 14px 14px 0 0; z-index: 3;
+}
+.archer-cv-head-text { min-width: 0; }
+.archer-cv-crumb { font-size: 12px; color: var(--ar-muted-2); line-height: 1.3; }
+body.archer-app .archer-shell .archer-cv-title {
+  font-family: var(--ar-display); font-size: 19px; font-weight: 800; color: var(--ar-navy);
+  margin: 2px 0 2px; line-height: 1.2; overflow-wrap: anywhere;
+}
+.archer-cv-meta { font-size: 12px; color: var(--ar-muted-2); }
+body.archer-app .archer-shell .archer-cv-open { padding: 6px 12px; font-size: 13px; min-height: 0; flex-shrink: 0; }
+.archer-cv-sections { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.archer-cv-sec { position: relative; border: 1px solid var(--ar-line); border-radius: 8px; background: #fff; }
+.archer-cv-sec:hover { border-color: var(--ar-navy); }
+.archer-cv-sec.is-fixed { border-style: dashed; }
+.archer-cv-sec.is-locked { border-color: var(--ar-teal); }
+.archer-cv-sec-label {
+  display: flex; flex-direction: column; padding: 6px 8px; line-height: 1.25;
+  border-bottom: 1px solid var(--ar-line); background: var(--ar-bg); border-radius: 8px 8px 0 0;
+}
+.archer-cv-sec-label strong { font-size: 12px; color: var(--ar-navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archer-cv-sec-label span { font-size: 11px; color: var(--ar-muted-2); }
+body.archer-app .archer-shell .archer-cv-body { width: 100%; border-radius: 0 0 8px 8px; }
+.archer-cv-body iframe { pointer-events: none; }
+.archer-cv-placeholder {
+  padding: 22px 10px; text-align: center; font-size: 12px; color: var(--ar-muted-2);
+  background: repeating-linear-gradient(135deg, #fff, #fff 8px, var(--ar-bg) 8px, var(--ar-bg) 16px);
+}
+.archer-cv-tools {
+  display: none; position: absolute; top: 4px; right: 4px; z-index: 4; gap: 3px; flex-wrap: wrap; justify-content: flex-end;
+  background: #fff; border: 1px solid var(--ar-line-2); border-radius: 8px; padding: 3px; box-shadow: var(--ar-shadow);
+}
+.archer-cv-sec:hover .archer-cv-tools, .archer-cv-sec:focus-within .archer-cv-tools { display: flex; }
+.archer-cv-tool {
+  font: 600 11px/1 var(--ar-font); color: var(--ar-navy); background: #fff; border: 1px solid transparent;
+  border-radius: 6px; padding: 5px 7px; cursor: pointer; min-height: 24px;
+}
+.archer-cv-tool:hover { border-color: var(--ar-navy); }
+.archer-cv-tool.is-danger:hover { border-color: var(--ar-danger); color: var(--ar-danger); }
+.archer-cv-tool[disabled] { opacity: 0.35; cursor: default; border-color: transparent; }
+.archer-cv-empty { padding: 4px 14px 18px; text-align: center; color: var(--ar-muted); font-size: 14px; }
+.archer-cv-empty[hidden] { display: none; }
+.archer-cv-col.is-empty .archer-cv-sections { display: none; }
+.archer-cv-zoom {
+  position: absolute; right: 14px; bottom: 14px; z-index: 6; display: flex; align-items: center; gap: 2px;
+  background: #fff; border: 1px solid var(--ar-line-2); border-radius: 10px; padding: 3px; box-shadow: var(--ar-shadow); cursor: default;
+}
+.archer-cv-zoom button {
+  font: 600 13px/1 var(--ar-font); color: var(--ar-navy); background: transparent; border: 0; border-radius: 7px;
+  min-width: 32px; height: 32px; padding: 0 8px; cursor: pointer;
+}
+.archer-cv-zoom button:hover { background: var(--ar-bg); }
+.archer-cv-zoom [data-archer-zoom-level] { font-size: 12px; color: var(--ar-muted); min-width: 44px; text-align: center; }
+.aisb-wf-whiteboard.is-hidden .archer-cv-zoom { display: none; }
+/* Header en footer in de detailweergave */
+body.archer-app .archer-shell .aisb-wf-section.archer-is-fixed { border-style: dashed; }
+
+/* ── Sitemap: canvas (zoals Relume) ─────────────────────── */
+.archer-smap-viewport {
+  --ar-smap-line: #9DB2D3;
+  position: relative; overflow: hidden;
+  height: calc(100vh - 240px - var(--ar-admin-bar)); min-height: 560px;
+  border: 1px solid var(--ar-line); border-radius: var(--ar-radius-lg);
+  background-color: var(--ar-bg-2);
+  background-image: radial-gradient(circle, rgba(9, 9, 48, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+  cursor: grab; touch-action: none; overscroll-behavior: contain;
+}
+.archer-smap-viewport.is-panning { cursor: grabbing; user-select: none; }
+.archer-smap-inner { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.archer-smap-tree { display: inline-block; padding: 8px; }
+.archer-smap-root { display: flex; flex-direction: column; align-items: center; }
+.archer-smap-node { width: 300px; cursor: default; }
+.archer-smap-node .archer-page-card { box-shadow: 0 6px 20px rgba(9, 9, 48, 0.06); }
+.archer-smap-home .archer-page-card { border-color: var(--ar-navy); border-width: 2px; }
+/* Hoofdpagina's in een rij, verbonden met de startpagina */
+.archer-smap-row {
+  list-style: none; margin: 0; padding: 40px 0 0; position: relative;
+  display: flex; align-items: flex-start;
+}
+.archer-smap-row::before {
+  content: ""; position: absolute; top: 0; left: 50%; height: 20px; border-left: 2px solid var(--ar-smap-line);
+}
+.archer-smap-col { position: relative; padding: 0 16px; margin: 0; }
+.archer-smap-col::before, .archer-smap-col::after {
+  content: ""; position: absolute; top: -20px; width: 50%; height: 20px; border-top: 2px solid var(--ar-smap-line);
+}
+.archer-smap-col::before { left: 0; }
+.archer-smap-col::after { right: 0; }
+.archer-smap-col > .archer-smap-node { position: relative; }
+.archer-smap-col > .archer-smap-node::before {
+  content: ""; position: absolute; top: -20px; left: 50%; height: 20px; border-left: 2px solid var(--ar-smap-line);
+}
+.archer-smap-col:first-child::before { border-top: 0; }
+.archer-smap-col:last-child::after { border-top: 0; }
+.archer-smap-col:only-child::before, .archer-smap-col:only-child::after { border-top: 0; }
+.archer-smap-col-add .archer-add-page-card { background: #fff; border: 1px dashed var(--ar-smap-line); border-radius: var(--ar-radius-lg); padding: 18px; }
+/* Subpagina's gestapeld onder hun ouder */
+.archer-smap-stack { list-style: none; margin: 0; padding: 0 0 0 22px; }
+.archer-smap-stack > li { position: relative; padding: 18px 0 0 18px; margin: 0; }
+.archer-smap-stack > li > .archer-smap-node { width: 282px; }
+.archer-smap-stack > li::before {
+  content: ""; position: absolute; left: 0; top: 0; width: 18px; height: 44px;
+  border-left: 2px solid var(--ar-smap-line); border-bottom: 2px solid var(--ar-smap-line); border-bottom-left-radius: 10px;
+}
+.archer-smap-stack > li:not(:last-child)::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 2px solid var(--ar-smap-line);
+}
+.archer-smap-stack .archer-smap-stack > li > .archer-smap-node { width: 264px; }
+.archer-smap-zoom { cursor: default; }
+.archer-smap-hint {
+  position: absolute; left: 14px; bottom: 14px; z-index: 5; font-size: 12px; color: var(--ar-muted-2);
+  background: rgba(255, 255, 255, 0.85); border-radius: 8px; padding: 6px 10px; pointer-events: none;
+}
+@media (max-width: 640px) { .archer-smap-hint { display: none; } }
+
+/* Canvas over de volle breedte van het venster */
+body.archer-app .archer-shell .archer-smap-viewport {
+  max-width: none; border-radius: 0; border-left: 0; border-right: 0;
+}
+/* Secties en paginatitels selecteren */
+.archer-smap-tree .archer-sec { cursor: pointer; }
+.archer-smap-tree .archer-sec:hover { border-color: var(--ar-navy); }
+.archer-smap-tree .archer-sec.is-selected { border-color: var(--ar-teal); box-shadow: 0 0 0 2px var(--ar-teal); }
+.archer-smap-tree .archer-sec:focus-visible, .archer-smap-tree .archer-page-card-title:focus-visible { outline: 2px solid var(--ar-teal); outline-offset: 2px; }
+.archer-smap-tree .archer-page-card-title { cursor: pointer; }
+.archer-smap-tree .archer-page-card-title:hover { text-decoration: underline; text-underline-offset: 3px; }
+.archer-smap-tree .archer-page-card-title.is-selected { color: var(--ar-teal); }
+/* Bewerkpaneel rechts in het canvas */
+.archer-smap-viewport { display: flex; align-items: stretch; }
+.archer-smap-stage { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.archer-smap-panel {
+  position: relative; flex: 0 0 400px; width: 400px; box-sizing: border-box;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: #fff; border-left: 1px solid var(--ar-line);
+  padding: 20px; cursor: default;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.archer-smap-panel[hidden] { display: none; }
+.archer-smap-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+.archer-smap-panel-head h3 { font-family: var(--ar-display); font-size: 22px; font-weight: 800; color: var(--ar-navy); margin: 2px 0 0; line-height: 1.2; overflow-wrap: anywhere; }
+.archer-smap-panel-eyebrow { font-size: 12px; font-weight: 600; color: var(--ar-teal); text-transform: uppercase; letter-spacing: 0.04em; }
+.archer-smap-panel .aisb-label { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--ar-navy); }
+.archer-smap-panel input, .archer-smap-panel textarea, .archer-smap-panel select {
+  width: 100%; box-sizing: border-box; font: 400 14px/1.45 var(--ar-font); color: var(--ar-ink);
+  border: 1px solid var(--ar-line-2); border-radius: 10px; padding: 9px 11px; background: #fff;
+}
+.archer-smap-panel textarea { resize: vertical; }
+.archer-smap-panel input:focus, .archer-smap-panel textarea:focus, .archer-smap-panel select:focus { outline: 2px solid var(--ar-teal); outline-offset: 0; border-color: var(--ar-teal); }
+.archer-smap-panel select[disabled] { background: var(--ar-bg); color: var(--ar-muted); }
+.archer-smap-panel .archer-form-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.archer-smap-panel .archer-danger-text { color: var(--ar-danger); }
+.archer-smap-panel .archer-btn[disabled] { opacity: 0.4; cursor: default; }
+@media (max-width: 760px) {
+  .archer-smap-viewport { flex-direction: column; }
+  .archer-smap-panel { flex: 0 0 auto; width: auto; max-height: 55%; border-left: 0; border-top: 1px solid var(--ar-line); }
+}
+/* De sitemapkaart mag het canvas niet afknippen (plugin-CSS: max-width 80% en overflow hidden). */
+body.archer-app .archer-shell .archer-sitemap-card { max-width: none; width: 100%; overflow: visible; }
+
+
+/* ── Sitemap maken: loader en skeletten ─────────────────── */
+.archer-shell.archer-generating .archer-start { display: none; }
+.archer-gen[hidden] { display: none; }
+.archer-gen { display: flex; justify-content: center; padding: 24px 0 48px; }
+.archer-gen-card {
+  width: 100%; max-width: 640px; background: #fff; border: 1px solid var(--ar-line);
+  border-radius: var(--ar-radius-lg); box-shadow: var(--ar-shadow); padding: 28px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.archer-gen-card .archer-h2 { margin: 0; }
+.archer-gen-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.archer-gen-steps li { display: flex; align-items: center; gap: 10px; color: var(--ar-muted-2); font-size: 15px; }
+.archer-gen-steps li.is-active { color: var(--ar-navy); font-weight: 600; }
+.archer-gen-steps li.is-done { color: var(--ar-ink); }
+.archer-gen-note { margin-left: auto; font-size: 13px; color: var(--ar-muted-2); font-weight: 400; }
+.archer-gen-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ar-line-2); flex: 0 0 auto; box-sizing: border-box; }
+.archer-gen-steps li.is-active .archer-gen-dot { border-color: var(--ar-teal); border-top-color: transparent; animation: archer-spin 0.8s linear infinite; }
+.archer-gen-steps li.is-done .archer-gen-dot { border-color: var(--ar-teal); background: var(--ar-teal); box-shadow: inset 0 0 0 3px #fff; }
+@keyframes archer-spin { to { transform: rotate(360deg); } }
+.archer-gen-preview { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px; background: var(--ar-bg-2); border-radius: 14px; }
+.archer-gen-row { display: flex; gap: 10px; width: 100%; justify-content: center; }
+.archer-gen-sk { width: 22%; height: 86px; border-radius: 10px; background: #fff; border: 1px solid var(--ar-line); position: relative; overflow: hidden; }
+.archer-gen-sk.is-home { width: 28%; height: 70px; border-color: var(--ar-navy); }
+.archer-gen-sk::after, .archer-sec-skel::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  transform: translateX(-100%); animation: archer-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes archer-shimmer { to { transform: translateX(100%); } }
+.archer-gen-error { color: var(--ar-danger); font-size: 14px; }
+.archer-gen-error[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .archer-gen-sk::after, .archer-sec-skel::after, .archer-gen-steps li.is-active .archer-gen-dot, .archer-smap-spinner { animation: none; }
+}
+/* Kaart waarvan de secties nog geschreven worden */
+.archer-page-card.is-pending .archer-page-card-meta { color: var(--ar-teal); }
+.archer-sec-skel { position: relative; overflow: hidden; min-height: 44px; display: flex; flex-direction: column; gap: 6px; justify-content: center; background: var(--ar-bg); }
+.archer-sec-skel span { display: block; height: 8px; border-radius: 4px; background: var(--ar-line); }
+.archer-sec-skel span:first-child { width: 35%; }
+.archer-sec-skel span:last-child { width: 70%; height: 10px; }
+/* Voortgang bovenaan het canvas */
+.archer-smap-progress {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 7;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  background: #fff; border: 1px solid var(--ar-line-2); border-radius: 999px; box-shadow: var(--ar-shadow);
+  padding: 8px 16px; font-size: 14px; color: var(--ar-ink); cursor: default; max-width: calc(100% - 32px);
+}
+.archer-smap-progress[hidden] { display: none; }
+.archer-smap-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ar-teal); border-top-color: transparent; animation: archer-spin 0.8s linear infinite; }
+.archer-smap-bar { width: 120px; height: 6px; border-radius: 3px; background: var(--ar-line); overflow: hidden; }
+.archer-smap-bar span { display: block; height: 100%; background: var(--ar-teal); transition: width 0.3s; }
+
+/* ── Wireframes: secties als één doorlopende pagina ─────── */
+body.archer-app .archer-shell .archer-cv-sections { gap: 0; padding: 0; overflow: hidden; border-radius: 0 0 14px 14px; background: #fff; }
+.archer-cv-sec { border: 0; border-radius: 0; }
+.archer-cv-sec:hover, .archer-cv-sec:focus-within { border: 0; outline: 2px solid var(--ar-teal); outline-offset: -2px; z-index: 3; }
+.archer-cv-sec.is-fixed, .archer-cv-sec.is-locked { border: 0; }
+.archer-cv-sec.is-locked::after { content: "vastgezet"; position: absolute; right: 6px; bottom: 6px; z-index: 4; font: 600 10px/1 var(--ar-font); color: #fff; background: var(--ar-teal); border-radius: 999px; padding: 4px 7px; }
+.archer-cv-sec-label {
+  display: none; position: absolute; top: 4px; left: 4px; z-index: 4; max-width: calc(100% - 140px);
+  background: var(--ar-navy); color: #fff; border: 0; border-radius: 6px; padding: 4px 7px;
+}
+.archer-cv-sec-label strong { color: #fff; font-size: 11px; }
+.archer-cv-sec-label span { display: none; }
+.archer-cv-sec:hover .archer-cv-sec-label, .archer-cv-sec:focus-within .archer-cv-sec-label { display: flex; }
+body.archer-app .archer-shell .archer-cv-body { border-radius: 0; }
+.archer-cv-placeholder { border-top: 1px dashed var(--ar-line-2); }
+/* Skeletten terwijl de wireframe gemaakt wordt */
+.archer-cv-skeleton { display: flex; flex-direction: column; border-radius: 0 0 14px 14px; overflow: hidden; background: #fff; }
+.archer-cv-skel {
+  position: relative; overflow: hidden; height: 120px; border-top: 1px solid var(--ar-line);
+  background: var(--ar-bg); display: flex; align-items: center; justify-content: center;
+}
+.archer-cv-skel:first-child { border-top: 0; }
+.archer-cv-skel.is-header { height: 26px; background: #fff; }
+.archer-cv-skel.is-hero { height: 190px; }
+.archer-cv-skel.is-short { height: 80px; }
+.archer-cv-skel.is-footer { height: 90px; background: var(--ar-bg-2); }
+.archer-cv-skel span { position: relative; z-index: 1; font-size: 11px; color: var(--ar-muted-2); background: rgba(255, 255, 255, 0.85); border-radius: 6px; padding: 3px 8px; max-width: 85%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.archer-cv-skel::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  transform: translateX(-100%); animation: archer-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .archer-cv-skel::after { animation: none; } }
+.archer-cv-col.is-pending .archer-cv-meta { color: var(--ar-teal); }
+.archer-cv-col.is-pending .archer-cv-open { visibility: hidden; }
+.archer-cv-progress { top: 14px; }
+
+/* ── Wireframes: sectie bewerken in een zijpaneel ───────── */
+.archer-cv-shell { display: flex; align-items: stretch; position: relative; }
+.archer-cv-shell > .aisb-wf-whiteboard { flex: 1 1 auto; min-width: 0; }
+.archer-cv-shell > .archer-cv-panel {
+  flex: 0 0 380px; width: 380px; align-self: flex-start;
+  height: calc(100vh - 250px - var(--ar-admin-bar)); min-height: 560px;
+  border: 1px solid var(--ar-line); border-left: 0; border-radius: 0 var(--ar-radius-lg) var(--ar-radius-lg) 0;
+}
+.archer-cv-shell.has-panel > .aisb-wf-whiteboard { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.archer-cv-shell:has(> .aisb-wf-whiteboard.is-hidden) > .archer-cv-panel { display: none; }
+.archer-cv-sec { cursor: pointer; }
+.archer-cv-sec.is-editing { outline: 3px solid var(--ar-teal); outline-offset: -3px; z-index: 3; }
+.archer-cv-body iframe.is-loading { position: absolute; top: 0; left: 0; visibility: hidden; }
+.archer-ed-note { margin: 0; font-size: 13px; color: var(--ar-muted); background: var(--ar-bg-2); border-radius: 10px; padding: 8px 10px; }
+.archer-ed-group { border-top: 1px solid var(--ar-line); padding-top: 10px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.archer-ed-title { font-size: 12px; font-weight: 700; color: var(--ar-navy); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+details.archer-ed-item > summary { cursor: pointer; list-style: revert; text-transform: none; letter-spacing: 0; font-size: 14px; }
+.archer-ed-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; font-size: 14px; color: var(--ar-ink); }
+.archer-ed-row > span { flex: 1 1 auto; min-width: 0; }
+.archer-ed-sub > span { padding-left: 12px; color: var(--ar-muted); }
+.archer-ed-seg { flex: none; padding: 3px; }
+.archer-ed-seg .archer-seg-btn { flex: none; min-height: 32px; padding: 5px 12px; font-size: 13px; }
+.archer-ed-count { display: flex; align-items: center; gap: 6px; }
+.archer-ed-count strong { min-width: 20px; text-align: center; font-size: 14px; }
+.archer-ed-count .archer-sec-tool { width: 32px; height: 32px; border: 1px solid var(--ar-line-2); border-radius: 8px; font-size: 16px; }
+.archer-ed-status { margin: 4px 0 0; min-height: 18px; font-size: 13px; color: var(--ar-muted); }
+@media (max-width: 760px) {
+  .archer-cv-shell { flex-direction: column; }
+  .archer-cv-shell > .archer-cv-panel { flex: 0 0 auto; width: auto; height: auto; min-height: 0; max-height: 70vh; border: 1px solid var(--ar-line); border-radius: 0 0 var(--ar-radius-lg) var(--ar-radius-lg); }
+}
+/* Tekstvelden zonder HTML: zoals een kleine teksteditor */
+.archer-ed-field { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.archer-ed-labelrow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.archer-ed-labelrow .aisb-label { margin: 0; }
+.archer-ed-len { font-size: 12px; color: var(--ar-muted-2); font-variant-numeric: tabular-nums; }
+.archer-ed-len.is-over { color: var(--ar-danger); font-weight: 600; }
+.archer-ed-hint { margin: 0; font-size: 12px; color: var(--ar-danger); }
+.archer-ed-hint[hidden] { display: none; }
+.archer-ed-tb { display: flex; gap: 2px; }
+.archer-ed-tb button {
+  width: 30px; height: 28px; border: 1px solid var(--ar-line-2); border-radius: 6px; background: #fff;
+  font: 400 14px/1 var(--ar-font); color: var(--ar-navy); cursor: pointer;
+}
+.archer-ed-tb button:hover { background: var(--ar-bg-2); }
+.archer-ed-rte {
+  min-height: 40px; box-sizing: border-box; font: 400 14px/1.45 var(--ar-font); color: var(--ar-ink);
+  border: 1px solid var(--ar-line-2); border-radius: 10px; padding: 9px 11px; background: #fff;
+  overflow-wrap: anywhere; cursor: text;
+}
+.archer-ed-rte.is-basic, .archer-ed-rte.is-rich { min-height: 64px; }
+.archer-ed-rte.is-inline { white-space: nowrap; overflow-x: auto; }
+.archer-ed-rte:focus { outline: 2px solid var(--ar-teal); outline-offset: 0; border-color: var(--ar-teal); }
+.archer-ed-rte p { margin: 0 0 6px; }
+.archer-ed-rte ul { margin: 0 0 6px 18px; padding: 0; }
+
+/* ── Stijl: paginakeuze in het live voorbeeld ───────────── */
+.aisb-sg-preview-header { flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.archer-sg-page-select {
+  flex: 0 1 220px; min-width: 0; max-width: 100%;
+  font: 600 13px/1.3 var(--ar-font); color: var(--ar-navy);
+  border: 1px solid var(--ar-line-2); border-radius: 999px; padding: 6px 30px 6px 12px; background-color: #fff;
+}
+.archer-sg-page-select:focus { outline: 2px solid var(--ar-teal); outline-offset: 1px; }
+.archer-sg-page-select[hidden] { display: none; }
+/* Stijl en foto's: het voorbeeld rechts krijgt de ruimte (geen 80%-kaart, smallere instellingen) */
+body.archer-app .archer-shell .archer-sg-card { max-width: none; width: 100%; }
+body.archer-app .archer-shell .aisb-sg-split-left { flex: 0 0 360px; width: 360px; min-width: 0; box-sizing: border-box; }
+body.archer-app .archer-shell .aisb-sg-split-right { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 1100px) {
+  body.archer-app .archer-shell .aisb-sg-split-left { flex-basis: 320px; width: 320px; }
+}
+/* Smal venster: instellingen boven, voorbeeld eronder over de volle breedte */
+@media (max-width: 960px) {
+  body.archer-app .archer-shell .aisb-sg-split { flex-direction: column; }
+  body.archer-app .archer-shell .aisb-sg-split-left { flex: 0 0 auto; width: auto; }
+  body.archer-app .archer-shell .aisb-sg-split-right { flex: 0 0 auto; width: auto; min-height: 70vh; }
+}
+
+/* ── Stijl: stijlrichtingen (tasteskill) ────────────────── */
+.archer-taste { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 18px; }
+.archer-taste-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.archer-taste-head h4 { margin: 0; font-family: var(--ar-display); font-size: 16px; font-weight: 700; color: var(--ar-navy); }
+.archer-taste-intro { margin: 0; font-size: 13px; color: var(--ar-muted); }
+.archer-taste-list { display: flex; flex-direction: column; gap: 8px; }
+.archer-taste-card {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; row-gap: 2px; align-items: center;
+  width: 100%; text-align: left; cursor: pointer; padding: 10px 12px;
+  background: #fff; border: 1px solid var(--ar-line-2); border-radius: 12px; font: inherit; color: var(--ar-ink);
+}
+.archer-taste-card:hover { border-color: var(--ar-navy); }
+.archer-taste-card:focus-visible { outline: 2px solid var(--ar-teal); outline-offset: 2px; }
+.archer-taste-card.is-active { border-color: var(--ar-teal); box-shadow: 0 0 0 2px var(--ar-teal); }
+.archer-taste-chips { grid-row: 1 / 3; display: grid; grid-template-columns: repeat(5, 12px); height: 36px; border-radius: 6px; overflow: hidden; border: 1px solid var(--ar-line); }
+.archer-taste-chips span { display: block; height: 100%; }
+.archer-taste-card strong { font-size: 17px; font-weight: 700; line-height: 1.2; color: var(--ar-navy); }
+.archer-taste-meta { font-size: 12px; color: var(--ar-muted); }
+.archer-taste-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--ar-muted); }
+body.archer-app .archer-shell .archer-btn.archer-btn-sm { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+.archer-taste-status { margin: 0; min-height: 18px; font-size: 13px; color: var(--ar-teal); }
+.archer-scheme-box { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; padding-top: 14px; border-top: 1px solid var(--ar-line); }
+
+/* ── Stijl: actiebalk boven het voorbeeld (concepten, licht/donker, verras me) ── */
+.archer-sg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.archer-sg-concepts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.archer-sg-concept { display: inline-flex; align-items: center; border: 1px solid var(--ar-line-2); border-radius: 999px; background: #fff; overflow: hidden; }
+.archer-sg-concept button { all: unset; cursor: pointer; padding: 6px 10px; font-size: 13px; font-weight: 600; color: var(--ar-navy); }
+.archer-sg-concept .archer-sg-concept-x { padding: 6px 9px 6px 2px; font-size: 11px; color: var(--ar-muted); }
+.archer-sg-concept .archer-sg-concept-x:hover { color: var(--ar-navy); }
+.archer-sg-concept button:focus-visible { outline: 2px solid var(--ar-teal); outline-offset: -2px; }
+.archer-sg-concept.is-active { border-color: var(--ar-teal); box-shadow: 0 0 0 1px var(--ar-teal); }
+.archer-sg-concepts .archer-link-btn { all: unset; cursor: pointer; padding: 6px 4px; font-size: 13px; font-weight: 600; color: var(--ar-teal); }
+.archer-sg-concepts .archer-link-btn:hover { text-decoration: underline; }
+/* Secties in Stijl zijn aanklikbaar (kleurschema per sectie, hoverbalk). */
+body.archer-app .aisb-sg-iframe-wrap iframe.aisb-sg-section-iframe { pointer-events: auto; }
+
+/* ── Sitemap: menu en structuur ───────────────────────── */
+.archer-smap-menu-btn { position: absolute; top: 14px; left: 14px; z-index: 6; display: inline-flex; align-items: center; gap: 6px; background: #fff; }
+.archer-menu-list, .archer-menu-sub { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.archer-menu-sub { margin: 6px 0 0 22px; padding-left: 10px; border-left: 2px solid var(--ar-line); }
+.archer-menu-item { display: flex; flex-direction: column; gap: 4px; }
+.archer-menu-row { display: flex; align-items: center; gap: 6px; }
+.archer-smap-panel .archer-menu-row input { flex: 1 1 auto; min-width: 0; padding: 7px 10px; }
+.archer-menu-row.is-child input { font-size: 13px; }
+.archer-menu-tools { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+.archer-menu-tools .archer-sec-tool { width: 28px; height: 28px; font-weight: 700; }
+.archer-menu-tools .archer-sec-tool[disabled] { opacity: 0.3; cursor: default; }
+.archer-smap-panel .archer-form-row select { flex: 1 1 auto; width: auto; min-width: 0; }
+.archer-smap-tree .archer-page-card[draggable="true"] .archer-page-card-head { cursor: grab; }
+.archer-smap-tree .archer-page-card.is-dragging { opacity: 0.45; }
+.archer-smap-tree .archer-page-card.is-drop-target { outline: 3px dashed var(--ar-teal); outline-offset: 4px; }
+body.archer-app .archer-shell .archer-btn.archer-btn-sm.is-active { background: var(--ar-navy); border-color: var(--ar-navy); color: #fff; }
+
+/* ── Stijl: één pagina, gewoon scrollen (geen canvas) ─── */
+body.archer-app .archer-shell .aisb-sg-canvas.archer-sg-pageview { overflow-y: auto !important; overflow-x: hidden !important; cursor: default !important; height: calc(100vh - 210px) !important; min-height: 480px; background: var(--ar-bg); }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-canvas-inner { transform: none !important; position: static !important; display: block !important; width: auto !important; height: auto !important; padding: 0 !important; }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; }
+
+/* ── Foto's: overzicht in 2 kolommen, 5px tussenruimte ── */
+body.archer-app .archer-shell [data-images-grid],
+body.archer-app .archer-shell [data-uploaded-grid-inner] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+body.archer-app .archer-shell [data-images-grid] > .aisb-sg-empty-state,
+body.archer-app .archer-shell [data-images-grid] > .aisb-sg-img-loader { grid-column: 1 / -1; }
+body.archer-app .archer-shell [data-images-grid] .aisb-sg-auto-card,
+body.archer-app .archer-shell [data-uploaded-grid-inner] .aisb-sg-auto-card { margin: 0; border-radius: 6px; }
+body.archer-app .archer-shell [data-images-grid] .aisb-sg-auto-card img,
+body.archer-app .archer-shell [data-uploaded-grid-inner] .aisb-sg-auto-card img { height: auto; aspect-ratio: 4 / 3; }
+.archer-stock-credit { margin: 6px 0 0; font-size: 11px; color: var(--ar-muted); }
+.archer-stock-credit a { color: inherit; }

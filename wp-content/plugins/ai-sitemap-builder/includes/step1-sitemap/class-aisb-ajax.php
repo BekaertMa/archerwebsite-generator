@@ -133,6 +133,9 @@ class AISB_Ajax {
 
     $decoded = $this->enforcer()->enforce_rules_on_data($decoded);
 
+    // Archer-regels: contactpagina, subpagina's bij overzichtspagina's, volledige sitemap van een bestaande site.
+    $decoded = apply_filters('aisb_generated_sitemap', $decoded, ['prompt' => $prompt, 'languages' => $languages]);
+
     // Maak automatisch een project aan wanneer er nog geen project_id is.
     if (!$project_id) {
       $title      = $decoded['website_name'] ?? 'New project';
@@ -803,7 +806,7 @@ class AISB_Ajax {
     update_post_meta($post_id, 'aisb_sitemap_is_current', 1);
 
     // Persist JSON
-    update_post_meta($post_id, 'aisb_sitemap_json', wp_json_encode($data));
+    update_post_meta($post_id, 'aisb_sitemap_json', wp_slash(wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
 
     // Update project pointers
     update_post_meta($project_id, 'aisb_latest_sitemap_id', (int)$post_id);

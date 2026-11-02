@@ -50,6 +50,79 @@ class AISB_InstaWP {
     $this->register_bricks_meta_auth();
   }
 
+  /** @var array<string,bool> Archer: ids of global classes whose name contains "logo". */
+  private $logo_class_ids = [];
+
+  /**
+   * Archer: remember which global classes mark logo slots, so photo baking skips them.
+   */
+  private function build_logo_class_map(array $global_classes): void {
+    $this->logo_class_ids = [];
+    $all = array_merge($global_classes, (array) get_option('bricks_global_classes', []));
+    foreach ($all as $gc) {
+      if (is_array($gc) && !empty($gc['id']) && stripos((string) ($gc['name'] ?? ''), 'logo') !== false) {
+        $this->logo_class_ids[(string) $gc['id']] = true;
+      }
+    }
+  }
+
+  private function is_logo_image_node(array $node): bool {
+    $settings = isset($node['settings']) && is_array($node['settings']) ? $node['settings'] : [];
+    foreach ((array) ($settings['_cssGlobalClasses'] ?? []) as $cid) {
+      if (isset($this->logo_class_ids[(string) $cid])) return true;
+    }
+    $label = strtolower((string) ($node['label'] ?? '') . ' ' . (string) ($settings['_cssClasses'] ?? ''));
+    return strpos($label, 'logo') !== false;
+  }
+
+  /**
+   * Archer (ADR-0027): write the style guide colours into the Bricks variables that the
+   * sections actually use, so the published site is on-brand without runtime JavaScript.
+   */
+  private function apply_style_guide_variables(array $variables, int $project_id): array {
+    $raw = get_post_meta($project_id, 'aisb_style_guide', true);
+    $sg = is_string($raw) ? json_decode($raw, true) : $raw;
+    if (!is_array($sg) || empty($sg['colours']) || !is_array($sg['colours'])) return $variables;
+
+    $c = [];
+    foreach ($sg['colours'] as $col) {
+      if (is_array($col) && !empty($col['name']) && !empty($col['hex'])) {
+        $c[strtolower((string) $col['name'])] = sanitize_hex_color((string) $col['hex']) ?: '';
+      }
+    }
+    $c = array_filter($c);
+    if (empty($c['primary'])) return $variables;
+
+    $set = [
+      'brxw-color-primary' => $c['primary'],
+      'primary' => $c['primary'],
+    ];
+    if (!empty($c['secondary'])) { $set['brxw-color-secondary'] = $c['secondary']; $set['secondary'] = $c['secondary']; }
+    if (!empty($c['dark']))      { $set['dark'] = $c['dark']; $set['dark-90'] = 'color-mix(in srgb, ' . $c['dark'] . ' 90%, transparent)'; }
+    if (!empty($c['light']))     { $set['light'] = $c['light']; }
+    foreach ([10, 20, 30, 40, 50, 60, 70, 80, 90] as $pct) {
+      $set['brxw-color-primary-trans-' . $pct] = 'color-mix(in srgb, var(--brxw-color-primary) ' . $pct . '%, transparent)';
+      if (!empty($c['secondary'])) {
+        $set['brxw-color-secondary-trans-' . $pct] = 'color-mix(in srgb, var(--brxw-color-secondary) ' . $pct . '%, transparent)';
+      }
+    }
+
+    $colors_cat = '';
+    foreach ($variables as $v) {
+      if (is_array($v) && ($v['name'] ?? '') === 'brxw-color-primary') { $colors_cat = (string) ($v['category'] ?? ''); break; }
+    }
+    foreach ($variables as $i => $v) {
+      if (is_array($v) && isset($set[$v['name'] ?? ''])) {
+        $variables[$i]['value'] = $set[$v['name']];
+        unset($set[$v['name']]);
+      }
+    }
+    foreach ($set as $name => $value) {
+      $variables[] = ['id' => 'ar' . substr(md5($name), 0, 4), 'name' => $name, 'value' => $value, 'category' => $colors_cat];
+    }
+    return array_values($variables);
+  }
+
   /**
     * Staat toe dat Bricks page-builder meta via XML-RPC wordt geschreven.
     *
@@ -262,6 +335,9 @@ class AISB_InstaWP {
       ], $status);
     }
 
+    if (class_exists('AISB_Archer_UI')) {
+      AISB_Archer_UI::remember_publish($project_id, $result);
+    }
     wp_send_json_success($result);
   }
 
@@ -530,6 +606,14 @@ class AISB_InstaWP {
 
   private function publish_export_site(WP_Post $project, array $export, string $site_name) {
     $pages = $this->normalise_export_pages($export['pages'] ?? []);
+    // Archer: kleurschema per sectie uit de stijlstap als achtergrond van die sectie.
+    if (class_exists('AISB_Archer_Taste')) {
+      $pages = AISB_Archer_Taste::apply_schemes_to_export($pages, isset($export['style_guide']) && is_array($export['style_guide']) ? $export['style_guide'] : []);
+    }
+    // Archer: header en footer met de naam, het menu en de footergroepen van deze website.
+    if (class_exists('AISB_Archer_Chrome')) {
+      $pages = AISB_Archer_Chrome::apply_to_export($pages, (int) $project->ID);
+    }
     if (empty($pages)) {
       return new WP_Error('aisb_instawp_empty_export', 'The live export does not contain any publishable pages.', ['status' => 400]);
     }
@@ -578,6 +662,9 @@ class AISB_InstaWP {
     $global_variables_categories = isset($export['global_variables_categories']) && is_array($export['global_variables_categories'])
       ? array_values(array_filter($export['global_variables_categories'], 'is_array'))
       : [];
+    $global_variables = $this->apply_style_guide_variables($global_variables, (int) $project->ID);
+    $this->build_logo_class_map($global_classes);
+
     $color_palette = isset($export['color_palette']) && is_array($export['color_palette'])
       ? array_values(array_filter($export['color_palette'], 'is_array'))
       : [];
@@ -673,6 +760,8 @@ class AISB_InstaWP {
       'logoUrl' => $this->convert_local_url_to_data_uri(trim((string) ($guide['logoUrl'] ?? ''))),
       'colours' => $colours,
       'images' => $images,
+      // Archer: huisregels van tasteskill (geen schaduwen op wat stil staat), ook op de gepubliceerde site.
+      'houseCss' => class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::house_css($guide) : '',
     ];
   }
 
@@ -1056,12 +1145,22 @@ class AISB_InstaWP {
       $nav_menu_id = $this->configure_remote_nav_menu($clone, $site, $nav_menu_items, $menu_label, $timeout);
     }
 
-    if ($nav_menu_id > 0 && !empty($bricks_injections)) {
+    // Archer: menu's volgens de sitemap (hoofdmenu met submenu's, footergroepen, juridisch).
+    $archer_menu_ids = [];
+    if (class_exists('AISB_Archer_Chrome')) {
+      foreach (AISB_Archer_Chrome::publish_menus((int) $project->ID, $published_pages) as $archer_role => $archer_items) {
+        $archer_mid = $this->configure_remote_nav_menu($clone, $site, $archer_items, ($project_name !== '' ? $project_name : 'Site') . ' ' . $archer_role, $timeout);
+        if ($archer_mid > 0) $archer_menu_ids[$archer_role] = $archer_mid;
+      }
+    }
+
+    if (($nav_menu_id > 0 || $archer_menu_ids) && !empty($bricks_injections)) {
       foreach ($bricks_injections as $injection_index => $injection) {
         $payload = is_array($injection['payload'] ?? null) ? $injection['payload'] : [];
         foreach (['content', 'header', 'footer'] as $region) {
           if (isset($payload[$region]) && is_array($payload[$region])) {
             $payload[$region] = $this->set_nav_menu_id_in_nodes($payload[$region], $nav_menu_id);
+            if ($archer_menu_ids) $payload[$region] = AISB_Archer_Chrome::set_menu_ids($payload[$region], $archer_menu_ids);
           }
         }
         $bricks_injections[$injection_index]['payload'] = $payload;
@@ -1299,7 +1398,7 @@ class AISB_InstaWP {
       return false;
     }
 
-    $form_data = $this->build_bricks_settings_form_data($html, ['administrator', 'editor', 'author', 'contributor']);
+    $form_data = $this->build_bricks_settings_form_data($html, ['administrator'] /* Archer (ADR-0031): never grant code execution to editors/authors/contributors */);
     if ($form_data === '') {
       error_log('[AISB] Bricks settings: could not build settings form payload.');
       return false;
@@ -1330,7 +1429,7 @@ class AISB_InstaWP {
     $ok      = $code === 200 && is_array($decoded) && !empty($decoded['success']);
 
     if ($ok) {
-      error_log('[AISB] Bricks code execution enabled for all roles on the clone.');
+      error_log('[AISB] Bricks code execution enabled for administrators on the clone.');
     } else {
       error_log('[AISB] Bricks settings: save failed (HTTP ' . $code . '): ' . substr((string) ($save_response['body'] ?? ''), 0, 300));
     }
@@ -1422,6 +1521,7 @@ class AISB_InstaWP {
     error_log('[AISB] Nav menu REST: menu aangemaakt id=' . $menu_id . ' naam=' . $menu_name);
 
     // Menu-items toevoegen
+    $created_ids = [];
     foreach ($menu_items as $order => $item) {
       $object_id = (int) ($item['object_id'] ?? 0);
       $title     = sanitize_text_field((string) ($item['title'] ?? ''));
@@ -1433,6 +1533,10 @@ class AISB_InstaWP {
         'status'     => 'publish',
         'menu_order' => $order + 1,
       ];
+      // Archer: submenu (index van het ouder-item in dezelfde lijst).
+      if (isset($item['parent']) && (int) $item['parent'] >= 0 && !empty($created_ids[(int) $item['parent']])) {
+        $item_body['parent'] = $created_ids[(int) $item['parent']];
+      }
 
       if ($object_id > 0) {
         $item_body['type']      = 'post_type';
@@ -1461,6 +1565,8 @@ class AISB_InstaWP {
       if ($item_code !== 200 && $item_code !== 201) {
         error_log('[AISB] Nav menu REST: item "' . $title . '" HTTP ' . $item_code . ': ' . substr((string) ($item_response['body'] ?? ''), 0, 200));
       }
+      $created_item = json_decode((string) ($item_response['body'] ?? ''), true);
+      if (is_array($created_item) && !empty($created_item['id'])) $created_ids[$order] = (int) $created_item['id'];
     }
 
     // Probeer het menu toe te wijzen aan beschikbare theme locaties (niet fataal)
@@ -1690,6 +1796,7 @@ class AISB_InstaWP {
     }
 
     $position = 0;
+    $db_ids = [];
     foreach ($menu_items as $item) {
       $position++;
       $object_id = (int) ($item['object_id'] ?? 0);
@@ -1743,7 +1850,7 @@ class AISB_InstaWP {
 
       $meta_values = [
         '_menu_item_type'             => $is_post ? 'post_type' : 'custom',
-        '_menu_item_menu_item_parent' => '0',
+        '_menu_item_menu_item_parent' => (string) ((isset($item['parent']) && (int) $item['parent'] >= 0 && !empty($db_ids[(int) $item['parent']])) ? $db_ids[(int) $item['parent']] : 0),
         '_menu_item_object_id'        => $is_post ? (string) $object_id : '0',
         '_menu_item_object'           => $is_post ? 'page' : 'custom',
         '_menu_item_target'           => '',
@@ -1752,6 +1859,7 @@ class AISB_InstaWP {
         '_menu_item_url'              => $is_post ? '' : $url,
       ];
 
+      $db_ids[$position - 1] = $menu_item_id;
       foreach ($meta_values as $meta_key => $meta_value) {
         $stored = $this->upsert_meta_value($connection, $prefix, $menu_item_id, $meta_key, (string) $meta_value);
         if (is_wp_error($stored)) {
@@ -2302,7 +2410,6 @@ class AISB_InstaWP {
 
     $values = [
       '_bricks_page_content_2' => $body,
-      '_bricks_data' => $body,
       '_bricks_editor_mode' => 'bricks',
     ];
 
@@ -2313,6 +2420,10 @@ class AISB_InstaWP {
     if (!empty($footer) || isset($existing_fields['_bricks_page_footer_2'])) {
       $values['_bricks_page_footer_2'] = $footer;
     }
+
+    // Archer: Bricks element data goes through the builder save (inject_bricks_via_builder) only.
+    // Sending it over XML-RPC as nested structs exceeds WordPress' 30,000-element limit on real pages.
+    $values = ['_bricks_editor_mode' => 'bricks'];
 
     $fields = [];
     foreach ($values as $key => $value) {
@@ -2378,12 +2489,19 @@ class AISB_InstaWP {
           if ($message->messageType === 'fault') {
             $last_error_code = (int) $message->faultCode;
             $last_error_message = (string) $message->faultString;
+            // Archer: only auth faults are transient (fresh clone); retrying other faults just hits rate limits.
+            if (stripos($last_error_message, 'incorrect username or password') === false) {
+              error_log(sprintf('[AISB] XML-RPC %s fault #%d %s (not retried)', $method, $last_error_code, $last_error_message));
+              break;
+            }
           } else {
             return $message->params[0] ?? null;
           }
         } else {
           $last_error_code = -32700;
           $last_error_message = 'parse error. not well formed';
+          error_log(sprintf('[AISB] XML-RPC %s response not parseable (not retried)', $method));
+          break;
         }
       } else {
         if (is_wp_error($response)) {
@@ -3253,9 +3371,9 @@ class AISB_InstaWP {
       }
 
       $style_map = [
-        'fontSize' => 'font-size',
+        // Archer: font-size/line-height are NOT baked; values measured on the scaled-down canvas
+        // produced 15px H1s. Sizes come from the section classes and the theme style instead.
         'fontWeight' => 'font-weight',
-        'lineHeight' => 'line-height',
         'textAlign' => 'text-align',
       ];
 
@@ -3423,6 +3541,9 @@ class AISB_InstaWP {
     foreach ($nodes as $index => $node) {
       if (!is_array($node) || ($node['name'] ?? '') !== 'image') {
         continue;
+      }
+      if ($this->is_logo_image_node($node)) {
+        continue; // Archer: logo/brand slots never get stock photos
       }
       if ($slot >= $total) {
         break;
@@ -3792,6 +3913,7 @@ class AISB_InstaWP {
       css +=
         ".brxe-icon-svg svg,.brxe-icon svg{color:" + accent + " !important;fill:" + accent + " !important;}";
     }
+    if (guide.houseCss) css += String(guide.houseCss);
     css += "img[data-aisb-logo='1']{max-height:60px !important;width:auto !important;object-fit:contain !important;}";
     return css;
   }
@@ -3807,6 +3929,16 @@ class AISB_InstaWP {
       link.rel = "stylesheet";
       link.href = url;
     }
+  }
+
+  // Archer: brand/logo slots (e.g. .logo-13__img, .card-testimonial-13__logo) never get stock photos.
+  function isBrandSlot(img) {
+    var el = img;
+    for (var i = 0; i < 3 && el; i++) {
+      if (/(^|[\s_-])logo/i.test(String(el.className || ''))) return true;
+      el = el.parentElement;
+    }
+    return false;
   }
 
   function isLogoImage(img) {
@@ -3965,7 +4097,7 @@ class AISB_InstaWP {
   function applySectionImages(root, urls) {
     if (!root || !Array.isArray(urls) || !urls.length) return;
     var imgs = Array.from(root.querySelectorAll("img")).filter(function (img) {
-      return !isLogoImage(img);
+      return !isLogoImage(img) && !isBrandSlot(img);
     });
     imgs.forEach(function (img, index) {
       var src = urls[index] || urls[index % urls.length];
@@ -4756,7 +4888,10 @@ JS;
       ],
       'body' => wp_json_encode([
         'slug' => $template_slug,
+        'template_slug' => $template_slug,
         'site_name' => $site_name,
+        // Archer (ADR-0031): previews are temporary; set instawp_reserve_sites for permanent client sites.
+        'is_reserved' => !empty(AISB_Settings::get_settings()['instawp_reserve_sites']),
       ]),
     ]);
 

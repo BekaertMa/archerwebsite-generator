@@ -89,6 +89,17 @@ class AISB_Wireframes {
     $post = get_post($id);
     setup_postdata($post);
 
+    // Archer: dezelfde themastijl als de sjabloonpagina's (conditie: posttype bricks_template).
+    // Anders gelden de stijlen van de homepagina en ontbreken o.a. de sectiepadding en containerbreedte.
+    if (class_exists('\Bricks\Theme_Styles')) {
+      $style_source = $post->post_type === 'bricks_template' ? $id : 0;
+      if (!$style_source) {
+        $tpl_ids = get_posts(['post_type' => 'bricks_template', 'post_status' => 'publish', 'numberposts' => 1, 'fields' => 'ids', 'meta_key' => '_bricks_template_type', 'meta_value' => 'section']);
+        $style_source = $tpl_ids ? (int) $tpl_ids[0] : 0;
+      }
+      if ($style_source) \Bricks\Theme_Styles::load_set_styles($style_source);
+    }
+
     if (function_exists('bricks_enqueue_scripts')) {
       bricks_enqueue_scripts();
     }
@@ -129,24 +140,7 @@ class AISB_Wireframes {
       <?php wp_head(); ?>
     </head>
     <body <?php body_class(); ?>>
-      <style id="aisb-force-desktop">
-        /* Override ALL Bricks responsive breakpoints to force desktop layout */
-        @media (max-width: 1320px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-        }
-        @media (max-width: 991px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-          [class*="brxe-"] { width: unset !important; max-width: unset !important; flex-basis: unset !important; flex-direction: unset !important; }
-        }
-        @media (max-width: 767px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-          [class*="brxe-"] { width: unset !important; max-width: unset !important; flex-basis: unset !important; flex-direction: unset !important; }
-        }
-        @media (max-width: 478px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-          [class*="brxe-"] { width: unset !important; max-width: unset !important; flex-basis: unset !important; flex-direction: unset !important; }
-        }
-      </style>
+      <?php /* Archer: geen force-desktop regels meer. De iframe is 1200px breed, dus Bricks gebruikt al de desktopweergave; flex-wrap: nowrap brak kolommen en rasters. */ ?>
       <style id="aisb-preview-fixes">
         /* Verberg Bricks accordion-toggles (verborgen checkboxes) die als
            zichtbare rechthoekjes renderen door browser-defaults. */
@@ -636,6 +630,8 @@ class AISB_Wireframes {
 
     $pattern = $this->detect_pattern($page_slug);
     $types = $this->patterns()[$pattern];
+    // Archer: dezelfde secties als in de sitemap (zie AISB_Archer_Generate::wireframe_types).
+    $types = apply_filters('aisb_wireframe_section_types', $types, $project_id, $sitemap_version_id, $page_slug);
     $model = [
       'page' => ['slug' => $page_slug, 'title' => ucfirst(str_replace('-', ' ', $page_slug))],
       'pattern' => $pattern,
@@ -806,6 +802,10 @@ class AISB_Wireframes {
   public function ajax_shuffle_section_layout(): void {
     $this->require_login();
     $this->check_nonce();
+    // Ander voorbeeld = ander sjabloon met nieuwe AI-tekst (anders blijft de oude sectie zichtbaar).
+    set_time_limit(180);
+    ignore_user_abort(true);
+    $regen = false;
     $project_id = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
     $sitemap_version_id = isset($_POST['sitemap_version_id']) ? (int)$_POST['sitemap_version_id'] : 0;
     $page_slug = isset($_POST['page_slug']) ? sanitize_title(wp_unslash($_POST['page_slug'])) : '';
@@ -835,6 +835,12 @@ class AISB_Wireframes {
 
       $bricks_tpl = $this->bricks->pick_bricks_template($type, $bricks_by_type, $used_bricks_ids);
       if ($bricks_tpl) {
+        $old_ai = isset($s['ai_wireframe_id']) ? (int) $s['ai_wireframe_id'] : 0;
+        if ($old_ai > 0) {
+          wp_trash_post($old_ai);
+          $model['sections'][$i]['ai_wireframe_id'] = null;
+          $regen = true;
+        }
         $model['sections'][$i]['layout_key']            = 'bricks_' . $bricks_tpl['id'];
         $model['sections'][$i]['bricks_template_id']    = $bricks_tpl['id'];
         $model['sections'][$i]['bricks_template_title'] = $bricks_tpl['title'];
@@ -859,6 +865,10 @@ class AISB_Wireframes {
     }
 
     $this->save_model($project_id, $sitemap_version_id, $page_slug, $model, true);
+    if ($regen) {
+      $model = $this->ai->populate_bricks_content_with_ai($model, $project_id, $sitemap_version_id, $page_slug, [$uuid]);
+      $this->save_model($project_id, $sitemap_version_id, $page_slug, $model, true);
+    }
     wp_send_json_success(['wireframe' => $model]);
   }
 
