@@ -56,7 +56,11 @@ class AISB_Wireframe_Compiler {
       // --- Prioriteit B: Bricks template post (uit de Bricks template bibliotheek) ---
       $bricks_post_id = isset($sec['bricks_template_id']) ? (int) $sec['bricks_template_id'] : 0;
       if ($bricks_post_id > 0) {
-        $bricks_data = get_post_meta($bricks_post_id, '_bricks_data', true);
+        // Archer: Bricks stores templates in _bricks_page_content_2; _bricks_data is a legacy key.
+        $bricks_data = get_post_meta($bricks_post_id, '_bricks_page_content_2', true);
+        if (!is_array($bricks_data) || empty($bricks_data)) {
+          $bricks_data = get_post_meta($bricks_post_id, '_bricks_data', true);
+        }
         if (is_array($bricks_data) && !empty($bricks_data)) {
           $tpl_content = array_values(array_filter($bricks_data, function($n) {
             return is_array($n) && (($n['name'] ?? '') !== 'code');

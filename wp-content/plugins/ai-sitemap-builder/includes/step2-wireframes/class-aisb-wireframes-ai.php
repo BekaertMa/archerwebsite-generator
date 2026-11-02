@@ -174,6 +174,9 @@ class AISB_Wireframes_AI {
         $prompt .= "Section context:\n" . implode("\n", $section_hints) . "\n";
     }
     $prompt .= "\nIMPORTANT: Write copy that is specific to the page you're on. Do NOT use generic welcome/landing page text unless this is actually the Home page.Look very good on wich page you're on so you only generate texts that are relevant to the current page. Dont generate de same text for different sections!\n";
+    // Archer: guardrails against invented facts and leftover placeholder text.
+    $prompt .= "FACTS: Never invent numbers, prices, fees, statistics, member counts, dates, awards or names that are not in the project brief. If a module expects such a value and the brief does not give it, write a short neutral placeholder in square brackets in the target language (e.g. [aantal leden], [prijs]).\n";
+    $prompt .= "PLACEHOLDERS: Every Lorem ipsum / dummy / example text must be replaced. Do not return any Latin placeholder text.\n";
     $prompt .= "CRITICAL: Preserve the EXACT JSON structure. Keep all keys (section_0, module IDs, setting names) exactly as they are. Only replace the text VALUES — do not add, remove, or rename any keys.\n";
     $prompt .= "Return ONLY the JSON with updated 'settings' values.";
     $prompt .= "\n\nTarget JSON:\n" . wp_json_encode($to_translate);
@@ -193,6 +196,34 @@ class AISB_Wireframes_AI {
         return $model;
     }
     error_log('[AISB] OpenAI returned ' . count($translated) . ' translated section(s)');
+    // Archer: second pass for modules the model skipped or left as placeholder text.
+    $archer_placeholder_re = '/lorem|ipsum|dolor sit|duis aute|consectetur adipiscing|\bbuy now\b|\bposition\b|adam smith|job title/i';
+    $archer_retry = [];
+    foreach ($to_translate as $archer_sk => $archer_sec) {
+        foreach (($archer_sec['modules'] ?? []) as $archer_mid => $archer_mod) {
+            $archer_got = $translated[$archer_sk]['modules'][$archer_mid]['settings'] ?? null;
+            $archer_check = wp_json_encode($archer_got === null ? $archer_mod['settings'] : $archer_got);
+            if ($archer_got === null || preg_match($archer_placeholder_re, (string) $archer_check)) {
+                $archer_retry[$archer_sk]['purpose'] = $archer_sec['purpose'] ?? 'content';
+                $archer_retry[$archer_sk]['modules'][$archer_mid] = $archer_mod;
+            }
+        }
+    }
+    if (!empty($archer_retry)) {
+        $archer_prompt = preg_replace('/Target JSON:\n.*$/s', '', $prompt)
+            . "These modules still contain placeholder or untranslated text. Replace EVERY value, keep the structure.\n\nTarget JSON:\n"
+            . wp_json_encode($archer_retry);
+        $archer_res = $openai->call_openai_chat_completions($archer_prompt, $settings, "Return valid JSON only. No markdown. No explanation.");
+        $archer_t2 = is_wp_error($archer_res) ? null : json_decode($this->clean_json_response($archer_res), true);
+        if (is_array($archer_t2)) {
+            foreach ($archer_t2 as $archer_sk => $archer_sec) {
+                foreach (($archer_sec['modules'] ?? []) as $archer_mid => $archer_mod) {
+                    $translated[$archer_sk]['modules'][$archer_mid] = $archer_mod;
+                }
+            }
+        }
+        error_log('[AISB] Archer placeholder retry pass for ' . count($archer_retry) . ' section(s)');
+    }
     // Log hero section from OpenAI response
     if (isset($translated['section_1'])) {
         error_log('[AISB] DEBUG OpenAI section_1 response: ' . wp_json_encode($translated['section_1']));
