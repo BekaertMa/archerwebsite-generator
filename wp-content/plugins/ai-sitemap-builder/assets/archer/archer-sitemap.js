@@ -967,7 +967,7 @@
           collection: p.archer_collection || 0,
         };
       };
-      // Home apart (die is het langst), de rest per twee, broers en zussen samen.
+      // Vier pagina's per vraag (de server schrijft ze tegelijk), home eerst, broers en zussen samen.
       const ordered = slugs.slice().sort((a, b) => {
         const pa = (state.bySlug[a] || {}).parent_slug || "";
         const pb = (state.bySlug[b] || {}).parent_slug || "";
@@ -976,9 +976,8 @@
       const batches = [];
       let cur = [];
       ordered.forEach((slug) => {
-        if (slug === "home") { batches.push([slug]); return; }
         cur.push(slug);
-        if (cur.length === 2) { batches.push(cur); cur = []; }
+        if (cur.length === 4) { batches.push(cur); cur = []; }
       });
       if (cur.length) batches.push(cur);
 
@@ -1034,7 +1033,7 @@
         scheduleRender();
         saver.run();
       };
-      // Zes vragen tegelijk.
+      // Vier vragen tegelijk: tot zestien pagina's worden tegelijk geschreven.
       let next = 0;
       const worker = async () => {
         while (next < batches.length) {
@@ -1043,7 +1042,7 @@
         }
       };
       setProgress(count(), (state.pages || []).length);
-      await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+      await Promise.all([worker(), worker(), worker(), worker()]);
       render();
       await saver.flush();
     };
