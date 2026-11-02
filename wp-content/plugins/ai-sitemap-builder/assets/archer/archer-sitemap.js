@@ -157,7 +157,7 @@
     let pan = null;
     vp.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
-      if (e.target.closest(".archer-page-card, .archer-add-page-card, .archer-smap-zoom, .archer-smap-panel, button, a, input, textarea, select, label, form")) return;
+      if (e.target.closest(".archer-page-card, .archer-add-page-card, .archer-smap-zoom, .archer-smap-panel, .archer-smap-progress, button, a, input, textarea, select, label, form")) return;
       pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, id: e.pointerId };
       vp.setPointerCapture(e.pointerId);
       vp.classList.add("is-panning");
@@ -497,7 +497,29 @@
       x: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>',
     };
 
+    const pending = new Set(); // pagina's waarvan de secties nog geschreven worden
+    const failed = new Set();
+
+    const pendingCard = (page) => {
+      const parent = page.parent_slug && page.parent_slug !== "home" ? state.bySlug[page.parent_slug] : null;
+      const meta = page.slug === "home" ? "Startpagina" : parent ? `Subpagina van ${esc(parent.page_title || parent.slug)}` : "Pagina in het menu";
+      return `<article class="archer-page-card is-pending" data-page="${esc(page.slug)}" aria-busy="true">
+          <div class="archer-page-card-head"><div>
+            <h3 class="archer-page-card-title">${esc(page.page_title || page.nav_label || page.slug)}</h3>
+            <div class="archer-page-card-meta">${meta} · secties worden geschreven…</div>
+          </div></div>
+          <ul class="archer-sec-list" aria-hidden="true">
+            <li class="archer-sec archer-sec-skel is-global"><span></span><span></span></li>
+            <li class="archer-sec archer-sec-skel"><span></span><span></span></li>
+            <li class="archer-sec archer-sec-skel"><span></span><span></span></li>
+            <li class="archer-sec archer-sec-skel"><span></span><span></span></li>
+            <li class="archer-sec archer-sec-skel is-global"><span></span><span></span></li>
+          </ul>
+        </article>`;
+    };
+
     const pageCard = (page) => {
+      if (pending.has(page.slug)) return pendingCard(page);
       const slug = page.slug;
       const sections = Array.isArray(page.sections) ? page.sections : [];
       const isHome = slug === "home";
@@ -869,6 +891,237 @@
         return origSetStatus.call(this, h);
       };
     }
+
+    /* ── Snelle generatie (zoals Relume) ──────────────────── */
+
+    const panel1 = document.querySelector('[data-aisb-step-panel="1"]');
+    const shell = document.querySelector(".archer-shell");
+    let genEl = null;
+    const showLoader = (steps) => {
+      if (!genEl) {
+        genEl = document.createElement("div");
+        genEl.className = "archer-gen";
+        genEl.setAttribute("role", "status");
+        genEl.setAttribute("aria-live", "polite");
+        (panel1 || card.parentElement).prepend(genEl);
+      }
+      shell && shell.classList.add("archer-generating");
+      genEl.hidden = false;
+      genEl.innerHTML =
+        '<div class="archer-gen-card"><span class="archer-eyebrow">Sitemap maken</span>' +
+        '<h2 class="archer-h2">We bouwen je sitemap</h2><ol class="archer-gen-steps">' +
+        steps.map((st) => `<li data-gen-step="${st.key}" class="${st.state ? "is-" + st.state : ""}"><span class="archer-gen-dot" aria-hidden="true"></span><span>${esc(st.label)}</span><span class="archer-gen-note">${esc(st.note || "")}</span></li>`).join("") +
+        '</ol><div class="archer-gen-preview" aria-hidden="true">' +
+        '<div class="archer-gen-sk is-home"></div><div class="archer-gen-row">' +
+        '<div class="archer-gen-sk"></div><div class="archer-gen-sk"></div><div class="archer-gen-sk"></div><div class="archer-gen-sk"></div></div></div>' +
+        '<div class="archer-gen-error" data-gen-error hidden></div></div>';
+    };
+    const hideLoader = () => {
+      if (genEl) genEl.hidden = true;
+      shell && shell.classList.remove("archer-generating");
+    };
+
+    // Voortgang bovenaan het canvas.
+    const progress = document.createElement("div");
+    progress.className = "archer-smap-progress";
+    progress.hidden = true;
+    vp.appendChild(progress);
+    const setProgress = (done, total) => {
+      const left = total - done;
+      if (!total) { progress.hidden = true; return; }
+      progress.hidden = false;
+      const pct = Math.round((done / total) * 100);
+      progress.innerHTML =
+        (left > 0
+          ? `<span class="archer-smap-spinner" aria-hidden="true"></span><span>Secties schrijven · <strong>${done}</strong> van ${total} pagina's</span>`
+          : failed.size
+            ? `<span>${total - failed.size} van ${total} pagina's klaar. ${failed.size} mislukt.</span><button type="button" class="archer-link-btn" data-gen-retry>Opnieuw proberen</button>`
+            : `<span>Klaar: ${total} pagina's met secties.</span>`) +
+        `<span class="archer-smap-bar"><span style="width:${pct}%"></span></span>`;
+      if (left === 0 && !failed.size) setTimeout(() => { if (!pending.size) progress.hidden = true; }, 4000);
+    };
+
+    let renderTimer = null;
+    const scheduleRender = () => {
+      if (renderTimer) return;
+      renderTimer = setTimeout(() => {
+        renderTimer = null;
+        render();
+      }, 120);
+    };
+
+    const runSections = async (slugs) => {
+      const all = state.pages || [];
+      const titleOf = (slug) => (state.bySlug[slug] && (state.bySlug[slug].page_title || slug)) || slug;
+      const outline = all.map((p) => ({ title: p.page_title || p.slug, slug: p.slug, parent: p.parent_slug ? titleOf(p.parent_slug) : "" }));
+      const site = { name: (state.data && state.data.website_name) || "", goal: (state.data && state.data.website_goal) || "" };
+      const reqOf = (slug) => {
+        const p = state.bySlug[slug] || {};
+        return {
+          slug,
+          title: p.page_title || slug,
+          page_type: p.page_type || "Other",
+          parent: p.parent_slug && p.parent_slug !== "home" ? titleOf(p.parent_slug) : "",
+          purpose: p.page_purpose || "",
+          children: all.filter((c) => c.parent_slug === slug).map((c) => c.page_title || c.slug),
+          collection: p.archer_collection || 0,
+        };
+      };
+      // Home apart (die is het langst), de rest per twee, broers en zussen samen.
+      const ordered = slugs.slice().sort((a, b) => {
+        const pa = (state.bySlug[a] || {}).parent_slug || "";
+        const pb = (state.bySlug[b] || {}).parent_slug || "";
+        return (a === "home" ? -1 : b === "home" ? 1 : 0) || pa.localeCompare(pb);
+      });
+      const batches = [];
+      let cur = [];
+      ordered.forEach((slug) => {
+        if (slug === "home") { batches.push([slug]); return; }
+        cur.push(slug);
+        if (cur.length === 2) { batches.push(cur); cur = []; }
+      });
+      if (cur.length) batches.push(cur);
+
+      const count = () => (state.pages || []).length - pending.size;
+      const apply = (slug, r) => {
+        const page = state.bySlug[slug];
+        if (!page) return;
+        page.sections = Array.isArray(r.sections) && r.sections.length ? r.sections : page.sections || [];
+        if (r.page_purpose && !page.page_purpose) page.page_purpose = r.page_purpose;
+        const seo = page.seo || {};
+        Object.keys(r.seo || {}).forEach((k) => {
+          const v = r.seo[k];
+          if (Array.isArray(v) ? v.length : v) seo[k] = v;
+        });
+        page.seo = seo;
+        syncPage(slug);
+        pending.delete(slug);
+        failed.delete(slug);
+      };
+      const fallback = (slug) => {
+        const page = state.bySlug[slug];
+        if (page && (!Array.isArray(page.sections) || !page.sections.length)) {
+          page.sections = [
+            { section_name: "Navigatie", section_type: "Headers", purpose: "", key_content: [] },
+            { section_name: "Inhoud", section_type: "Content Sections", purpose: "", key_content: [] },
+            { section_name: "Footer", section_type: "Footers", purpose: "", key_content: [] },
+          ];
+          syncPage(slug);
+        }
+        pending.delete(slug);
+        failed.add(slug);
+      };
+      const callBatch = async (batch, attempt) => {
+        try {
+          const out = await UI.post("aisb_archer_sections", {
+            project_id: state.projectId,
+            pages: JSON.stringify(batch.map(reqOf)),
+            outline: JSON.stringify(outline),
+            site: JSON.stringify(site),
+          });
+          const pages = (out && out.pages) || {};
+          const missing = [];
+          batch.forEach((slug) => (pages[slug] ? apply(slug, pages[slug]) : missing.push(slug)));
+          if (missing.length) {
+            if (attempt < 1) return callBatch(missing, attempt + 1);
+            missing.forEach(fallback);
+          }
+        } catch (e) {
+          if (attempt < 1) return callBatch(batch, attempt + 1);
+          batch.forEach(fallback);
+        }
+        setProgress(count(), (state.pages || []).length);
+        scheduleRender();
+        saver.run();
+      };
+      // Zes vragen tegelijk.
+      let next = 0;
+      const worker = async () => {
+        while (next < batches.length) {
+          const b = batches[next++];
+          await callBatch(b, 0);
+        }
+      };
+      setProgress(count(), (state.pages || []).length);
+      await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+      render();
+      await saver.flush();
+    };
+
+    progress.addEventListener("click", (e) => {
+      if (!e.target.closest("[data-gen-retry]") || !failed.size) return;
+      const slugs = Array.from(failed);
+      slugs.forEach((s) => {
+        const p = state.bySlug[s];
+        if (p) { p.sections = []; syncPage(s); }
+        pending.add(s);
+      });
+      failed.clear();
+      render();
+      runSections(slugs);
+    });
+
+    /**
+     * Maakt een sitemap in twee stappen: eerst de structuur (meteen zichtbaar op het canvas),
+     * dan de secties per pagina, parallel.
+     */
+    UI.fastGenerate = async (opts) => {
+      const isUrl = opts.mode === "url";
+      const steps = [
+        ...(isUrl ? [{ key: "read", label: "Huidige website lezen", state: "active" }] : []),
+        { key: "plan", label: isUrl ? "Paginastructuur overnemen" : "Paginastructuur bedenken", state: isUrl ? "" : "active" },
+        { key: "sections", label: "Secties per pagina schrijven", state: "" },
+      ];
+      const mark = (key, st, note) => {
+        const s = steps.find((x) => x.key === key);
+        if (s) { s.state = st; if (note !== undefined) s.note = note; }
+        showLoader(steps);
+      };
+      const fail = (msg) => {
+        const el = genEl && genEl.querySelector("[data-gen-error]");
+        if (el) {
+          el.hidden = false;
+          el.innerHTML = esc(msg) + ' <button type="button" class="archer-link-btn" data-gen-back>Terug</button>';
+          el.querySelector("[data-gen-back]").addEventListener("click", hideLoader);
+        }
+      };
+      showLoader(steps);
+      try {
+        let brief = null;
+        if (isUrl) {
+          brief = await UI.post("aisb_archer_site_brief", { url: opts.url });
+          mark("read", "done", (brief.pages || []).length + 1 + " pagina's gevonden");
+          mark("plan", "active");
+        }
+        const plan = await UI.post("aisb_archer_plan", {
+          mode: opts.mode,
+          url: isUrl ? brief.url : "",
+          prompt: opts.prompt || "",
+          languages: JSON.stringify(opts.languages || ["Dutch"]),
+          page_count: opts.pageCount || "5-10",
+          project_id: state.projectId || "",
+        });
+        mark("plan", "done", plan.data.sitemap.length + " pagina's");
+        mark("sections", "active");
+
+        // Canvas tonen met alle pagina's; de secties volgen.
+        state.projectId = plan.project_id;
+        state.sitemapId = plan.sitemap_id;
+        state.version = plan.version;
+        state.structureOnly = false;
+        plan.data.sitemap.forEach((p) => pending.add(app.normalizeSlug ? app.normalizeSlug(p.slug) : p.slug));
+        app.updateWireframesLinks && app.updateWireframesLinks();
+        view.fitted = false;
+        app.renderAll(plan.data);
+        hideLoader();
+        app.setStatus && app.setStatus("");
+        await runSections(Array.from(pending));
+        app.setStatus && app.setStatus('<div class="aisb-ok">Klaar: de sitemap staat. Klik op een sectie of pagina om ze aan te passen.</div>');
+      } catch (e) {
+        fail(e.message || "Er ging iets mis.");
+        throw e;
+      }
+    };
 
     // Als de sitemap al geladen was voor dit script draaide.
     if (state.data) render();

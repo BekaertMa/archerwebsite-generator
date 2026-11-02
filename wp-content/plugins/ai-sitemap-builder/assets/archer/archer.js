@@ -232,64 +232,43 @@
       app.btnGen.textContent = loading ? "Bezig met de sitemap… dit kan enkele minuten duren" : btnLabel;
     };
 
-    // Modus "bestaande website": eerst de site lezen, dan de gewone generatie.
+    // Genereren: eerst de structuur (meteen op het canvas), dan de secties per pagina, parallel.
     if (app.btnGen) {
       app.btnGen.addEventListener(
         "click",
         async (e) => {
-          if (mode !== "url") return;
+          if (typeof UI.fastGenerate !== "function") return; // terugval: de gewone generatie
           e.preventDefault();
           e.stopImmediatePropagation();
-          const urlEl = $("#archer-site-url");
-          const extraEl = $("#archer-site-extra");
-          const url = (urlEl.value || "").trim();
-          if (url.length < 4) {
-            app.setStatus('<div class="aisb-error">Vul het adres van de huidige website in.</div>');
-            urlEl.focus();
-            return;
-          }
-          app.setLoading(true);
-          app.setStatus("We lezen de huidige website…");
-          try {
-            const data = await UI.post("aisb_archer_site_brief", { url });
-            const extra = (extraEl.value || "").trim();
-            const pages = Array.isArray(data.pages) ? data.pages : [];
-            const titleOf = {};
-            pages.forEach((p) => (titleOf[p.slug] = p.title));
-            let tree = "";
-            if (pages.length) {
-              tree =
-                "\nBESTAANDE SITEMAP (neem alle " + (pages.length + 1) + " pagina's over, met dezelfde structuur):\n" +
-                "- Home (slug: home)\n" +
-                pages
-                  .map((p) => "- " + p.title + " (slug: " + p.slug + (p.parent_slug && p.parent_slug !== "home" ? ", onder: " + (titleOf[p.parent_slug] || p.parent_slug) : "") + ")")
-                  .join("\n") +
-                "\n";
-              (data.collapsed || []).forEach((c) => {
-                tree += "Onder " + (titleOf[c.slug] || c.path) + " staan " + c.items + " losse items (bv. producten of berichten): maak daarvoor één detailpagina als sjabloon.\n";
-              });
-              // Paginakeuze volgt de bestaande site.
-              const total = pages.length + 1;
-              const pc = $("#aisb-pagecount");
-              if (pc) pc.value = total <= 5 ? "2-5" : total <= 10 ? "5-10" : total <= 15 ? "10-15" : "15+";
+          const languages = [($("#aisb-languages") || {}).value || "Dutch"];
+          const pageCount = ($("#aisb-pagecount") || {}).value || "5-10";
+          let opts;
+          if (mode === "url") {
+            const urlEl = $("#archer-site-url");
+            const url = (urlEl.value || "").trim();
+            if (url.length < 4) {
+              app.setStatus('<div class="aisb-error">Vul het adres van de huidige website in.</div>');
+              urlEl.focus();
+              return;
             }
-            const head =
-              "Maak een nieuwe, betere versie van de bestaande website " + data.url + ". " +
-              "Gebruik de eigen diensten, teksten en contactgegevens hieronder als bron en verzin geen feiten bij.\n" +
-              (extra ? "Wensen van de klant: " + extra + "\n" : "") +
-              tree +
-              "\n";
-            // De server aanvaardt maximaal 10.000 bytes: de lopende tekst wordt ingekort, de sitemap niet.
-            const bytes = (t) => new TextEncoder().encode(t).length;
-            let text = data.text || "";
-            while (text && bytes(head + text) > 9800) text = text.slice(0, Math.max(0, text.length - 400));
-            app.promptEl.value = head + text;
-            app.promptEl.dispatchEvent(new Event("input"));
-            app.setLoading(false);
-            await app.doGenerate();
+            opts = { mode: "url", url, prompt: (($("#archer-site-extra") || {}).value || "").trim(), languages, pageCount };
+          } else {
+            const prompt = (app.promptEl.value || "").trim();
+            if (prompt.length < 10) {
+              app.setStatus('<div class="aisb-error">Beschrijf de zaak in een paar zinnen: wat ze doet, voor wie en in welke regio.</div>');
+              app.promptEl.focus();
+              return;
+            }
+            opts = { mode: "desc", prompt, languages, pageCount };
+          }
+          app.setStatus("");
+          app.btnGen.disabled = true;
+          try {
+            await UI.fastGenerate(opts);
           } catch (err) {
-            app.setLoading(false);
-            app.setStatus('<div class="aisb-error">' + esc(err.message) + "</div>");
+            console.error("[Archer] generatie", err);
+          } finally {
+            app.btnGen.disabled = false;
           }
         },
         true,
