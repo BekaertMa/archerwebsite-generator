@@ -253,13 +253,37 @@
           try {
             const data = await UI.post("aisb_archer_site_brief", { url });
             const extra = (extraEl.value || "").trim();
-            const prompt =
-              "Maak een nieuwe, betere versie van de bestaande website van deze zaak. " +
+            const pages = Array.isArray(data.pages) ? data.pages : [];
+            const titleOf = {};
+            pages.forEach((p) => (titleOf[p.slug] = p.title));
+            let tree = "";
+            if (pages.length) {
+              tree =
+                "\nBESTAANDE SITEMAP (neem alle " + (pages.length + 1) + " pagina's over, met dezelfde structuur):\n" +
+                "- Home (slug: home)\n" +
+                pages
+                  .map((p) => "- " + p.title + " (slug: " + p.slug + (p.parent_slug && p.parent_slug !== "home" ? ", onder: " + (titleOf[p.parent_slug] || p.parent_slug) : "") + ")")
+                  .join("\n") +
+                "\n";
+              (data.collapsed || []).forEach((c) => {
+                tree += "Onder " + (titleOf[c.slug] || c.path) + " staan " + c.items + " losse items (bv. producten of berichten): maak daarvoor één detailpagina als sjabloon.\n";
+              });
+              // Paginakeuze volgt de bestaande site.
+              const total = pages.length + 1;
+              const pc = $("#aisb-pagecount");
+              if (pc) pc.value = total <= 5 ? "2-5" : total <= 10 ? "5-10" : total <= 15 ? "10-15" : "15+";
+            }
+            const head =
+              "Maak een nieuwe, betere versie van de bestaande website " + data.url + ". " +
               "Gebruik de eigen diensten, teksten en contactgegevens hieronder als bron en verzin geen feiten bij.\n" +
               (extra ? "Wensen van de klant: " + extra + "\n" : "") +
-              "\n" +
-              data.text;
-            app.promptEl.value = prompt.slice(0, 10000);
+              tree +
+              "\n";
+            // De server aanvaardt maximaal 10.000 bytes: de lopende tekst wordt ingekort, de sitemap niet.
+            const bytes = (t) => new TextEncoder().encode(t).length;
+            let text = data.text || "";
+            while (text && bytes(head + text) > 9800) text = text.slice(0, Math.max(0, text.length - 400));
+            app.promptEl.value = head + text;
             app.promptEl.dispatchEvent(new Event("input"));
             app.setLoading(false);
             await app.doGenerate();
@@ -374,44 +398,98 @@
       }
     });
 
+    /* Volgorde: header altijd eerst, footer altijd laatst. */
+    const isHead = (s) => /^(header|headers|navbar|nav|navigation|megamenu)/i.test((s && (s.type || s.section_type)) || "");
+    const isFoot = (s) => /^(footer|footers)/i.test((s && (s.type || s.section_type)) || "");
+    const isFixed = (s) => isHead(s) || isFoot(s);
+    /** Zet de secties in de juiste volgorde (in place). Geeft true als er iets veranderde. */
+    function normalizeOrder(model) {
+      const list = model && Array.isArray(model.sections) ? model.sections : null;
+      if (!list || list.length < 2) return false;
+      const before = list.map((s) => s.uuid).join("|");
+      const head = list.filter(isHead);
+      const foot = list.filter(isFoot);
+      const mid = list.filter((s) => !isFixed(s));
+      const next = head.concat(mid, foot);
+      list.splice(0, list.length, ...next);
+      return next.map((s) => s.uuid).join("|") !== before;
+    }
+    UI.normalizeWireframeOrder = normalizeOrder;
+
     // Labels per sectie in de werkbalk, in gewone taal.
+    const typeLabelOf = (s) => {
+      const type = (s.type || s.section_type || "sectie").toString();
+      const t = labels[type] || WF_TYPES[type.toLowerCase()] || type.replace(/[_-]+/g, " ");
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    };
+    const nameOf = (s) => (s.title || s.section_name || s.name || "").toString();
+
     function labelSections() {
       const sections = wf.state.model?.sections || [];
+      const movable = sections.map((s, i) => (isFixed(s) ? -1 : i)).filter((i) => i >= 0);
+      const firstM = movable[0];
+      const lastM = movable[movable.length - 1];
       $$(".aisb-wf-section", wf.el.sections).forEach((card, idx) => {
         const s = sections[idx];
         const bar = $(".aisb-wf-section-toolbar", card);
-        if (!s || !bar || $(".archer-wf-sec-label", bar)) return;
-        const type = (s.type || s.section_type || "sectie").toString();
-        const typeLabel = labels[type] || WF_TYPES[type.toLowerCase()] || type.replace(/[_-]+/g, " ");
-        const name = (s.title || s.section_name || s.name || "").toString();
+        if (!s || !bar) return;
+        // Header en footer staan vast; de andere secties blijven ertussen.
+        const up = $('[data-act="up"]', bar);
+        const down = $('[data-act="down"]', bar);
+        if (up) up.disabled = isFixed(s) || idx === firstM;
+        if (down) down.disabled = isFixed(s) || idx === lastM;
+        card.classList.toggle("archer-is-fixed", isFixed(s));
+        if ($(".archer-wf-sec-label", bar)) return;
+        const typeLabel = typeLabelOf(s);
+        const name = nameOf(s);
         const lbl = document.createElement("div");
         lbl.className = "archer-wf-sec-label";
         lbl.innerHTML =
-          `<strong>${esc(name || typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1))}</strong>` +
-          `<span>${esc(name ? typeLabel : "")}${s.locked ? (name ? " · " : "") + "vastgezet" : ""}</span>`;
+          `<strong>${esc(name || typeLabel)}</strong>` +
+          `<span>${esc(name ? typeLabel : "")}${isHead(s) ? " · altijd bovenaan" : isFoot(s) ? " · altijd onderaan" : ""}${s.locked ? " · vastgezet" : ""}</span>`;
         bar.prepend(lbl);
         const lock = $('[data-act="lock"]', bar);
         if (lock) lock.textContent = s.locked ? "Losmaken" : "Vastzetten";
       });
     }
 
-    // Autosave van het paginamodel na elke wijziging.
+    // Autosave: elke pagina die veranderde, wordt bewaard (ook vanop het canvas).
     const lastSaved = {};
+    const dirty = new Set();
+    const modelOf = (slug) =>
+      slug === wf.state.pageSlug && wf.state.model ? wf.state.model : wf.state.pageModels[slug];
     const saver = UI.debouncedSaver(async () => {
-      const slug = wf.state.pageSlug;
-      const model = wf.state.model;
-      if (!slug || !model || !model.sections) return;
-      const json = JSON.stringify(model);
-      if (lastSaved[slug] === json) return;
-      const out = await wf.post("aisb_update_wireframe_page", {
-        project_id: wf.state.projectId,
-        sitemap_version_id: wf.state.sitemapId,
-        page_slug: slug,
-        model_json: json,
-      });
-      if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Bewaren mislukt");
-      lastSaved[slug] = json;
+      const slugs = Array.from(dirty);
+      dirty.clear();
+      for (const slug of slugs) {
+        const model = modelOf(slug);
+        if (!model || !Array.isArray(model.sections)) continue;
+        const json = JSON.stringify(model);
+        if (lastSaved[slug] === json) continue;
+        let out;
+        try {
+          out = await wf.post("aisb_update_wireframe_page", {
+            project_id: wf.state.projectId,
+            sitemap_version_id: wf.state.sitemapId,
+            page_slug: slug,
+            model_json: json,
+          });
+        } catch (e) {
+          dirty.add(slug);
+          throw e;
+        }
+        if (!out || !out.success) {
+          dirty.add(slug);
+          throw new Error((out && out.data && out.data.message) || "Bewaren mislukt");
+        }
+        lastSaved[slug] = json;
+      }
     }, 900);
+    const markDirty = (slug) => {
+      if (!slug) return;
+      dirty.add(slug);
+      saver.run();
+    };
     const flushWf = () => saver.flush();
 
     const anyGenerated = () =>
@@ -438,47 +516,469 @@
 
     const origRenderSections = wf.renderSections;
     wf.renderSections = function () {
+      const slug = wf.state.pageSlug;
+      if (wf.state.model) {
+        normalizeOrder(wf.state.model);
+        if (slug) wf.state.pageModels[slug] = wf.state.model;
+      }
       const r = origRenderSections.apply(this, arguments);
       if (!(wf.state.model?.sections || []).length) emptyState();
       if (wf.btn.generateAll) wf.btn.generateAll.textContent = anyGenerated() ? "Alle pagina's opnieuw maken" : "Maak alle pagina's";
       labelSections();
-      const slug = wf.state.pageSlug;
       const json = wf.state.model ? JSON.stringify(wf.state.model) : "";
       if (slug && json) {
         if (lastSaved[slug] === undefined) lastSaved[slug] = json; // eerste weergave: niets te bewaren
-        else if (lastSaved[slug] !== json) saver.run();
+        else if (lastSaved[slug] !== json) markDirty(slug);
       }
       renderTabs();
       renderPager();
       return r;
     };
 
-    // init.js start het laden al voor deze wrappers bestaan. De eerste whiteboard-render
-    // komt pas als alle paginamodellen binnen zijn: dan nemen we het over.
-    let autoOpened = false;
-    const origWhiteboard = wf.renderWhiteboard;
+    /* ── Canvas: alle pagina's naast elkaar, zoals Relume ──────────── */
+
+    const wb = wf.el.whiteboard;
+    const inner = wf.el.canvasInner;
+    const COL_BODY = 336; // breedte van een sectievoorbeeld op het canvas
+    const PREVIEW = (window.AISB_WF && AISB_WF.previewUrl) || "";
+    let parentOf = null; // slug => ouderslug, uit de sitemap
+    let firstCanvas = true;
+    let canvasStale = false;
+
+    // Ouders uit de sitemap, voor de volgorde en de kruimel boven elke kolom.
+    if (typeof wf.postCore === "function" && wf.state.sitemapId) {
+      wf.postCore("aisb_get_sitemap_by_id", { sitemap_id: wf.state.sitemapId })
+        .then((out) => {
+          const data = (out && out.data && (out.data.data || out.data)) || {};
+          const list = Array.isArray(data.sitemap) ? data.sitemap : [];
+          parentOf = {};
+          list.forEach((p) => {
+            const slug = (p.slug || "").toString().replace(/^\//, "");
+            if (slug) parentOf[slug] = (p.parent_slug || "").toString().replace(/^\//, "");
+          });
+          if (wf.state.pages.length && !isOpen()) wf.renderWhiteboard();
+        })
+        .catch(() => {});
+    }
+
+    /** Boomvolgorde: home, dan elke hoofdpagina gevolgd door haar subpagina's. */
+    function treeOrder() {
+      const pages = wf.state.pages;
+      if (!parentOf) return pages.slice();
+      const known = new Set(pages.map((p) => p.slug));
+      const kids = {};
+      pages.forEach((p) => {
+        let par = parentOf[p.slug] || "";
+        if (p.slug === "home") par = "";
+        else if (!par || !known.has(par) || par === p.slug) par = "home";
+        (kids[par] = kids[par] || []).push(p);
+      });
+      const out = [];
+      const seen = new Set();
+      const walk = (slug) => {
+        (kids[slug] || []).forEach((p) => {
+          if (seen.has(p.slug)) return;
+          seen.add(p.slug);
+          out.push(p);
+          walk(p.slug);
+        });
+      };
+      walk("");
+      walk("home");
+      pages.forEach((p) => !seen.has(p.slug) && out.push(p));
+      return out;
+    }
+
+    const depthOf = (slug) => {
+      let d = 0;
+      let cur = parentOf && parentOf[slug];
+      while (cur && cur !== "home" && d < 5) {
+        d++;
+        cur = parentOf[cur];
+      }
+      return d;
+    };
+
+    const sectionKey = (s) => [s.uuid || "", s.ai_wireframe_id || "", s.bricks_template_id || "", s.layout_key || ""].join(":");
+
+    function sectionEl(slug, s) {
+      const el = document.createElement("div");
+      el.className = "archer-cv-sec";
+      el.setAttribute("data-archer-cv-key", sectionKey(s));
+      el.setAttribute("data-archer-cv-uuid", s.uuid || "");
+      const id = s.ai_wireframe_id || s.bricks_template_id;
+      el.innerHTML =
+        '<div class="archer-cv-sec-label"><strong></strong><span></span></div>' +
+        (id
+          ? '<div class="aisb-wf-body archer-cv-body"><div class="aisb-wf-iframe-wrap"></div></div>'
+          : '<div class="archer-cv-placeholder"></div>') +
+        '<div class="archer-cv-tools" role="toolbar">' +
+        '<button type="button" class="archer-cv-tool" data-archer-cv-act="up" title="Naar boven" aria-label="Naar boven">↑</button>' +
+        '<button type="button" class="archer-cv-tool" data-archer-cv-act="down" title="Naar beneden" aria-label="Naar beneden">↓</button>' +
+        '<button type="button" class="archer-cv-tool" data-archer-cv-act="shuffle">Ander voorbeeld</button>' +
+        '<button type="button" class="archer-cv-tool" data-archer-cv-act="lock">Vastzetten</button>' +
+        '<button type="button" class="archer-cv-tool is-danger" data-archer-cv-act="del" title="Verwijderen" aria-label="Verwijderen">✕</button>' +
+        "</div>";
+      if (id) {
+        const iframe = document.createElement("iframe");
+        iframe.src = PREVIEW + id;
+        iframe.className = "aisb-bricks-iframe";
+        iframe.loading = "lazy";
+        iframe.title = typeLabelOf(s) + " (voorbeeld)";
+        iframe.scrolling = "no";
+        iframe.tabIndex = -1;
+        $(".aisb-wf-iframe-wrap", el).appendChild(iframe);
+      } else {
+        $(".archer-cv-placeholder", el).textContent = typeLabelOf(s);
+      }
+      return el;
+    }
+
+    function updateSectionEl(el, s, idx, sections) {
+      const movable = sections.map((x, i) => (isFixed(x) ? -1 : i)).filter((i) => i >= 0);
+      el.style.order = String(idx);
+      el.classList.toggle("is-fixed", isFixed(s));
+      el.classList.toggle("is-locked", !!s.locked);
+      const name = nameOf(s);
+      const type = typeLabelOf(s);
+      $(".archer-cv-sec-label strong", el).textContent = name || type;
+      $(".archer-cv-sec-label span", el).textContent =
+        (name ? type : "") + (isHead(s) ? " · altijd bovenaan" : isFoot(s) ? " · altijd onderaan" : "") + (s.locked ? " · vastgezet" : "");
+      $('[data-archer-cv-act="up"]', el).disabled = isFixed(s) || idx === movable[0];
+      $('[data-archer-cv-act="down"]', el).disabled = isFixed(s) || idx === movable[movable.length - 1];
+      $('[data-archer-cv-act="shuffle"]', el).disabled = !!s.locked || !(s.ai_wireframe_id || s.bricks_template_id);
+      $('[data-archer-cv-act="lock"]', el).textContent = s.locked ? "Losmaken" : "Vastzetten";
+      // Header en footer kan je niet verplaatsen; verwijderen kan wel.
+      const body = $(".archer-cv-body", el);
+      if (body) {
+        const w = body.offsetWidth || COL_BODY;
+        const scale = w / 1200;
+        const wrap = $(".aisb-wf-iframe-wrap", body);
+        wrap.style.setProperty("--exp-scale", scale.toFixed(4));
+        const iframe = $("iframe", wrap);
+        const h = parseInt(iframe && iframe.style.height, 10) || 400;
+        body.style.height = Math.ceil(h * scale) + "px";
+      }
+    }
+
+    function columnSig(p) {
+      const crumb = parentOf && parentOf[p.slug] && parentOf[p.slug] !== "home" ? parentOf[p.slug] : "";
+      return [p.title, crumb].join("|");
+    }
+
+    function renderColumn(col, p, order) {
+      const model = wf.state.pageModels[p.slug];
+      const sections = (model && model.sections) || [];
+      col.style.order = String(order);
+      col.classList.toggle("is-empty", !sections.length);
+      col.classList.toggle("is-child", depthOf(p.slug) > 0);
+      if (col.getAttribute("data-archer-cv-sig") !== columnSig(p)) {
+        col.setAttribute("data-archer-cv-sig", columnSig(p));
+        const parent = parentOf && parentOf[p.slug] && parentOf[p.slug] !== "home" ? wf.state.pages.find((x) => x.slug === parentOf[p.slug]) : null;
+        $(".archer-cv-crumb", col).textContent = parent ? (parent.title || parent.slug) + " ›" : p.slug === "home" ? "Startpagina" : "Hoofdmenu";
+        $(".archer-cv-title", col).textContent = p.title || p.slug;
+        $("[data-archer-cv-open]", col).setAttribute("aria-label", "Pagina " + (p.title || p.slug) + " bewerken");
+      }
+      $(".archer-cv-meta", col).textContent = "/" + (p.slug === "home" ? "" : p.slug) + " · " + (sections.length ? sections.length + " secties" : "nog leeg");
+
+      const list = $(".archer-cv-sections", col);
+      const existing = {};
+      $$(".archer-cv-sec", list).forEach((el) => (existing[el.getAttribute("data-archer-cv-key")] = el));
+      const used = new Set();
+      sections.forEach((s, idx) => {
+        const key = sectionKey(s);
+        let el = existing[key];
+        if (!el || used.has(key)) {
+          el = sectionEl(p.slug, s);
+          list.appendChild(el);
+        }
+        used.add(key);
+        updateSectionEl(el, s, idx, sections);
+      });
+      Object.keys(existing).forEach((k) => !used.has(k) && existing[k].remove());
+
+      const empty = $(".archer-cv-empty", col);
+      empty.hidden = !!sections.length;
+    }
+
+    function columnEl(p) {
+      const col = document.createElement("section");
+      col.className = "aisb-wf-page-card archer-cv-col";
+      col.setAttribute("data-archer-cv-page", p.slug);
+      col.innerHTML =
+        '<header class="archer-cv-head">' +
+        '<div class="archer-cv-head-text"><div class="archer-cv-crumb"></div><h3 class="archer-cv-title"></h3><div class="archer-cv-meta"></div></div>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-cv-open" data-archer-cv-open>Bewerken</button>' +
+        "</header>" +
+        '<div class="archer-cv-sections"></div>' +
+        '<div class="archer-cv-empty" hidden><p>Nog geen wireframe voor deze pagina.</p>' +
+        '<button type="button" class="archer-btn archer-btn-primary" data-archer-cv-gen>Maak wireframe</button></div>';
+      return col;
+    }
+
+    // Zoomknoppen rechtsonder in het canvas.
+    const zoom = document.createElement("div");
+    zoom.className = "archer-cv-zoom";
+    zoom.innerHTML =
+      '<button type="button" data-archer-zoom="out" aria-label="Uitzoomen">−</button>' +
+      '<span data-archer-zoom-level>100%</span>' +
+      '<button type="button" data-archer-zoom="in" aria-label="Inzoomen">+</button>' +
+      '<button type="button" data-archer-zoom="fit">Passend</button>';
+    wb.appendChild(zoom);
+    zoom.addEventListener("mousedown", (e) => e.stopPropagation());
+    const zoomLevel = $("[data-archer-zoom-level]", zoom);
+    const showZoom = () => (zoomLevel.textContent = Math.round(wf.canvas.scale * 100) + "%");
+    const origApply = wf.applyCanvasTransform;
+    if (origApply) {
+      wf.applyCanvasTransform = function () {
+        const r = origApply.apply(this, arguments);
+        showZoom();
+        return r;
+      };
+    }
+    // Ctrl + scroll zoomt via canvas.js; het percentage volgt mee.
+    wb.addEventListener("wheel", () => requestAnimationFrame(showZoom), { passive: true });
+    const setTransform = () => {
+      inner.style.transform = `translate(${wf.canvas.tx}px, ${wf.canvas.ty}px) scale(${wf.canvas.scale})`;
+      showZoom();
+    };
+    const zoomBy = (factor) => {
+      const rect = wb.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = Math.min(rect.height / 2, 200);
+      const prev = wf.canvas.scale;
+      const next = Math.max(0.2, Math.min(1.5, prev * factor));
+      const wx = (cx - wf.canvas.tx) / prev;
+      const wy = (cy - wf.canvas.ty) / prev;
+      wf.canvas.scale = next;
+      wf.canvas.tx = cx - wx * next;
+      wf.canvas.ty = cy - wy * next;
+      setTransform();
+    };
+    zoom.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-archer-zoom]");
+      if (!b) return;
+      const z = b.getAttribute("data-archer-zoom");
+      if (z === "in") zoomBy(1.2);
+      else if (z === "out") zoomBy(1 / 1.2);
+      else wf.fitToView();
+    });
+
+    // Passend: zo veel mogelijk kolommen in de breedte, bovenaan beginnen.
+    let fitPending = false;
+    wf.fitToView = function () {
+      const rect = wb.getBoundingClientRect();
+      const cols = $$(".archer-cv-col", inner);
+      if (!cols.length) return;
+      if (!rect.width || inner.style.display === "none") {
+        fitPending = true; // canvas verborgen: passend maken zodra het weer zichtbaar is
+        return;
+      }
+      fitPending = false;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      cols.forEach((c) => {
+        minX = Math.min(minX, c.offsetLeft);
+        maxX = Math.max(maxX, c.offsetLeft + c.offsetWidth);
+      });
+      const pad = 24;
+      const w = maxX - minX;
+      const scale = Math.max(0.35, Math.min(1, (rect.width - pad * 2) / w));
+      wf.canvas.scale = scale;
+      wf.canvas.tx = w * scale < rect.width ? (rect.width - w * scale) / 2 - minX * scale : pad - minX * scale;
+      wf.canvas.ty = pad - (cols[0].offsetTop - 0) * scale + 8;
+      setTransform();
+    };
+
+    // Slepen op een kolom verschuift ook het canvas (behalve op knoppen).
+    let dragMoved = false;
+    let downAt = null;
+    wb.addEventListener("mousedown", (e) => {
+      downAt = { x: e.clientX, y: e.clientY };
+      dragMoved = false;
+      if (!e.target.closest(".archer-cv-col") || e.target.closest("button, a, input, select")) return;
+      wf.isPanning = true;
+      wf.panStart = { x: e.clientX, y: e.clientY, tx: wf.canvas.tx, ty: wf.canvas.ty };
+      wb.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (downAt && Math.abs(e.clientX - downAt.x) + Math.abs(e.clientY - downAt.y) > 4) dragMoved = true;
+    });
+    window.addEventListener("mouseup", () => (downAt = null));
+
     wf.renderWhiteboard = function () {
-      const r = origWhiteboard.apply(this, arguments);
-      if (!autoOpened && wf.state.pages && wf.state.pages.length) {
-        autoOpened = true;
-        // Modellen die al op de server staan, gelden als bewaard.
+      if (!inner) return;
+      const pages = wf.state.pages || [];
+      if (firstCanvas && pages.length) {
+        // Modellen die al op de server staan, gelden als bewaard; daarna de volgorde rechtzetten.
         Object.keys(wf.state.pageModels || {}).forEach((slug) => {
           lastSaved[slug] = JSON.stringify(wf.state.pageModels[slug]);
+          if (normalizeOrder(wf.state.pageModels[slug])) markDirty(slug);
         });
-        if (!isOpen()) {
-          const first =
-            wf.state.pages.find((p) => wf.state.pageModels[p.slug]?.sections?.length) || wf.state.pages[0];
-          if (first) setTimeout(() => wf.openExpandedPage(first.slug), 0);
-        }
+      } else {
+        Object.keys(wf.state.pageModels || {}).forEach((slug) => {
+          if (normalizeOrder(wf.state.pageModels[slug])) markDirty(slug);
+        });
       }
       renderTabs();
       renderPager();
-      return r;
+      // Met een open pagina is het canvas verborgen: pas tekenen bij terugkeren.
+      if (isOpen()) {
+        canvasStale = true;
+        return;
+      }
+      canvasStale = false;
+      const ordered = treeOrder();
+      const cols = {};
+      $$(".archer-cv-col", inner).forEach((c) => (cols[c.getAttribute("data-archer-cv-page")] = c));
+      // Andere inhoud (de oude paginakaarten) eruit.
+      Array.from(inner.children).forEach((c) => !c.classList.contains("archer-cv-col") && c.remove());
+      const keep = new Set();
+      ordered.forEach((p, i) => {
+        let col = cols[p.slug];
+        if (!col) {
+          col = columnEl(p);
+          inner.appendChild(col);
+        }
+        keep.add(p.slug);
+        renderColumn(col, p, i);
+      });
+      Object.keys(cols).forEach((slug) => !keep.has(slug) && cols[slug].remove());
+      if (firstCanvas && pages.length) {
+        firstCanvas = false;
+        fitPending = true;
+      }
+      // setTimeout in plaats van requestAnimationFrame: werkt ook in een achtergrondtab.
+      if (fitPending) setTimeout(() => wf.fitToView(), 60);
     };
+    const origHideLoader = wf.hideCanvasLoader;
+    if (origHideLoader) {
+      wf.hideCanvasLoader = function () {
+        const r = origHideLoader.apply(this, arguments);
+        if (fitPending) setTimeout(() => wf.fitToView(), 60);
+        return r;
+      };
+    }
+
+    // Een kolom opnieuw tekenen na een actie op het canvas.
+    const redrawPage = (slug) => {
+      const p = wf.state.pages.find((x) => x.slug === slug);
+      const col = $(`.archer-cv-col[data-archer-cv-page="${CSS.escape(slug)}"]`, inner);
+      if (p && col) renderColumn(col, p, Number(col.style.order) || 0);
+      renderTabs();
+    };
+
+    let undo = null;
+    const status = (html) => {
+      if (wf.el.status) wf.el.status.innerHTML = html;
+    };
+
+    inner.addEventListener("click", async (e) => {
+      if (dragMoved) return;
+      const col = e.target.closest(".archer-cv-col");
+      if (!col) return;
+      e.stopPropagation();
+      const slug = col.getAttribute("data-archer-cv-page");
+
+      if (e.target.closest("[data-archer-cv-open]")) {
+        await flushWf();
+        wf.openExpandedPage(slug);
+        return;
+      }
+      if (e.target.closest("[data-archer-cv-gen]")) {
+        await flushWf();
+        wf.state.pageSlug = slug;
+        wf.state.model = wf.state.pageModels[slug] || { sections: [] };
+        wf.btn.generate && wf.btn.generate.click();
+        return;
+      }
+      const btn = e.target.closest("[data-archer-cv-act]");
+      if (!btn || btn.disabled) return;
+      const secEl = btn.closest(".archer-cv-sec");
+      const uuid = secEl && secEl.getAttribute("data-archer-cv-uuid");
+      const model = modelOf(slug);
+      if (!model || !Array.isArray(model.sections)) return;
+      const list = model.sections;
+      const idx = list.findIndex((s) => s.uuid === uuid);
+      if (idx < 0) return;
+      const act = btn.getAttribute("data-archer-cv-act");
+
+      if (act === "up" || act === "down") {
+        const step = act === "up" ? -1 : 1;
+        const to = idx + step;
+        if (!list[to] || isFixed(list[to]) || isFixed(list[idx])) return;
+        [list[idx], list[to]] = [list[to], list[idx]];
+      } else if (act === "lock") {
+        list[idx].locked = !list[idx].locked;
+      } else if (act === "del") {
+        undo = { slug, idx, section: list[idx] };
+        list.splice(idx, 1);
+        status(
+          '<span class="aisb-ok">Sectie ' + esc(nameOf(undo.section) || typeLabelOf(undo.section)) + " verwijderd. " +
+            '<button type="button" class="archer-link-btn" data-archer-cv-undo>Ongedaan maken</button></span>',
+        );
+      } else if (act === "shuffle") {
+        btn.disabled = true;
+        btn.textContent = "Zoeken…";
+        await flushWf();
+        try {
+          const out = await wf.post("aisb_shuffle_section_layout", {
+            project_id: wf.state.projectId,
+            sitemap_version_id: wf.state.sitemapId,
+            page_slug: slug,
+            uuid,
+          });
+          if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "");
+          const w = out.data.wireframe;
+          normalizeOrder(w);
+          wf.state.pageModels[slug] = w;
+          if (wf.state.pageSlug === slug) wf.state.model = w;
+          lastSaved[slug] = JSON.stringify(w);
+          // Het voorbeeld opnieuw laden, ook als het sjabloon-id gelijk bleef.
+          if (secEl) secEl.remove();
+          wf.setStatus("Shuffled.", "ok");
+        } catch (err) {
+          wf.setStatus("Shuffle failed", "err");
+        }
+        redrawPage(slug);
+        return;
+      }
+      if (wf.state.pageSlug === slug && wf.state.model) wf.state.pageModels[slug] = wf.state.model;
+      redrawPage(slug);
+      markDirty(slug);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("[data-archer-cv-undo]") || !undo) return;
+      const model = modelOf(undo.slug);
+      if (model && Array.isArray(model.sections)) {
+        model.sections.splice(Math.min(undo.idx, model.sections.length), 0, undo.section);
+        normalizeOrder(model);
+        redrawPage(undo.slug);
+        markDirty(undo.slug);
+        status('<span class="aisb-ok">Sectie teruggezet.</span>');
+      }
+      undo = null;
+    });
+
+    // Dubbelklik op een kolom opent de pagina.
+    inner.addEventListener("dblclick", (e) => {
+      const col = e.target.closest(".archer-cv-col");
+      if (!col || e.target.closest("button")) return;
+      flushWf().then(() => wf.openExpandedPage(col.getAttribute("data-archer-cv-page")));
+    });
+
+    // Schaal van de voorbeelden bijwerken als het venster verandert.
+    window.addEventListener("resize", () => {
+      if (isOpen()) return;
+      wf.state.pages.forEach((p) => redrawPage(p.slug));
+    });
 
     const origClose = wf.closeExpandedPage;
     wf.closeExpandedPage = function () {
-      const r = origClose.apply(this, arguments);
+      const r = origClose.apply(this, arguments); // roept renderWhiteboard aan
+      if (canvasStale) wf.renderWhiteboard();
       renderTabs();
       renderPager();
       return r;

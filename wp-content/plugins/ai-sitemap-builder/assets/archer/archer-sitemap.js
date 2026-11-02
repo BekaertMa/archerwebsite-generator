@@ -148,6 +148,10 @@
       const slug = page.slug;
       const sections = Array.isArray(page.sections) ? page.sections : [];
       const isHome = slug === "home";
+      // De contactpagina blijft altijd staan (de laatste die er is).
+      const isContact = /^contact$/i.test(page.page_type || "") || /(^|-)(contact|kontakt)/i.test(slug);
+      const contactCount = state.pages.filter((p) => /^contact$/i.test(p.page_type || "") || /(^|-)(contact|kontakt)/i.test(p.slug || "")).length;
+      const keep = isHome || (isContact && contactCount <= 1);
       const parent = page.parent_slug && page.parent_slug !== "home" ? state.bySlug[page.parent_slug] : null;
       const movable = sections
         .map((s, i) => ({ s, i }))
@@ -219,14 +223,22 @@
           : "";
 
       const meta = isHome ? "Startpagina" : parent ? `Subpagina van ${esc(parent.page_title || parent.slug)}` : "Pagina in het menu";
+      const badge =
+        page.archer_added === "source"
+          ? '<span class="archer-page-badge">van je huidige website</span>'
+          : page.archer_added === "detail"
+            ? '<span class="archer-page-badge">sjabloon per item</span>'
+            : isContact && keep
+              ? '<span class="archer-page-badge">altijd aanwezig</span>'
+              : "";
 
       return `<article class="archer-page-card${parent ? " is-child" : ""}" data-page="${esc(slug)}">
           <div class="archer-page-card-head">
             <div>
-              <h3 class="archer-page-card-title">${esc(page.page_title || page.nav_label || slug)}</h3>
+              <h3 class="archer-page-card-title">${esc(page.page_title || page.nav_label || slug)}${badge}</h3>
               <div class="archer-page-card-meta">${meta} · /${esc(isHome ? "" : slug)} · ${sections.length} secties</div>
             </div>
-            ${isHome ? "" : `<button type="button" class="archer-sec-tool is-danger" data-act="page-del" data-slug="${esc(slug)}" aria-label="Pagina ${esc(page.page_title || slug)} verwijderen">${icon.x}</button>`}
+            ${keep ? "" : `<button type="button" class="archer-sec-tool is-danger" data-act="page-del" data-slug="${esc(slug)}" aria-label="Pagina ${esc(page.page_title || slug)} verwijderen">${icon.x}</button>`}
           </div>
           ${page.page_purpose ? `<p class="archer-page-card-purpose">${esc(page.page_purpose)}</p>` : ""}
           ${delConfirm}
