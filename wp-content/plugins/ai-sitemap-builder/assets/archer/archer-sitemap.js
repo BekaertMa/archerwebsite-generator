@@ -92,17 +92,21 @@
     const view = { tx: 0, ty: 0, scale: 1, fitted: false };
     const vp = document.createElement("div");
     vp.className = "archer-smap-viewport";
+    // Het canvas (stage) en het bewerkpaneel staan naast elkaar: het paneel ligt nooit over de pagina's.
     vp.innerHTML =
+      '<div class="archer-smap-stage">' +
       '<div class="archer-smap-inner"><div class="archer-smap-tree" data-archer-smap-tree></div></div>' +
       '<div class="archer-cv-zoom archer-smap-zoom">' +
       '<button type="button" data-archer-smap-zoom="out" aria-label="Uitzoomen">−</button>' +
       '<span data-archer-smap-level>100%</span>' +
       '<button type="button" data-archer-smap-zoom="in" aria-label="Inzoomen">+</button>' +
       '<button type="button" data-archer-smap-zoom="fit">Passend</button></div>' +
-      '<div class="archer-smap-hint">Sleep om te verschuiven · Ctrl + scroll om te zoomen</div>';
+      '<div class="archer-smap-hint">Sleep om te verschuiven · Ctrl + scroll om te zoomen</div>' +
+      '</div>';
     const gridEl = document.createElement("div");
     gridEl.className = "archer-sitemap-grid";
     listEl.append(vp, gridEl);
+    const stage = vp.querySelector(".archer-smap-stage");
     const innerEl = vp.querySelector(".archer-smap-inner");
     const treeBox = vp.querySelector("[data-archer-smap-tree]");
     const levelEl = vp.querySelector("[data-archer-smap-level]");
@@ -132,7 +136,7 @@
 
     const fit = () => {
       stretch();
-      const w = vp.clientWidth;
+      const w = stage.clientWidth;
       const tw = treeBox.offsetWidth;
       if (!w || !tw) return false;
       const scale = Math.max(0.35, Math.min(1, (w - 48) / tw));
@@ -147,8 +151,8 @@
       const b = e.target.closest("[data-archer-smap-zoom]");
       if (!b) return;
       const z = b.getAttribute("data-archer-smap-zoom");
-      const cx = vp.clientWidth / 2;
-      const cy = Math.min(vp.clientHeight / 2, 240);
+      const cx = stage.clientWidth / 2;
+      const cy = Math.min(stage.clientHeight / 2, 240);
       if (z === "in") zoomAt(view.scale * 1.2, cx, cy);
       else if (z === "out") zoomAt(view.scale / 1.2, cx, cy);
       else fit();
@@ -183,7 +187,7 @@
       (e) => {
         if (e.target.closest(".archer-smap-panel")) return; // het paneel scrolt zelf
         e.preventDefault();
-        const r = vp.getBoundingClientRect();
+        const r = stage.getBoundingClientRect();
         if (e.ctrlKey || e.metaKey) {
           zoomAt(view.scale * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
         } else {
@@ -321,12 +325,32 @@
       }
     };
 
+    /** Schuift het canvas zodat de kaart van deze pagina helemaal zichtbaar is naast het paneel. */
+    const ensureVisible = (slug) => {
+      const el = treeBox.querySelector(`.archer-page-card[data-page="${CSS.escape(slug)}"]`);
+      if (!el) return;
+      const sr = stage.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      const pad = 24;
+      let dx = 0;
+      if (er.right > sr.right - pad) dx = sr.right - pad - er.right;
+      if (er.left + dx < sr.left + pad) dx = sr.left + pad - er.left;
+      let dy = 0;
+      if (er.top < sr.top + pad) dy = sr.top + pad - er.top;
+      if (dx || dy) {
+        view.tx += dx;
+        view.ty += dy;
+        applyView();
+      }
+    };
+
     const select = (next) => {
       sel = next;
       openForm = null;
       confirmDelete = null;
       render();
       renderPanel();
+      ensureVisible(next.slug);
       const first = panel.querySelector("input, textarea");
       first && first.focus({ preventScroll: true });
     };
@@ -925,7 +949,7 @@
     const progress = document.createElement("div");
     progress.className = "archer-smap-progress";
     progress.hidden = true;
-    vp.appendChild(progress);
+    stage.appendChild(progress);
     const setProgress = (done, total) => {
       const left = total - done;
       if (!total) { progress.hidden = true; return; }
