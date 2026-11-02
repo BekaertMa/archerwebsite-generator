@@ -956,6 +956,9 @@ body.archer-app .archer-shell .aisb-sg-split-right { flex: 1 1 auto; min-width: 
 @media (max-width: 1100px) {
   body.archer-app .archer-shell .aisb-sg-split-left { flex-basis: 320px; width: 320px; }
 }
-@media (max-width: 900px) {
+/* Smal venster: instellingen boven, voorbeeld eronder over de volle breedte */
+@media (max-width: 960px) {
+  body.archer-app .archer-shell .aisb-sg-split { flex-direction: column; }
   body.archer-app .archer-shell .aisb-sg-split-left { flex: 0 0 auto; width: auto; }
+  body.archer-app .archer-shell .aisb-sg-split-right { flex: 0 0 auto; width: auto; min-height: 70vh; }
 }
