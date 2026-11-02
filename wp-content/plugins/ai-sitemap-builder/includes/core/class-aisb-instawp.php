@@ -606,6 +606,10 @@ class AISB_InstaWP {
 
   private function publish_export_site(WP_Post $project, array $export, string $site_name) {
     $pages = $this->normalise_export_pages($export['pages'] ?? []);
+    // Archer: kleurschema per sectie uit de stijlstap als achtergrond van die sectie.
+    if (class_exists('AISB_Archer_Taste')) {
+      $pages = AISB_Archer_Taste::apply_schemes_to_export($pages, isset($export['style_guide']) && is_array($export['style_guide']) ? $export['style_guide'] : []);
+    }
     if (empty($pages)) {
       return new WP_Error('aisb_instawp_empty_export', 'The live export does not contain any publishable pages.', ['status' => 400]);
     }
