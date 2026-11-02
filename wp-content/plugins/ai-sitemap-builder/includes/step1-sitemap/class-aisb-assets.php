@@ -266,143 +266,153 @@ class AISB_Assets {
     // Lees de teksten die via shortcode-attributen overschreven kunnen worden.
     $atts = shortcode_atts([
       'title' => 'Sitemap Builder',
-      'placeholder' => "Describe the website you want to build.\nExample: “A modern website for a hearing clinic in Belgium. Services: hearing tests, hearing aids, tinnitus coaching. Needs online appointment booking and testimonials.”",
-      'button' => 'Generate sitemap',
+      'placeholder' => "Bijvoorbeeld: Peeters HVAC uit Deinze plaatst en onderhoudt warmtepompen en ventilatie voor particulieren. We willen meer offerteaanvragen en een pagina per dienst.",
+      'button' => 'Genereer de sitemap',
     ], $atts);
 
     // De hoofdshortcode heeft altijd de frontend-assets nodig.
     $this->enqueue_assets_for_shortcode();
+    if (class_exists('AISB_Archer_UI')) AISB_Archer_UI::enqueue();
 
     // De actieve stap komt uit de URL. Buiten bereik valt terug naar stap 1.
     $step = isset($_GET['aisb_step']) ? (int) $_GET['aisb_step'] : 1;
     if ($step < 0 || $step > 4) $step = 1;
+    $view = isset($_GET['aisb_view']) ? sanitize_key(wp_unslash($_GET['aisb_view'])) : '';
 
     // Project en sitemap worden via de URL gedeeld tussen de stappen.
     $project_id = isset($_GET['aisb_project']) ? (int) $_GET['aisb_project'] : 0;
     $sitemap_id = isset($_GET['aisb_sitemap']) ? (int) $_GET['aisb_sitemap'] : 0;
-
-    // Bouw tab-URL's en behoud daarbij de gekozen project- en sitemapcontext.
-    $base_url = remove_query_arg(['aisb_step'], (function_exists('home_url') ? home_url(add_query_arg([], $_SERVER['REQUEST_URI'] ?? ''), is_ssl() ? 'https' : 'http') : ''));
-    if (!$base_url) {
-      $base_url = remove_query_arg(['aisb_step'], add_query_arg([], $_SERVER['REQUEST_URI'] ?? ''));
+    if ($project_id && !$sitemap_id) {
+      $sitemap_id = (int) get_post_meta($project_id, 'aisb_latest_sitemap_id', true);
     }
-    $return_step = isset($_GET['aisb_return']) ? (int) $_GET['aisb_return'] : 0;
 
-    // De projecten-tab onthoudt vanaf welke stap de gebruiker kwam.
-    $tab0_args = ['aisb_step' => 0];
-    if ($step > 0) $tab0_args['aisb_return'] = $step;
-    $tab0_url = add_query_arg($tab0_args, remove_query_arg(['aisb_project', 'aisb_sitemap', 'aisb_return'], $base_url));
-    $tab1_url = remove_query_arg(['aisb_step'], $base_url);
-    $tab2_url = add_query_arg(['aisb_step' => 2], $base_url);
-    $tab3_url = add_query_arg(['aisb_step' => 3], $base_url);
-    $tab4_url = add_query_arg(['aisb_step' => 4], $base_url);
+    $base_url = AISB_Archer_UI::base_url();
+    $ctx_url = add_query_arg(array_filter(['aisb_project' => $project_id, 'aisb_sitemap' => $sitemap_id]), $base_url);
+    $dash_url = add_query_arg(['aisb_step' => 0], $base_url);
+    $key = AISB_Archer_UI::current_step_key($step, $view);
+    $is_staff = current_user_can('manage_options');
 
     ob_start(); ?>
-      <div class="aisb-wrap" data-aisb data-aisb-step="<?php echo esc_attr($step); ?>">
-        <div class="aisb-header">
-          <h2 class="aisb-title"><?php echo esc_html($atts['title']); ?></h2>
-          <p class="aisb-subtitle">
-            Type a brief. You’ll get a complete sitemap with <strong>hierarchy</strong> + sections.
-          </p>
-        </div>
+      <div class="aisb-wrap archer-shell" data-aisb data-aisb-step="<?php echo esc_attr($step); ?>"
+           data-archer-key="<?php echo esc_attr($key); ?>"
+           <?php echo $project_id ? 'data-archer-has-project' : ''; ?>>
 
-        <div class="aisb-steps">
-          <a class="aisb-step-tab aisb-step-tab--projects <?php echo $step === 0 ? 'is-active' : ''; ?>" href="<?php echo esc_url($tab0_url); ?>">My Projects</a>
-          <span class="aisb-step-tab-divider"></span>
-          <a class="aisb-step-tab <?php echo $step === 1 ? 'is-active' : ''; ?>" href="<?php echo esc_url($tab1_url); ?>">Step 1 · Sitemap</a>
-          <a class="aisb-step-tab <?php echo $step === 2 ? 'is-active' : ''; ?>" href="<?php echo esc_url($tab2_url); ?>" data-aisb-step2-tab>Step 2 · Wireframes</a>
-          <a class="aisb-step-tab <?php echo $step === 3 ? 'is-active' : ''; ?>" href="<?php echo esc_url($tab3_url); ?>">Step 3 · Style Guide</a>
-          <a class="aisb-step-tab <?php echo $step === 4 ? 'is-active' : ''; ?>" href="<?php echo esc_url($tab4_url); ?>">Step 4 · Design</a>
-        </div>
+        <?php echo AISB_Archer_UI::render_topbar($project_id); ?>
+        <?php echo AISB_Archer_UI::render_stepbar($step, $view, $project_id, $sitemap_id); ?>
+
+        <div class="archer-main">
 
         <?php if ($step === 0) : ?>
         <div class="aisb-step-panel" data-aisb-step-panel="0">
-          <div class="aisb-card">
-            <?php echo $this->render_my_projects_shortcode(['title' => 'My Projects', 'target_step' => $return_step]); ?>
-          </div>
+          <?php echo AISB_Archer_UI::render_dashboard(); ?>
         </div><!-- /Stap 0-paneel -->
         <?php endif; ?>
 
         <div class="aisb-step-panel" data-aisb-step-panel="1" style="<?php echo $step === 1 ? '' : 'display:none;'; ?>">
-        <div class="aisb-card aisb-input-card">
-          <label class="aisb-label" for="aisb-prompt">Website brief</label>
-          <textarea id="aisb-prompt" class="aisb-textarea" rows="7" maxlength="10000"
-            placeholder="<?php echo esc_attr($atts['placeholder']); ?>"></textarea>
-          
-          <div class="aisb-field" style="margin-top: 15px; margin-bottom: 5px;">
-            <label class="aisb-label" for="aisb-pdf-upload" style="display: flex; align-items: center; gap: 5px;">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-              Upload PDF brief (will be extracted as text)
-            </label>
-            <input type="file" id="aisb-pdf-upload" accept="application/pdf" class="aisb-file-input" style="font-size: 0.9em; padding: 5px; width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #fff;">
-            <div id="aisb-pdf-status" style="font-size: 0.85em; color: #666; margin-top: 6px; display: none;"></div>
+
+        <div class="archer-start" data-archer-start>
+          <div class="archer-start-intro">
+            <span class="archer-eyebrow">Nieuwe website</span>
+            <h1 class="archer-h1 archer-h1-xl">Beschrijf de zaak. De website staat er in enkele minuten.</h1>
+            <p class="archer-lead">Typ wat de zaak doet of plak het adres van de huidige website. AI maakt eerst de sitemap. Layouts, teksten, stijl en foto's volgen per stap.</p>
           </div>
 
-          <div class="aisb-brief-grid">
-              <div class="aisb-field">
-                <label class="aisb-label" for="aisb-languages">Languages</label>
-                <select id="aisb-languages" class="aisb-select">
-                  <option value="English">English</option>
-                  <option value="French">French</option>
-                  <option value="Dutch">Dutch</option>
-                  <option value="German">German</option>
-                </select>
-              </div>
-            
-              <div class="aisb-field">
-                <label class="aisb-label" for="aisb-pagecount">Number of pages</label>
-                <select id="aisb-pagecount" class="aisb-select">
-                  <option value="1">1</option>
-                  <option value="2-5">2-5</option>
-                  <option value="5-10" selected>5-10</option>
-                  <option value="10-15">10-15</option>
-                  <option value="15+">15+</option>
-                </select>
+          <div class="aisb-card aisb-input-card archer-start-card">
+            <div class="archer-seg" role="group" aria-label="Hoe wil je starten?">
+              <button type="button" class="archer-seg-btn is-active" data-archer-mode="desc" aria-pressed="true">Beschrijf de website</button>
+              <button type="button" class="archer-seg-btn" data-archer-mode="url" aria-pressed="false">Er is al een website</button>
+            </div>
+
+            <div class="archer-mode-panel" data-archer-mode-panel="desc">
+              <label class="archer-sr-only" for="aisb-prompt">Beschrijving van de website</label>
+              <textarea id="aisb-prompt" class="aisb-textarea archer-input" rows="6" maxlength="10000"
+                placeholder="<?php echo esc_attr($atts['placeholder']); ?>"></textarea>
+              <div class="archer-field-foot">
+                <span class="archer-muted archer-small">Hoe meer je vertelt (diensten, regio, doelgroep, wat de website moet opleveren), hoe beter het voorstel.</span>
+                <span data-aisb-counter class="aisb-counter archer-small">0 / 10000</span>
               </div>
             </div>
 
-          <div class="aisb-row">
-            <button class="aisb-btn" type="button" data-aisb-generate>
-              <?php echo esc_html($atts['button']); ?>
+            <div class="archer-mode-panel" data-archer-mode-panel="url" hidden>
+              <label class="aisb-label" for="archer-site-url">Adres van de huidige website</label>
+              <input type="url" id="archer-site-url" class="archer-input" placeholder="https://www.voorbeeld.be" autocomplete="url">
+              <p class="archer-muted archer-small">We lezen de huidige website en bouwen er een nieuwe versie van, met de eigen teksten, diensten en contactgegevens.</p>
+              <label class="aisb-label" for="archer-site-extra">Wat moet er anders of beter? <span class="archer-muted">(optioneel)</span></label>
+              <textarea id="archer-site-extra" class="archer-input" rows="3" placeholder="Bijvoorbeeld: meer offerteaanvragen, een pagina per dienst, een vacaturepagina."></textarea>
+            </div>
+
+            <details class="archer-more">
+              <summary>Meer opties</summary>
+              <div class="aisb-brief-grid">
+                <div class="aisb-field">
+                  <label class="aisb-label" for="aisb-languages">Taal van de website</label>
+                  <select id="aisb-languages" class="aisb-select archer-input">
+                    <option value="Dutch" selected>Nederlands</option>
+                    <option value="French">Frans</option>
+                    <option value="English">Engels</option>
+                    <option value="German">Duits</option>
+                  </select>
+                </div>
+                <div class="aisb-field">
+                  <label class="aisb-label" for="aisb-pagecount">Aantal pagina's</label>
+                  <select id="aisb-pagecount" class="aisb-select archer-input">
+                    <option value="1">1</option>
+                    <option value="2-5">2 tot 5</option>
+                    <option value="5-10" selected>5 tot 10</option>
+                    <option value="10-15">10 tot 15</option>
+                    <option value="15+">Meer dan 15</option>
+                  </select>
+                </div>
+              </div>
+              <div class="aisb-field">
+                <label class="aisb-label" for="aisb-pdf-upload">Briefing als pdf <span class="archer-muted">(de tekst komt bij de beschrijving)</span></label>
+                <input type="file" id="aisb-pdf-upload" accept="application/pdf" class="aisb-file-input archer-input">
+                <div id="aisb-pdf-status" class="archer-small" style="display:none;"></div>
+              </div>
+            </details>
+
+            <button class="aisb-btn archer-btn archer-btn-primary archer-btn-block" type="button" data-aisb-generate>
+              <?php echo esc_html($atts['button']); ?> →
             </button>
-            <div class="aisb-hint">
-              <span data-aisb-demo-note class="aisb-demo-note" style="display:none;">
-                Demo mode (set API key in Settings → AI Sitemap Builder to enable live generation)
-              </span>
-              <span data-aisb-counter class="aisb-counter">0 / 10000</span>
-            </div>
+            <span data-aisb-demo-note class="aisb-demo-note archer-small" style="display:none;">
+              Demomodus: stel een API-sleutel in onder Instellingen → AI Sitemap Builder.
+            </span>
+            <div class="aisb-status archer-status" data-aisb-status aria-live="polite"></div>
           </div>
-
-          <div class="aisb-status" data-aisb-status aria-live="polite"></div>
         </div>
 
-        <div class="aisb-card aisb-output-card" data-aisb-output style="display:none;">
-          <div class="aisb-output-head">
-            <h3 class="aisb-output-title">Generated sitemap</h3>
-            <div class="aisb-actions">
-              <button class="aisb-btn" type="button" data-aisb-approve style="display:none;">
-                Ziet er goed uit? Genereer sectie-inhoud →
+        <div class="aisb-card aisb-output-card archer-sitemap-card" data-aisb-output style="display:none;">
+          <?php echo AISB_Archer_UI::render_page_head('sitemap'); ?>
+
+          <div class="archer-toolbar">
+            <div class="archer-seg archer-seg-sm" role="group" aria-label="Weergave">
+              <button type="button" class="archer-seg-btn is-active" data-archer-sitemap-view="list" aria-pressed="true">Pagina's</button>
+              <button type="button" class="archer-seg-btn" data-archer-sitemap-view="tree" aria-pressed="false">Boomstructuur</button>
+            </div>
+            <div class="aisb-actions archer-toolbar-actions">
+              <button class="aisb-btn archer-btn archer-btn-primary" type="button" data-aisb-approve style="display:none;">
+                Ziet er goed uit? Maak de secties →
               </button>
-              <button class="aisb-btn-secondary" type="button" data-aisb-add-page>
-                <span class="aisb-plus">+</span> Add page
-              </button>
-              <button class="aisb-btn-secondary" type="button" data-aisb-fit>Fit</button>
-              <button class="aisb-btn-secondary" type="button" data-aisb-zoomout>−</button>
-              <button class="aisb-btn-secondary" type="button" data-aisb-zoomin>+</button>
-              <button class="aisb-btn-secondary" type="button" data-aisb-copy>Copy JSON</button>
-              <button class="aisb-btn-secondary" type="button" data-aisb-save>Save version</button>
-              <a class="aisb-btn" data-aisb-go-wireframes href="#" style="display:none; text-decoration:none;">→ Wireframes</a>
-              <button class="aisb-btn-secondary" type="button" data-aisb-reset>Reset</button>
+              <button class="aisb-btn-secondary archer-btn archer-btn-outline archer-tree-only" type="button" data-aisb-add-page>+ Pagina</button>
+              <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-tree-only" type="button" data-aisb-fit>Passend maken</button>
+              <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-tree-only" type="button" data-aisb-zoomout aria-label="Uitzoomen">−</button>
+              <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-tree-only" type="button" data-aisb-zoomin aria-label="Inzoomen">+</button>
+              <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-staff-only" type="button" data-aisb-copy>JSON kopiëren</button>
+              <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-staff-only" type="button" data-aisb-save>Nieuwe versie</button>
+              <a class="aisb-btn" data-aisb-go-wireframes href="#" style="display:none;" hidden>Wireframes</a>
+              <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-staff-only" type="button" data-aisb-reset>Leegmaken</button>
             </div>
           </div>
 
-          <div class="aisb-summary" data-aisb-summary></div>
+          <div class="aisb-summary archer-staff-only" data-aisb-summary></div>
 
-          <div class="aisb-workspace">
+          <div class="archer-sitemap-list" data-archer-sitemap-list></div>
+
+          <div class="aisb-workspace archer-tree-view" hidden>
             <div class="aisb-detail-panel" data-aisb-detail-panel>
               <div class="aisb-detail-head">
-                <div class="aisb-detail-title" data-aisb-detail-title>Select a page</div>
-                <div class="aisb-detail-sub" data-aisb-detail-sub>We’ll show sections + SEO for that page.</div>
+                <div class="aisb-detail-title" data-aisb-detail-title>Kies een pagina</div>
+                <div class="aisb-detail-sub" data-aisb-detail-sub>Je ziet de secties en SEO van die pagina.</div>
               </div>
               <div class="aisb-detail-body" data-aisb-detail-body></div>
             </div>
@@ -413,73 +423,69 @@ class AISB_Assets {
                   <svg class="aisb-edges" data-aisb-edges aria-hidden="true"></svg>
                   <div class="aisb-nodes" data-aisb-nodes></div>
                 </div>
-                <div class="aisb-canvas-hint">Drag background to pan · Scroll to zoom · Drag cards to reposition</div>
+                <div class="aisb-canvas-hint">Sleep de achtergrond om te verschuiven · scroll om te zoomen · sleep kaarten om ze te verplaatsen</div>
               </div>
             </div>
           </div>
 
-          <details class="aisb-raw">
-            <summary>Raw JSON output</summary>
+          <details class="aisb-raw archer-staff-only">
+            <summary>Ruwe JSON (Archer-team)</summary>
             <pre class="aisb-pre" data-aisb-raw></pre>
           </details>
+
+          <?php echo AISB_Archer_UI::render_step_footer('sitemap', $project_id, $sitemap_id); ?>
         </div>
         </div><!-- /Stap 1-paneel -->
 
         <?php if ($step === 2) : ?>
         <div class="aisb-step-panel" data-aisb-step-panel="2">
-          <div class="aisb-card aisb-wireframes-card" data-aisb-wireframes
+          <?php echo AISB_Archer_UI::render_page_head('wireframes'); ?>
+          <div class="aisb-card aisb-wireframes-card archer-wf-card" data-aisb-wireframes
                data-project-id="<?php echo esc_attr($project_id); ?>"
                data-sitemap-id="<?php echo esc_attr($sitemap_id); ?>">
-            <div class="aisb-wf-head">
-              <div>
-                <h3 class="aisb-output-title">Wireframes</h3>
-              </div>
-            </div>
 
             <?php if (!is_user_logged_in()) : ?>
-              <p>You must be logged in to use wireframes.</p>
+              <p>Log in om de wireframes te gebruiken.</p>
             <?php elseif (!$project_id || !$sitemap_id) : ?>
-              <div class="aisb-wf-no-project">
-                <p class="aisb-wf-no-project-msg">No project selected. <a href="<?php echo esc_url($tab0_url); ?>" class="aisb-btn-link">Go to My Projects</a> to pick one.</p>
+              <div class="archer-empty">
+                <p>Er is nog geen website gekozen. <a href="<?php echo esc_url($dash_url); ?>">Kies er een bij Mijn websites.</a></p>
               </div>
             <?php else : ?>
 
               <!-- Werkbalk -->
-              <div class="aisb-wf-toolbar">
-                <div class="aisb-wf-toolbar-left">
-                  <span class="aisb-project-switcher-name"><?php echo esc_html(get_the_title($project_id)); ?></span>
-                  <a href="<?php echo esc_url($tab0_url); ?>" class="aisb-btn-secondary aisb-project-switch-btn">Switch project</a>
-                </div>
-                <div class="aisb-wf-toolbar-right">
-                  <button class="aisb-btn generate-wireframe__all" type="button" data-aisb-wf-generate-all>Generate all</button>
-                  <button class="aisb-btn" type="button" data-aisb-wf-save-all>Save all</button>
-                  <a href="<?php echo esc_url(add_query_arg(['aisb_step' => 3], $base_url)); ?>" class="aisb-btn styleguide-link__button" data-aisb-wf-style>Style your wireframes</a>
+              <div class="aisb-wf-toolbar archer-toolbar">
+                <div class="aisb-wf-toolbar-left archer-wf-tabs" data-archer-wf-tabs role="tablist" aria-label="Pagina's"></div>
+                <div class="aisb-wf-toolbar-right archer-toolbar-actions">
+                  <button class="aisb-btn archer-btn archer-btn-outline generate-wireframe__all" type="button" data-aisb-wf-generate-all>Alle pagina's opnieuw maken</button>
+                  <button class="aisb-btn archer-btn archer-btn-ghost archer-staff-only" type="button" data-aisb-wf-save-all>Alles bewaren</button>
+                  <a href="<?php echo esc_url(add_query_arg(['aisb_step' => 3], $ctx_url)); ?>" class="aisb-btn styleguide-link__button" data-aisb-wf-style hidden>Stijl</a>
                 </div>
               </div>
 
-              <div class="aisb-wf-status" data-aisb-wf-status></div>
+              <div class="aisb-wf-status archer-status" data-aisb-wf-status aria-live="polite"></div>
 
-              <!-- Werkvlak waarop alle pagina's als kaarten verschijnen -->
+              <!-- Overzicht van alle pagina's -->
               <div class="aisb-wf-whiteboard" data-aisb-wf-whiteboard></div>
 
-              <!-- Uitgeklapt paginapaneel, standaard verborgen -->
-              <div class="aisb-wf-expanded" data-aisb-wf-expanded>
-                <div class="aisb-wf-expanded-head">
+              <!-- Een pagina in detail -->
+              <div class="aisb-wf-expanded archer-wf-expanded" data-aisb-wf-expanded>
+                <div class="aisb-wf-expanded-head archer-wf-page-head">
                   <div>
-                    <div class="aisb-wf-canvas-title" data-aisb-wf-page-title></div>
-                    <div class="aisb-wf-muted" data-aisb-wf-page-sub></div>
+                    <div class="aisb-wf-canvas-title archer-h2" data-aisb-wf-page-title></div>
+                    <div class="aisb-wf-muted archer-muted" data-aisb-wf-page-sub></div>
                   </div>
-                  <div class="aisb-wf-actions">
-                    <button class="aisb-btn-secondary" type="button" data-aisb-wf-generate>Generate wireframe</button>
-                    <button class="aisb-btn-secondary" type="button" data-aisb-wf-shuffle-page>Shuffle unlocked</button>
-                    <button class="aisb-btn" type="button" data-aisb-wf-save>Save</button>
-                    <button class="aisb-btn-secondary" type="button" data-aisb-wf-compile>Compile JSON</button>
-                    <button class="aisb-btn-secondary" type="button" data-aisb-wf-close-expanded>✕ Close</button>
+                  <div class="aisb-wf-actions archer-toolbar-actions">
+                    <button class="aisb-btn-secondary archer-btn archer-btn-outline" type="button" data-aisb-wf-generate>Pagina opnieuw maken</button>
+                    <button class="aisb-btn-secondary archer-btn archer-btn-outline" type="button" data-aisb-wf-shuffle-page>Andere voorbeelden</button>
+                    <button class="aisb-btn archer-btn archer-btn-ghost archer-staff-only" type="button" data-aisb-wf-save>Bewaren</button>
+                    <button class="aisb-btn-secondary archer-btn archer-btn-ghost archer-staff-only" type="button" data-aisb-wf-compile>JSON compileren</button>
+                    <button class="aisb-btn-secondary archer-btn archer-btn-ghost" type="button" data-aisb-wf-close-expanded>Alle pagina's</button>
                   </div>
                 </div>
                 <div class="aisb-wf-sections" data-aisb-wf-sections></div>
-                <details class="aisb-wf-raw">
-                  <summary>Compiled Bricks JSON (latest)</summary>
+                <div class="archer-wf-pager" data-archer-wf-pager></div>
+                <details class="aisb-wf-raw archer-staff-only">
+                  <summary>Gecompileerde Bricks-JSON (Archer-team)</summary>
                   <pre class="aisb-pre" data-aisb-wf-compiled></pre>
                 </details>
               </div>
@@ -506,13 +512,13 @@ class AISB_Assets {
               <template data-tpl="section-card">
                 <div class="aisb-wf-section" data-uuid>
                   <div class="aisb-wf-section-toolbar">
-                    <button class="aisb-wf-tbtn" data-act="up" title="Move up">↑</button>
-                    <button class="aisb-wf-tbtn" data-act="down" title="Move down">↓</button>
-                    <button class="aisb-wf-tbtn" data-act="shuffle" title="Shuffle layout">⟳</button>
-                    <button class="aisb-wf-tbtn" data-act="lock" title="Lock">🔒</button>
-                    <button class="aisb-wf-tbtn" data-act="edit" title="Edit text">✏️</button>
-                    <button class="aisb-wf-tbtn" data-act="dup" title="Duplicate">⧉</button>
-                    <button class="aisb-wf-tbtn aisb-wf-tbtn-del" data-act="del" title="Delete">✕</button>
+                    <button type="button" class="aisb-wf-tbtn" data-act="up" title="Naar boven" aria-label="Sectie naar boven">↑</button>
+                    <button type="button" class="aisb-wf-tbtn" data-act="down" title="Naar beneden" aria-label="Sectie naar beneden">↓</button>
+                    <button type="button" class="aisb-wf-tbtn" data-act="shuffle" title="Ander voorbeeld">Ander voorbeeld</button>
+                    <button type="button" class="aisb-wf-tbtn" data-act="lock" title="Vastzetten">Vastzetten</button>
+                    <button type="button" class="aisb-wf-tbtn" data-act="edit" title="Tekst aanpassen">Tekst aanpassen</button>
+                    <button type="button" class="aisb-wf-tbtn" data-act="dup" title="Dupliceren">Dupliceren</button>
+                    <button type="button" class="aisb-wf-tbtn aisb-wf-tbtn-del" data-act="del" title="Verwijderen" aria-label="Sectie verwijderen">Verwijderen</button>
                   </div>
                   <div class="aisb-wf-body"></div>
                 </div>
@@ -527,65 +533,49 @@ class AISB_Assets {
 
             <?php endif; ?>
           </div>
+          <?php if ($project_id && $sitemap_id) echo AISB_Archer_UI::render_step_footer('wireframes', $project_id, $sitemap_id, 'Tevreden over de opbouw? Kies nu kleuren en lettertypes.'); ?>
         </div><!-- /Stap 2-paneel -->
         <?php endif; ?>
 
         <?php if ($step === 3) : ?>
-        <div class="aisb-step-panel" data-aisb-step-panel="3">
-          <div class="aisb-card" data-styleguide
+        <div class="aisb-step-panel" data-aisb-step-panel="3" data-archer-sg-view="<?php echo $view === 'photos' ? 'photos' : 'style'; ?>">
+          <?php echo AISB_Archer_UI::render_page_head($view === 'photos' ? 'photos' : 'style'); ?>
+          <div class="aisb-card archer-sg-card" data-styleguide
                data-styleguide-project="<?php echo esc_attr($project_id); ?>">
-            <div class="aisb-sg-head">
-              <div>
-                <h3 class="aisb-output-title">Style Guide</h3>
-              </div>
-              <?php if ($project_id) : ?>
-                <div class="aisb-project-switcher">
-                  <span class="aisb-project-switcher-name"><?php echo esc_html(get_the_title($project_id)); ?></span>
-                  <a href="<?php echo esc_url($tab0_url); ?>" class="aisb-btn-secondary aisb-project-switch-btn">Switch project</a>
-                </div>
-              <?php endif; ?>
-            </div>
-
             <?php if (!is_user_logged_in()) : ?>
-              <p>You must be logged in to use the Style Guide.</p>
+              <p>Log in om de stijl te kiezen.</p>
             <?php elseif (!$project_id) : ?>
-              <div class="aisb-wf-no-project">
-                <p class="aisb-wf-no-project-msg">No project selected. <a href="<?php echo esc_url($tab0_url); ?>" class="aisb-btn-link">Go to My Projects</a> to pick one.</p>
+              <div class="archer-empty">
+                <p>Er is nog geen website gekozen. <a href="<?php echo esc_url($dash_url); ?>">Kies er een bij Mijn websites.</a></p>
               </div>
             <?php else : ?>
               <?php AISB_Style_Guide::render_style_guide_html($project_id); ?>
             <?php endif; ?>
           </div>
+          <?php if ($project_id) echo AISB_Archer_UI::render_step_footer($view === 'photos' ? 'photos' : 'style', $project_id, $sitemap_id, $view === 'photos' ? "Geen eigen foto's bij de hand? Publiceer gerust met de stockfoto's." : ''); ?>
         </div><!-- /Stap 3-paneel -->
         <?php endif; ?>
 
         <?php if ($step === 4) : ?>
         <div class="aisb-step-panel" data-aisb-step-panel="4">
-          <div class="aisb-card">
-            <div class="aisb-sg-head">
-              <div>
-                <h3 class="aisb-output-title">Design</h3>
-              </div>
-              <?php if ($project_id) : ?>
-                <div class="aisb-project-switcher">
-                  <span class="aisb-project-switcher-name"><?php echo esc_html(get_the_title($project_id)); ?></span>
-                  <a href="<?php echo esc_url($tab0_url); ?>" class="aisb-btn-secondary aisb-project-switch-btn">Switch project</a>
-                </div>
-              <?php endif; ?>
-            </div>
-
+          <?php echo AISB_Archer_UI::render_page_head('publish'); ?>
+          <?php if ($project_id) echo AISB_Archer_UI::render_publish_summary($project_id, $sitemap_id); ?>
+          <div class="aisb-card archer-publish-card">
             <?php if (!is_user_logged_in()) : ?>
-              <p>You must be logged in to use the Design view.</p>
+              <p>Log in om te publiceren.</p>
             <?php elseif (!$project_id) : ?>
-              <div class="aisb-wf-no-project">
-                <p class="aisb-wf-no-project-msg">No project selected. <a href="<?php echo esc_url($tab0_url); ?>" class="aisb-btn-link">Go to My Projects</a> to pick one.</p>
+              <div class="archer-empty">
+                <p>Er is nog geen website gekozen. <a href="<?php echo esc_url($dash_url); ?>">Kies er een bij Mijn websites.</a></p>
               </div>
             <?php else : ?>
               <?php AISB_Design::render_design_html($project_id); ?>
             <?php endif; ?>
           </div>
+          <?php if ($project_id) echo AISB_Archer_UI::render_step_footer('publish', $project_id, $sitemap_id); ?>
         </div><!-- /Stap 4-paneel -->
         <?php endif; ?>
+
+        </div><!-- /.archer-main -->
       </div>
     <?php
     return ob_get_clean();

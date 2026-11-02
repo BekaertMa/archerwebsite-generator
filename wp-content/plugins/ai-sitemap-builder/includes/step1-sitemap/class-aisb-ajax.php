@@ -803,7 +803,7 @@ class AISB_Ajax {
     update_post_meta($post_id, 'aisb_sitemap_is_current', 1);
 
     // Persist JSON
-    update_post_meta($post_id, 'aisb_sitemap_json', wp_json_encode($data));
+    update_post_meta($post_id, 'aisb_sitemap_json', wp_slash(wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
 
     // Update project pointers
     update_post_meta($project_id, 'aisb_latest_sitemap_id', (int)$post_id);
