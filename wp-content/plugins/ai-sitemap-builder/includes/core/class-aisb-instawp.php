@@ -979,6 +979,7 @@ class AISB_InstaWP {
       'pages' => $pages_payload,
       'style_guide' => $style_guide,
       'sections' => $sections_payload,
+      'archer_menus' => class_exists('AISB_Archer_Chrome'),
     ];
   }
 
@@ -4542,6 +4543,8 @@ class AISB_InstaWP {
   }
 
   function applyNavMenus() {
+    // Archer: de menu's zijn echte WordPress-menu's volgens de sitemap; niet vervangen door een platte lijst.
+    if (payload.archer_menus) return;
     var pages = Array.isArray(payload.pages) ? payload.pages : [];
     if (!pages.length) return;
 

@@ -20,6 +20,145 @@ class AISB_Archer_Chrome {
 
   public function init(): void {
     add_action('template_redirect', [$this, 'preview'], 5);
+    // Header en footer van elke pagina volgen die van Home.
+    foreach (['aisb_get_wireframe_page', 'aisb_compile_wireframe_page', 'aisb_get_wireframe_sections'] as $a) {
+      add_action('wp_ajax_' . $a, [$this, 'sync_before_read'], 1);
+    }
+    foreach (['aisb_generate_wireframe_page', 'aisb_update_wireframe_page', 'aisb_shuffle_section_layout', 'aisb_replace_section_type'] as $a) {
+      add_action('wp_ajax_' . $a, [$this, 'sync_after_write'], 1);
+    }
+  }
+
+  /* ───────────────────────── Header en footer zoals Home ───────────────────────── */
+
+  /** Project uit het verzoek, als de gebruiker er recht op heeft en de nonce klopt; anders 0. */
+  private static function request_project(): int {
+    $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+    if (!$nonce) return 0;
+    $ok = false;
+    foreach ([AISB_Plugin::NONCE_ACTION, 'aisb_wf_nonce', 'aisb_sg_nonce'] as $action) if (wp_verify_nonce($nonce, $action)) $ok = true;
+    if (!$ok) return 0;
+    $pid = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
+    $p = $pid ? get_post($pid) : null;
+    if (!$p || $p->post_type !== 'aisb_project') return 0;
+    if ((int) $p->post_author !== get_current_user_id() && !current_user_can('manage_options')) return 0;
+    return $pid;
+  }
+
+  private static function request_sitemap(int $pid): int {
+    $sid = isset($_POST['sitemap_version_id']) ? (int) $_POST['sitemap_version_id'] : 0;
+    return $sid ?: (int) get_post_meta($pid, 'aisb_latest_sitemap_id', true);
+  }
+
+  public function sync_before_read(): void {
+    $pid = self::request_project();
+    if (!$pid) return;
+    $slug = isset($_POST['page_slug']) ? sanitize_title(wp_unslash($_POST['page_slug'])) : '';
+    // Eén pagina opvragen: alleen die pagina rechtzetten (de wireframes laden alle pagina's tegelijk).
+    self::sync_chrome($pid, self::request_sitemap($pid), 'home', $slug !== '' ? [$slug] : null);
+  }
+
+  /** Na het bewaren door de plugin (wp_send_json stopt het verzoek, de shutdown-hook loopt nog). */
+  public function sync_after_write(): void {
+    $pid = self::request_project();
+    if (!$pid) return;
+    $sid = self::request_sitemap($pid);
+    $slug = isset($_POST['page_slug']) ? sanitize_title(wp_unslash($_POST['page_slug'])) : '';
+    $uuid = isset($_POST['uuid']) ? sanitize_text_field(wp_unslash($_POST['uuid'])) : '';
+    $action = isset($_POST['action']) ? sanitize_key(wp_unslash($_POST['action'])) : '';
+    if (!$sid || $slug === '') return;
+    add_action('shutdown', function () use ($pid, $sid, $slug, $uuid, $action) {
+      $source = 'home';
+      $types = ['header', 'footer'];
+      // Een ander voorbeeld voor de header of footer, op eender welke pagina: dat wordt de header of footer van alle pagina's.
+      if ($uuid !== '' && in_array($action, ['aisb_shuffle_section_layout', 'aisb_replace_section_type'], true)) {
+        $model = self::wireframe_rows($pid, $sid)[$slug]['model'] ?? [];
+        foreach ((array) ($model['sections'] ?? []) as $sec) {
+          $t = is_array($sec) ? strtolower((string) ($sec['type'] ?? '')) : '';
+          if (($sec['uuid'] ?? '') === $uuid && in_array($t, ['header', 'footer'], true)) {
+            $source = $slug;
+            $types = [$t]; // alleen wat veranderde; het andere blijft dat van Home
+          }
+        }
+      }
+      if ($source === 'home' && $slug !== 'home') {
+        self::sync_chrome($pid, $sid, 'home', [$slug]);
+      } else {
+        self::sync_chrome($pid, $sid, $source, null, $types);
+      }
+    });
+  }
+
+  /** @return array<string,array{id:int,json:string,model:array}> */
+  private static function wireframe_rows(int $pid, int $sid): array {
+    global $wpdb;
+    $table = $wpdb->prefix . 'aisb_wireframes';
+    $rows = $wpdb->get_results($wpdb->prepare("SELECT id, page_slug, model_json FROM {$table} WHERE project_id = %d AND sitemap_version_id = %d", $pid, $sid), ARRAY_A);
+    $out = [];
+    foreach ((array) $rows as $r) {
+      $m = json_decode((string) $r['model_json'], true);
+      $out[(string) $r['page_slug']] = ['id' => (int) $r['id'], 'json' => (string) $r['model_json'], 'model' => is_array($m) ? $m : []];
+    }
+    return $out;
+  }
+
+  private static function chrome_sections(array $model): array {
+    $found = [];
+    foreach ((array) ($model['sections'] ?? []) as $sec) {
+      if (!is_array($sec)) continue;
+      $type = strtolower((string) ($sec['type'] ?? ''));
+      if ($type === 'header' && !isset($found['header'])) $found['header'] = $sec;
+      if ($type === 'footer') $found['footer'] = $sec; // de laatste footer
+    }
+    return $found;
+  }
+
+  /**
+   * Zet de header en footer van de andere pagina's gelijk aan die van $source (standaard Home).
+   * Elke pagina houdt haar eigen uuid. Schrijft alleen als de rij intussen niet veranderde,
+   * zodat een generatie die tegelijk loopt nooit overschreven wordt. Geeft het aantal aangepaste pagina's.
+   */
+  public static function sync_chrome(int $pid, int $sid, string $source = 'home', ?array $only = null, array $types = ['header', 'footer']): int {
+    global $wpdb;
+    if (!$pid || !$sid) return 0;
+    $rows = self::wireframe_rows($pid, $sid);
+    if (!isset($rows[$source])) return 0;
+    $src = self::chrome_sections($rows[$source]['model']);
+    if (!$src) return 0;
+    $strip = function (array $sec): string {
+      unset($sec['uuid']);
+      return (string) wp_json_encode($sec);
+    };
+    $table = $wpdb->prefix . 'aisb_wireframes';
+    $changed = 0;
+    foreach ($rows as $slug => $row) {
+      if ($slug === $source || ($only !== null && !in_array($slug, $only, true))) continue;
+      $model = $row['model'];
+      if (empty($model['sections']) || !is_array($model['sections'])) continue;
+      $dirty = false;
+      $last_footer = null;
+      foreach ($model['sections'] as $i => $sec) {
+        if (is_array($sec) && strtolower((string) ($sec['type'] ?? '')) === 'footer') $last_footer = $i;
+      }
+      $first_header = null;
+      foreach ($model['sections'] as $i => $sec) {
+        if (is_array($sec) && strtolower((string) ($sec['type'] ?? '')) === 'header') { $first_header = $i; break; }
+      }
+      foreach (['header' => $first_header, 'footer' => $last_footer] as $type => $i) {
+        if ($i === null || empty($src[$type]) || !in_array($type, $types, true)) continue;
+        $cur = $model['sections'][$i];
+        if ($strip($cur) === $strip($src[$type])) continue;
+        $model['sections'][$i] = array_merge($src[$type], ['uuid' => $cur['uuid'] ?? wp_generate_uuid4()]);
+        $dirty = true;
+      }
+      if (!$dirty) continue;
+      $done = $wpdb->query($wpdb->prepare(
+        "UPDATE {$table} SET model_json = %s, compiled_bricks_json = NULL, updated_at = %s WHERE id = %d AND model_json = %s",
+        wp_json_encode($model, JSON_UNESCAPED_SLASHES), current_time('mysql'), $row['id'], $row['json']
+      ));
+      if ($done) $changed++;
+    }
+    return $changed;
   }
 
   /* ───────────────────────── Gegevens ───────────────────────── */
@@ -456,6 +595,25 @@ class AISB_Archer_Chrome {
     $ctx = self::context($project_id);
     if (!$ctx) return $pages;
     $link = fn($slug) => $slug === 'home' ? '/' : '/' . $slug . '/';
+    // Header en footer van Home op elke pagina (ook als een pagina nog een eigen versie had).
+    $home = null;
+    foreach ($pages as $p) if (($p['slug'] ?? '') === 'home') $home = $p;
+    $home_chrome = [];
+    foreach ((array) ($home['sections'] ?? []) as $sec) {
+      $type = strtolower((string) ($sec['type'] ?? ''));
+      if ($type === 'header' && !isset($home_chrome['header'])) $home_chrome['header'] = $sec;
+      if ($type === 'footer') $home_chrome['footer'] = $sec;
+    }
+    if ($home_chrome) {
+      foreach ($pages as &$page) {
+        if (($page['slug'] ?? '') === 'home') continue;
+        foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
+          $type = strtolower((string) ($sec['type'] ?? ''));
+          if (is_array($sec) && isset($home_chrome[$type])) $page['sections'][$k] = $home_chrome[$type];
+        }
+      }
+      unset($page);
+    }
     foreach ($pages as &$page) {
       foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
         if (!is_array($sec)) continue;
