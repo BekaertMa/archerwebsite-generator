@@ -89,6 +89,17 @@ class AISB_Wireframes {
     $post = get_post($id);
     setup_postdata($post);
 
+    // Archer: dezelfde themastijl als de sjabloonpagina's (conditie: posttype bricks_template).
+    // Anders gelden de stijlen van de homepagina en ontbreken o.a. de sectiepadding en containerbreedte.
+    if (class_exists('\Bricks\Theme_Styles')) {
+      $style_source = $post->post_type === 'bricks_template' ? $id : 0;
+      if (!$style_source) {
+        $tpl_ids = get_posts(['post_type' => 'bricks_template', 'post_status' => 'publish', 'numberposts' => 1, 'fields' => 'ids', 'meta_key' => '_bricks_template_type', 'meta_value' => 'section']);
+        $style_source = $tpl_ids ? (int) $tpl_ids[0] : 0;
+      }
+      if ($style_source) \Bricks\Theme_Styles::load_set_styles($style_source);
+    }
+
     if (function_exists('bricks_enqueue_scripts')) {
       bricks_enqueue_scripts();
     }
@@ -129,24 +140,7 @@ class AISB_Wireframes {
       <?php wp_head(); ?>
     </head>
     <body <?php body_class(); ?>>
-      <style id="aisb-force-desktop">
-        /* Override ALL Bricks responsive breakpoints to force desktop layout */
-        @media (max-width: 1320px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-        }
-        @media (max-width: 991px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-          [class*="brxe-"] { width: unset !important; max-width: unset !important; flex-basis: unset !important; flex-direction: unset !important; }
-        }
-        @media (max-width: 767px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-          [class*="brxe-"] { width: unset !important; max-width: unset !important; flex-basis: unset !important; flex-direction: unset !important; }
-        }
-        @media (max-width: 478px) {
-          .brxe-section, .brxe-container, .brxe-block, .brxe-div { flex-wrap: nowrap !important; }
-          [class*="brxe-"] { width: unset !important; max-width: unset !important; flex-basis: unset !important; flex-direction: unset !important; }
-        }
-      </style>
+      <?php /* Archer: geen force-desktop regels meer. De iframe is 1200px breed, dus Bricks gebruikt al de desktopweergave; flex-wrap: nowrap brak kolommen en rasters. */ ?>
       <style id="aisb-preview-fixes">
         /* Verberg Bricks accordion-toggles (verborgen checkboxes) die als
            zichtbare rechthoekjes renderen door browser-defaults. */
@@ -636,6 +630,8 @@ class AISB_Wireframes {
 
     $pattern = $this->detect_pattern($page_slug);
     $types = $this->patterns()[$pattern];
+    // Archer: dezelfde secties als in de sitemap (zie AISB_Archer_Generate::wireframe_types).
+    $types = apply_filters('aisb_wireframe_section_types', $types, $project_id, $sitemap_version_id, $page_slug);
     $model = [
       'page' => ['slug' => $page_slug, 'title' => ucfirst(str_replace('-', ' ', $page_slug))],
       'pattern' => $pattern,

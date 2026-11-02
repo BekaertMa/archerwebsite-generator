@@ -68,6 +68,8 @@ class AISB_Wireframes_AI {
 
     // 2. Alle tekst ophalen uit de gekozen Bricks templates
     foreach ($model['sections'] as $idx => $sec) {
+        // Archer: per sectie opnieuw beginnen (anders kreeg elke sectie de modules van alle vorige secties mee).
+        $module_data_to_translate = [];
         if (empty($sec['bricks_template_id'])) {
             error_log('[AISB] Section ' . $idx . ' (type=' . ($sec['type'] ?? '?') . ') has no bricks_template_id — skipped');
             continue;
@@ -133,7 +135,8 @@ class AISB_Wireframes_AI {
 
         if (!empty($module_data_to_translate)) {
             $to_translate["section_{$idx}"] = [
-                'purpose' => $sec['type'] ?? 'content',
+                // Archer: de sectieomschrijving uit de sitemap, als die er is.
+                'purpose' => (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content'),
                 'modules' => $module_data_to_translate
             ];
         }
@@ -183,6 +186,9 @@ class AISB_Wireframes_AI {
 
     $settings = get_option('aisb_settings', []);
     $openai = new \AISB_OpenAI();
+    // Archer: elke sectie apart en tegelijk laten schrijven (sneller model); anders de oude, ene grote vraag.
+    $translated = class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::translate_sections_parallel($prompt, $to_translate) : null;
+    if (!is_array($translated)) {
     $res = $openai->call_openai_chat_completions($prompt, $settings, "Return valid JSON only. No markdown. No explanation.");
 
     if (is_wp_error($res)) {
@@ -194,6 +200,7 @@ class AISB_Wireframes_AI {
     if (!is_array($translated)) {
         error_log('[AISB] OpenAI response could not be parsed as JSON. Raw: ' . substr((string)$res, 0, 500));
         return $model;
+    }
     }
     error_log('[AISB] OpenAI returned ' . count($translated) . ' translated section(s)');
     // Archer: second pass for modules the model skipped or left as placeholder text.
@@ -460,6 +467,13 @@ class AISB_Wireframes_AI {
    * voldoende ademruimte heeft tussen secties.
    */
   private function apply_section_padding_to_nodes(array $nodes): array {
+    // Archer: geen padding meer forceren. De oude check (int) parent === 0 was waar voor ELK element
+    // (Bricks-ids zijn tekst), waardoor elk blok 3rem padding kreeg en kolommen en kaarten verschoven.
+    // De sjablonen hebben zelf de juiste ruimte (via hun global classes en de stijlbeheerder).
+    return $nodes;
+  }
+
+  private function archer_unused_apply_section_padding_to_nodes(array $nodes): array {
     $top    = '3rem';
     $bottom = '3rem';
 
