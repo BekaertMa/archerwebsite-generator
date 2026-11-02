@@ -1968,7 +1968,7 @@
             return `<button type="button" class="archer-taste-card${on ? " is-active" : ""}" data-taste-idx="${i}" aria-pressed="${on ? "true" : "false"}">` +
               `<span class="archer-taste-chips" aria-hidden="true">${chips(d.palette)}</span>` +
               `<strong style="font-family:'${esc(d.headingFont)}',sans-serif">${esc(d.name)}</strong>` +
-              `<span class="archer-taste-meta">${esc(d.colourNote)} · ${esc(d.headingFont)}${d.bodyFont !== d.headingFont ? " + " + esc(d.bodyFont) : ""}</span>` +
+              `<span class="archer-taste-meta">${esc(d.colourNote)} · ${esc(d.typeNote || "")}: ${esc(d.headingFont)}${d.bodyFont !== d.headingFont ? " + " + esc(d.bodyFont) : ""}</span>` +
               `</button>`;
           })
           .join("");
