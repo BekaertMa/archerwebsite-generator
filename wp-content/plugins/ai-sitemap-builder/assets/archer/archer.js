@@ -1844,6 +1844,16 @@
     if (!SG || !panel) return;
     const view = panel.getAttribute("data-archer-sg-view");
 
+    const wfReady = () => Array.isArray(SG.wireframePages) && SG.wireframePages.length > 0;
+    if (typeof SG.autoAssignImages === "function" && !SG.autoAssignImages._archer) {
+      const origAuto = SG.autoAssignImages;
+      SG.autoAssignImages = function () {
+        if (!wfReady()) return Promise.resolve();
+        return origAuto.apply(this, arguments);
+      };
+      SG.autoAssignImages._archer = true;
+      if (SG.onStep3Enter === origAuto) SG.onStep3Enter = SG.autoAssignImages;
+    }
     // Weergave kiezen: stijl = kleuren + lettertypes, foto's = afbeeldingen.
     const show = () => {
       if (typeof SG.goToWizardStep !== "function") return;
@@ -1877,16 +1887,39 @@
       };
       SG.injectImagesIntoIframe._archer = true;
     }
-    // Foto's: de stap opent vaak voor de wireframes geladen zijn; dan telde de stijlgids 0 fotovakken.
+    // Foto's: de stap opent vaak voor de wireframes (en de bewaarde stijlgids) geladen zijn. Dan telde de
+    // stijlgids 0 fotovakken, toonde "No images needed" en maakte guide.images leeg. Daarom: wachten.
+    const mediaTotal = () =>
+      (SG.wireframePages || []).reduce((n, p) => n + (p.sections || []).reduce((m, x) => m + (x.media_count || 0), 0), 0);
+    /** Bewaarde stockfoto's tonen (de stijlgids doet dat alleen na een nieuwe zoekopdracht). */
+    const showStock = () => {
+      const grid = SG.el && SG.el.autoImagesContainer;
+      const imgs = (SG.guide && SG.guide.images) || [];
+      if (!grid) return;
+      if (imgs.length && !grid.querySelector(".aisb-sg-auto-card")) {
+        grid.innerHTML = imgs
+          .map((img, i) => `<div class="aisb-sg-auto-card" data-image-index="${i}" title="Klik om te wisselen"><img src="${esc(img.thumb || img.full || "")}" alt="${esc(img.alt || "")}" loading="lazy"></div>`)
+          .join("");
+      }
+      const total = mediaTotal();
+      if (SG.el.uploadTotalNeeded) SG.el.uploadTotalNeeded.textContent = total;
+      if (SG.el.uploadHint) SG.el.uploadHint.textContent = `${(SG.uploadedImages || []).length} eigen foto's · ${total} foto's nodig`;
+      if (SG.refreshImageLibraryState) SG.refreshImageLibraryState();
+    };
     if (view === "photos") {
       let tries = 0;
-      const waitPages = setInterval(() => {
+      const waitPages = setInterval(async () => {
         tries++;
-        const pages = Array.isArray(SG.wireframePages) ? SG.wireframePages : [];
-        if (pages.length || tries > 60) {
-          clearInterval(waitPages);
-          if (pages.length && !SG.imagesLoaded && typeof SG.autoAssignImages === "function") SG.autoAssignImages();
+        if (!wfReady() && tries <= 80) return;
+        clearInterval(waitPages);
+        if (!wfReady()) return;
+        const has = SG.guide && SG.guide.images && SG.guide.images.length;
+        if (has) SG.imagesLoaded = true;
+        else if (typeof SG.autoAssignImages === "function") {
+          SG.imagesLoaded = false;
+          await SG.autoAssignImages();
         }
+        showStock();
       }, 500);
     }
 
