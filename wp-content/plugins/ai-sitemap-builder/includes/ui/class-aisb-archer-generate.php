@@ -18,6 +18,92 @@ class AISB_Archer_Generate {
   public function init(): void {
     add_action('wp_ajax_aisb_archer_plan', [$this, 'ajax_plan']);
     add_action('wp_ajax_aisb_archer_sections', [$this, 'ajax_sections']);
+    add_filter('aisb_wireframe_section_types', [$this, 'wireframe_types'], 10, 4);
+  }
+
+  /* ───────────────────────── Wireframes volgen de sitemap ───────────────────────── */
+
+  /** Sectieomschrijving uit de sitemap per wireframe-sectie (pagina => index => tekst). */
+  private static $hints = [];
+
+  public static function section_hint(string $page_slug, int $idx): string {
+    return (string) (self::$hints[$page_slug][$idx] ?? '');
+  }
+
+  /** Sectiesoort uit de sitemap → soort sjabloon in de wireframebibliotheek. */
+  private static function wireframe_type(string $section_type): string {
+    $t = strtolower($section_type);
+    $map = [
+      'headers' => 'header', 'megamenu' => 'header', 'footers' => 'footer',
+      'hero' => 'hero', 'single post hero' => 'hero', 'banner' => 'hero',
+      'testimonial' => 'testimonials', 'logo' => 'social_proof',
+      'faq' => 'faq', 'pricing' => 'pricing', 'process' => 'process', 'timeline' => 'process',
+      'team' => 'team', 'single team' => 'team',
+      'cta' => 'cta', 'contact' => 'contact',
+      'feature' => 'features', 'products' => 'features', 'single product' => 'features',
+      'property' => 'features', 'single property' => 'features', 'portfolio' => 'features',
+      'single portfolio' => 'features', 'gallery' => 'features', 'blog' => 'features', 'event' => 'features',
+      'single event' => 'features', 'career' => 'features',
+      'content' => 'content', 'intro' => 'content', 'category filters' => 'content', 'single post' => 'content',
+    ];
+    foreach ($map as $k => $v) {
+      if (strpos($t, $k) === 0) return $v;
+    }
+    return 'content';
+  }
+
+  /**
+   * Bouwt de wireframe op met dezelfde secties, in dezelfde volgorde, als de sitemap,
+   * zodat het canvas van stap 1 en stap 2 overeenkomen (zoals Relume).
+   */
+  public function wireframe_types($types, $project_id, $sitemap_id, $page_slug) {
+    $data = json_decode((string) get_post_meta((int) $sitemap_id, 'aisb_sitemap_json', true), true);
+    if (!is_array($data)) return $types;
+    $page = null;
+    foreach ((array) ($data['sitemap'] ?? []) as $p) {
+      if (is_array($p) && sanitize_title((string) ($p['slug'] ?? '')) === $page_slug) { $page = $p; break; }
+    }
+    $sections = is_array($page['sections'] ?? null) ? AISB_Archer_Sitemap_Rules::order_sections($page['sections']) : [];
+    if (count($sections) < 3) return $types;
+    $out = [];
+    $hints = [];
+    foreach ($sections as $s) {
+      $wt = self::wireframe_type((string) ($s['section_type'] ?? ''));
+      $out[] = $wt;
+      $hints[count($out) - 1] = trim((string) ($s['section_name'] ?? '') . ': ' . (string) ($s['purpose'] ?? ''), ': ');
+    }
+    self::$hints[$page_slug] = $hints;
+    return $out;
+  }
+
+  /* ───────────────────────── Wireframeteksten ───────────────────────── */
+
+  /**
+   * Schrijft de teksten van alle secties van een wireframe parallel (één AI-vraag per sectie)
+   * in plaats van één grote vraag voor de hele pagina. Gebruikt door AISB_Wireframes_AI.
+   *
+   * @param string $prompt       De volledige prompt van de wireframe-AI (met "Target JSON:" op het einde).
+   * @param array  $to_translate section_N => ['purpose' => ..., 'modules' => [...]]
+   * @return array|null Zelfde vorm als het oude antwoord, of null als niets lukte.
+   */
+  public static function translate_sections_parallel(string $prompt, array $to_translate): ?array {
+    if (!$to_translate || !class_exists('WpOrg\\Requests\\Requests')) return null;
+    $self = new self();
+    $base = preg_replace('/Target JSON:\n.*$/s', '', $prompt);
+    $system = 'Return valid JSON only. No markdown. No explanation.';
+    $calls = [];
+    foreach ($to_translate as $key => $section) {
+      $calls[(string) $key] = ['system' => $system, 'user' => $base . "Target JSON:\n" . wp_json_encode([$key => $section])];
+    }
+    $answers = $self->ai_multi($calls, 'copy', 90);
+    $out = [];
+    foreach ($answers as $key => $ans) {
+      if (is_wp_error($ans) || !is_array($ans)) continue;
+      if (isset($ans[$key]) && is_array($ans[$key])) $out[$key] = $ans[$key];
+      elseif (isset($ans['modules'])) $out[$key] = $ans;
+      elseif (count($ans) === 1 && is_array(reset($ans)) && isset(reset($ans)['modules'])) $out[$key] = reset($ans);
+    }
+    return $out ?: null;
   }
 
   /* ───────────────────────── Hulp ───────────────────────── */
@@ -75,6 +161,7 @@ class AISB_Archer_Generate {
     $defaults = [
       'plan' => ['model' => 'gpt-5.4-mini', 'effort' => 'low'],
       'sections' => ['model' => 'gpt-5.4-mini', 'effort' => 'none'],
+      'copy' => ['model' => 'gpt-5.4-mini', 'effort' => 'none'],
     ];
     $m = apply_filters('archer_ai_' . $task . '_model', $defaults[$task] ?? $defaults['sections']);
     return is_array($m) ? $m : $defaults['sections'];

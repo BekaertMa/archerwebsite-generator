@@ -35,6 +35,10 @@ class AISB_Archer_UI {
   public function init(): void {
     add_action('wp_enqueue_scripts', [$this, 'maybe_enqueue'], 20);
     add_filter('body_class', [$this, 'body_class']);
+    // Staging draait op https maar WordPress kent zichzelf als http: CSS en JS van de eigen site
+    // dan via https laden, anders blokkeert de browser ze (bv. Bricks style-manager.css).
+    add_filter('style_loader_src', [$this, 'same_scheme_src']);
+    add_filter('script_loader_src', [$this, 'same_scheme_src']);
 
     add_action('wp_ajax_aisb_archer_autosave_sitemap', [$this, 'ajax_autosave_sitemap']);
     add_action('wp_ajax_aisb_archer_site_brief', [$this, 'ajax_site_brief']);
@@ -47,6 +51,8 @@ class AISB_Archer_UI {
 
   /** Staat de builder-shortcode op de huidige pagina (ook in Bricks-content)? */
   public static function is_builder_page(): bool {
+    // Sectievoorbeelden (iframes) zijn geen builderpagina: daar hoort geen Archer-CSS.
+    if (isset($_GET['aisb_bricks_preview'])) return false;
     if (!is_singular()) return false;
     $id = (int) get_queried_object_id();
     if (!$id) return false;
@@ -56,6 +62,12 @@ class AISB_Archer_UI {
     if (!$bricks) return false;
     $json = is_string($bricks) ? $bricks : wp_json_encode($bricks);
     return is_string($json) && strpos($json, 'ai_sitemap_builder') !== false;
+  }
+
+  public function same_scheme_src($src) {
+    if (!is_string($src) || !is_ssl() || strpos($src, 'http://') !== 0) return $src;
+    $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+    return wp_parse_url($src, PHP_URL_HOST) === $host ? set_url_scheme($src, 'https') : $src;
   }
 
   public function body_class(array $classes): array {
