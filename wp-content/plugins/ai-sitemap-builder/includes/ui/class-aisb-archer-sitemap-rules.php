@@ -74,8 +74,18 @@ class AISB_Archer_Sitemap_Rules {
       'courses'       => ['Course', 'Feature Sections'],
       'panden'        => ['Pand', 'Single Property Sections'],
       'woningen'      => ['Woning', 'Single Property Sections'],
-      'te-koop'       => ['Woning', 'Single Property Sections'],
-      'te-huur'       => ['Woning', 'Single Property Sections'],
+      'te-koop'       => ['Pand te koop', 'Single Property Sections'],
+      'te-huur'       => ['Pand te huur', 'Single Property Sections'],
+      'kopen'         => ['Pand te koop', 'Single Property Sections'],
+      'huren'         => ['Pand te huur', 'Single Property Sections'],
+      'vastgoed'      => ['Pand', 'Single Property Sections'],
+      'huizen'        => ['Huis', 'Single Property Sections'],
+      'appartementen' => ['Appartement', 'Single Property Sections'],
+      'immo'          => ['Pand', 'Single Property Sections'],
+      'a-vendre'      => ['Bien à vendre', 'Single Property Sections'],
+      'a-louer'       => ['Bien à louer', 'Single Property Sections'],
+      'for-sale'      => ['Property for sale', 'Single Property Sections'],
+      'for-rent'      => ['Property for rent', 'Single Property Sections'],
       'properties'    => ['Property', 'Single Property Sections'],
       'blog'          => ['Blogbericht', 'Single Post Sections'],
       'nieuws'        => ['Nieuwsbericht', 'Single Post Sections'],
@@ -101,6 +111,10 @@ class AISB_Archer_Sitemap_Rules {
       $p = self::plain($candidate);
       if ($p === '') continue;
       if (isset($list[$p])) return $list[$p];
+      // Samengestelde sleutels ("huizen-te-koop" bevat "te-koop").
+      foreach ($list as $key => $info) {
+        if (strpos($key, '-') !== false && strpos('-' . $p . '-', '-' . $key . '-') !== false) return $info;
+      }
       // "onze-diensten", "diensten-en-tarieven": eerste herkend woord telt.
       foreach (explode('-', $p) as $word) {
         if (strlen($word) >= 4 && isset($list[$word])) return $list[$word];

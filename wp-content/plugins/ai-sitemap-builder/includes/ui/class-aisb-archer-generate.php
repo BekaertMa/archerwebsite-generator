@@ -67,6 +67,75 @@ class AISB_Archer_Generate {
     return $types;
   }
 
+  /**
+   * Model per taak. Structuur: wat meer nadenken (logica), secties: zo snel mogelijk.
+   * Aan te passen met de filters archer_ai_plan_model en archer_ai_sections_model.
+   */
+  private function model_for(string $task): array {
+    $defaults = [
+      'plan' => ['model' => 'gpt-5.4-mini', 'effort' => 'low'],
+      'sections' => ['model' => 'gpt-5.4-mini', 'effort' => 'none'],
+    ];
+    $m = apply_filters('archer_ai_' . $task . '_model', $defaults[$task] ?? $defaults['sections']);
+    return is_array($m) ? $m : $defaults['sections'];
+  }
+
+  private function request_body(array $model, string $system, string $user): array {
+    $body = [
+      'model' => $model['model'],
+      'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]],
+      'response_format' => ['type' => 'json_object'],
+    ];
+    if (preg_match('/^(gpt-5|gpt-6|o\d)/', (string) $model['model'])) {
+      if (!empty($model['effort'])) $body['reasoning_effort'] = $model['effort'];
+    } else {
+      $body['temperature'] = 0.4;
+    }
+    return $body;
+  }
+
+  /**
+   * Meerdere AI-vragen tegelijk. Lukt een model niet (bv. niet beschikbaar voor deze sleutel),
+   * dan volgt een tweede poging met het model uit de instellingen.
+   * @param array $calls key => ['system' => string, 'user' => string]
+   * @return array key => array|WP_Error
+   */
+  private function ai_multi(array $calls, string $task, int $timeout = 60): array {
+    $settings = $this->settings();
+    if (empty($settings['api_key'])) {
+      return array_map(function () { return new WP_Error('aisb_no_key', 'Er is geen AI-sleutel ingesteld.'); }, $calls);
+    }
+    $endpoint = !empty($settings['endpoint']) ? $settings['endpoint'] : 'https://api.openai.com/v1/chat/completions';
+    $headers = ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $settings['api_key']];
+    $models = [$this->model_for($task), ['model' => (string) ($settings['model'] ?? 'gpt-4o-mini') ?: 'gpt-4o-mini', 'effort' => '']];
+    $out = [];
+    $todo = $calls;
+    foreach ($models as $model) {
+      if (!$todo) break;
+      $reqs = [];
+      foreach ($todo as $k => $c) {
+        $reqs[$k] = ['url' => $endpoint, 'type' => 'POST', 'headers' => $headers, 'data' => wp_json_encode($this->request_body($model, $c['system'], $c['user']))];
+      }
+      $responses = \WpOrg\Requests\Requests::request_multiple($reqs, ['timeout' => $timeout, 'connect_timeout' => 10]);
+      $retry = [];
+      foreach ($todo as $k => $c) {
+        $r = $responses[$k] ?? null;
+        if (!($r instanceof \WpOrg\Requests\Response)) { $retry[$k] = $c; $out[$k] = new WP_Error('aisb_ai_http', 'De AI reageerde niet.'); continue; }
+        $j = json_decode((string) $r->body, true);
+        if ($r->status_code < 200 || $r->status_code >= 300) {
+          $out[$k] = new WP_Error('aisb_ai_' . $r->status_code, (string) ($j['error']['message'] ?? 'AI-fout ' . $r->status_code));
+          if (in_array($r->status_code, [400, 404, 429, 500, 502, 503], true)) $retry[$k] = $c;
+          continue;
+        }
+        $content = json_decode((string) ($j['choices'][0]['message']['content'] ?? ''), true);
+        if (!is_array($content)) { $retry[$k] = $c; $out[$k] = new WP_Error('aisb_bad_json', 'De AI gaf geen geldig antwoord.'); continue; }
+        $out[$k] = $content;
+      }
+      $todo = $retry;
+    }
+    return $out;
+  }
+
   private function ai_json(string $system, string $user, int $timeout = 60) {
     $settings = $this->settings();
     if (empty($settings['api_key']) || !class_exists('AISB_OpenAI')) return new WP_Error('aisb_no_key', 'Er is geen AI-sleutel ingesteld.');
@@ -203,18 +272,9 @@ class AISB_Archer_Generate {
   /** Structuur uit een beschrijving: één kleine AI-vraag (enkel pagina's, geen secties). */
   private function plan_from_prompt(string $prompt, array $languages, string $page_count) {
     $lang = self::lang_name($languages);
-    $system = "You are a senior information architect. Return ONLY valid JSON.\n"
-      . "Create the page structure (no sections) of a small-business website from the brief.\n"
-      . "JSON: {\"website_name\":\"\",\"website_goal\":\"\",\"primary_audiences\":[\"\"],\"sitemap\":[{\"page_title\":\"\",\"nav_label\":\"\",\"slug\":\"\",\"page_type\":\"Home|Service|About|Contact|Blog|Landing|Legal|Other\",\"priority\":\"Core|Support|Optional\",\"parent_slug\":\"string|null\",\"page_purpose\":\"one sentence\"}]}\n"
-      . "Rules:\n"
-      . "- Write everything in {$lang}.\n"
-      . "- Exactly one Home page: slug \"home\", parent_slug null. Every other page has a parent_slug (\"home\" for menu pages).\n"
-      . "- Always include a Contact page.\n"
-      . "- Every overview page that lists several items (services, products, cars, projects, cases, vacancies, events, courses, team, blog) MUST have child pages: one per item known from the brief (max 6), otherwise one detail template page (for example \"Dienst (detailpagina)\").\n"
-      . "- Respect the desired number of pages: {$page_count} (child pages count). Never invent facts that are not in the brief.\n"
-      . "- Slugs are lowercase, hyphenated, unique, without leading slash. nav_label is 1–3 words.";
-    $user = "Desired number of pages: {$page_count}\n\nBrief:\n" . mb_substr($prompt, 0, 9000);
-    $json = $this->ai_json($system, $user, 60);
+    $system = self::plan_system_prompt();
+    $user = "Language: {$lang}\nDesired number of pages: {$page_count}\n\nBrief:\n" . mb_substr($prompt, 0, 9000);
+    $json = $this->ai_multi(['plan' => ['system' => $system, 'user' => $user]], 'plan', 60)['plan'];
     if (is_wp_error($json)) return $json;
     $pages = [];
     $seen = [];
@@ -252,6 +312,33 @@ class AISB_Archer_Generate {
     ];
   }
 
+  private static function plan_system_prompt(): string {
+    return <<<'PROMPT'
+You are a senior information architect for small-business websites. Return ONLY valid JSON.
+Create the page structure (no sections) from the brief.
+JSON: {"website_name":"","website_goal":"","primary_audiences":[""],"sitemap":[{"page_title":"","nav_label":"","slug":"","page_type":"Home|Service|About|Contact|Blog|Landing|Legal|Listing|Detail|Other","priority":"Core|Support|Optional","parent_slug":"string|null","page_purpose":"one sentence"}]}
+
+How to structure:
+- Organise pages the way visitors look for things, not the way the business is organised internally.
+- Search filters are NOT pages. If visitors filter on type, price, brand, location, size or rooms, that happens on ONE overview page with filters. Never make separate pages per filter value (no "Houses for sale" and "Apartments for sale"; no page per car brand; no page per price range).
+- Every overview of items that change over time (listings, properties, cars, products, projects, cases, vacancies, events, blog posts, team members) gets exactly ONE detail template page as its child (for example "Pand (detailpagina)", "Wagen (detailpagina)", "Vacature (detailpagina)"). Do not invent individual items.
+- Services the business names in the brief get one child page each under a services overview (max 6). Without named services: one services page, no children.
+- Industry patterns (use when they fit; translate the titles to the requested language):
+  - Real estate: Te koop (overview with filters) > Pand te koop (detail); Te huur (overview with filters) > Pand te huur (detail); Verkopen of verhuren (for owners: valuation request); Over ons; Contact.
+  - Car dealer / garage: Occasions (overview with filters) > Wagen (detail); Onderhoud en herstellingen (with the named services as children); Afspraak maken; Over ons; Contact.
+  - Restaurant / hospitality: Menukaart; Reserveren; Over ons; Contact (events or catering only if named).
+  - Construction / installers: Diensten (named services as children); Realisaties > Realisatie (detail); Offerte aanvragen; Over ons; Contact.
+  - Webshop: Shop (overview with filters) > Product (detail); Over ons; Klantenservice; Contact.
+  - Practice / healthcare / professional services: Behandelingen or Diensten (named ones as children); Team; Afspraak maken; Tarieven (only if relevant); Contact.
+- Add a conversion page when the brief's goal asks for it (appointment, quote, valuation, reservation), unless the contact page covers it.
+- Always include a Contact page. Add a Blog only when the brief mentions content, news or SEO.
+- Exactly one Home page: slug "home", parent_slug null. Every other page has a parent_slug ("home" for menu pages). Max 3 levels.
+- Respect the desired number of pages as a guide; never pad with filler pages.
+- Write titles and labels in the requested language. Slugs: lowercase, hyphenated, unique. nav_label: 1–3 words.
+- Never invent facts (names, addresses, prices) that are not in the brief.
+PROMPT;
+  }
+
   /* ───────────────────────── 2. Secties per pagina ───────────────────────── */
 
   public function ajax_sections(): void {
@@ -269,7 +356,7 @@ class AISB_Archer_Generate {
     $pages = json_decode((string) wp_unslash($_POST['pages'] ?? '[]'), true);
     $outline = json_decode((string) wp_unslash($_POST['outline'] ?? '[]'), true);
     $site = json_decode((string) wp_unslash($_POST['site'] ?? '{}'), true);
-    if (!is_array($pages) || !$pages || count($pages) > 5) wp_send_json_error(['message' => 'Ongeldige pagina’s.'], 400);
+    if (!is_array($pages) || !$pages || count($pages) > 6) wp_send_json_error(['message' => 'Ongeldige pagina’s.'], 400);
 
     $languages = json_decode((string) get_post_meta($project_id, 'aisb_project_languages', true), true);
     $lang = self::lang_name(is_array($languages) ? $languages : ['Dutch']);
@@ -281,46 +368,42 @@ class AISB_Archer_Generate {
       if (!is_array($o)) continue;
       $outline_lines[] = '- ' . ($o['title'] ?? '') . ' (' . ($o['slug'] ?? '') . (isset($o['parent']) && $o['parent'] && $o['parent'] !== 'home' ? ', under ' . $o['parent'] : '') . ')';
     }
-    $page_lines = [];
-    foreach ($pages as $p) {
-      if (!is_array($p) || empty($p['slug'])) continue;
-      $children = array_filter((array) ($p['children'] ?? []), 'is_string');
-      $page_lines[] = "- slug: " . sanitize_title((string) $p['slug']) . "\n  title: " . sanitize_text_field((string) ($p['title'] ?? ''))
-        . "\n  type: " . sanitize_text_field((string) ($p['page_type'] ?? 'Other'))
-        . (!empty($p['parent']) && $p['parent'] !== 'home' ? "\n  parent: " . sanitize_text_field((string) $p['parent']) : '')
-        . (!empty($p['purpose']) ? "\n  purpose: " . sanitize_text_field((string) $p['purpose']) : '')
-        . ($children ? "\n  child pages: " . implode(', ', array_slice($children, 0, 12)) : '')
-        . (!empty($p['collection']) ? "\n  this is a template for " . (int) $p['collection'] . " similar items" : '');
-    }
-
-    $system = "You are a senior web strategist writing the section plan of website pages. Return ONLY valid JSON.\n"
+    $system = "You are a senior web strategist writing the section plan of one website page. Return ONLY valid JSON.\n"
       . "Write everything in {$lang}. Never mix languages. Never invent facts (names, numbers, prices, addresses) that are not in the brief.\n"
-      . "For each requested page return: page_purpose (one sentence), sections, seo.\n"
       . "Sections:\n"
       . "- The FIRST section is always section_type \"Headers\" and the LAST section is always section_type \"Footers\".\n"
-      . "- Between them: Home 6–8 sections; overview pages 4–6 (include a section that lists or links the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
-      . "- section_type MUST be one of: " . implode(' | ', $types) . "\n"
-      . "- section_name: short, specific to this business (2–5 words).\n"
-      . "- purpose: 2 sentences that tell a web designer what to design and what the visitor gets.\n"
-      . "- key_content: 2–5 concrete items taken from the brief.\n"
-      . "JSON: {\"pages\":[{\"slug\":\"\",\"page_purpose\":\"\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}]}";
-    $user = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
+      . "- Between them: Home 6–8 sections; overview pages 4–6 (on listing overviews include the search filters and the results grid; on other overviews a section that lists the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
+      . "- Order the sections the way a visitor reads the page: hero or intro right after the header, the main content next, proof and the call to action near the end.\n"
+      . "- section_type MUST be one of: " . implode(' | ', $types) . " (for properties use Property or Single Property sections, for cars and products the product sections).\n"
+      . "- section_name: short and specific to this business (2–5 words).\n"
+      . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
+      . "- key_content: 2–4 concrete items from the brief.\n"
+      . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
+    $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
       . "\nAll pages of the site:\n" . implode("\n", array_slice($outline_lines, 0, 70))
-      . "\n\nBrief:\n" . $brief
-      . "\n\nWrite the sections for these pages:\n" . implode("\n", $page_lines);
+      . "\n\nBrief:\n" . $brief;
 
-    $json = $this->ai_json($system, $user, 75);
-    if (is_wp_error($json)) wp_send_json_error(['message' => $json->get_error_message()], 502);
+    $calls = [];
+    foreach ($pages as $p) {
+      if (!is_array($p) || empty($p['slug'])) continue;
+      $slug = sanitize_title((string) $p['slug']);
+      $children = array_filter((array) ($p['children'] ?? []), 'is_string');
+      $page = "Write the sections for this page:\n- slug: " . $slug . "\n- title: " . sanitize_text_field((string) ($p['title'] ?? ''))
+        . "\n- type: " . sanitize_text_field((string) ($p['page_type'] ?? 'Other'))
+        . (!empty($p['parent']) && $p['parent'] !== 'home' ? "\n- parent: " . sanitize_text_field((string) $p['parent']) : '')
+        . (!empty($p['purpose']) ? "\n- purpose: " . sanitize_text_field((string) $p['purpose']) : '')
+        . ($children ? "\n- child pages: " . implode(', ', array_slice($children, 0, 12)) : '')
+        . (!empty($p['collection']) ? "\n- this is a template for " . (int) $p['collection'] . " similar items" : '');
+      $calls[$slug] = ['system' => $system, 'user' => $context . "\n\n" . $page];
+    }
+    $answers = $this->ai_multi($calls, 'sections', 60);
 
     $out = [];
-    $by_slug = [];
-    foreach ((array) ($json['pages'] ?? []) as $p) if (is_array($p) && !empty($p['slug'])) $by_slug[sanitize_title((string) $p['slug'])] = $p;
+    $errors = [];
     $lang_code = strtolower(substr((string) (is_array($languages) ? ($languages[0] ?? 'Dutch') : 'Dutch'), 0, 2));
-    foreach ($pages as $req) {
-      $slug = sanitize_title((string) ($req['slug'] ?? ''));
-      $p = $by_slug[$slug] ?? null;
-      if (!$p) continue;
+    foreach ($answers as $slug => $p) {
+      if (is_wp_error($p)) { $errors[$slug] = $p->get_error_message(); continue; }
       $out[$slug] = [
         'page_purpose' => sanitize_text_field((string) ($p['page_purpose'] ?? '')),
         'sections' => $this->clean_sections((array) ($p['sections'] ?? []), $types, $lang_code),
@@ -332,7 +415,8 @@ class AISB_Archer_Generate {
         ],
       ];
     }
-    wp_send_json_success(['pages' => $out]);
+    if (!$out && $errors) wp_send_json_error(['message' => reset($errors)], 502);
+    wp_send_json_success(['pages' => $out, 'errors' => $errors]);
   }
 
   private function clean_sections(array $sections, array $types, string $lang): array {
