@@ -262,6 +262,9 @@ class AISB_Archer_Styles {
       . '@layer bricks{html body .bricks-button.circle.circle{border-radius:var(--a-radius-button) !important;}}'
       // Velden
       . 'html body .brxe-form.brxe-form :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border-radius:var(--a-radius-field);border:1px solid var(--a-line);background-color:var(--a-base);color:var(--a-ink);}'
+      // Labels: de sjablonen kleuren ze licht (bedoeld voor een donkere kaart), op de grond onleesbaar.
+      . 'html body .brxe-form.brxe-form :is(label,.form-group > label,.options-wrapper label){color:var(--a-muted) !important;}'
+      . 'html body .brxe-form.brxe-form ::placeholder{color:var(--a-muted);opacity:.7;}'
       // Beelden
       . 'html body .brxe-image:not(.archer-cover *):not(.brxe-logo *),html body .brxe-image:not(.archer-cover *) img,html body figure:not(.archer-cover *) img{border-radius:var(--a-radius-image);}'
       . 'html body .brxe-image img{object-fit:cover;}'
@@ -283,6 +286,8 @@ class AISB_Archer_Styles {
       . 'html body .archer-footer,html body .archer-footer :is(.brxe-container,.brxe-block){background-color:var(--a-footer-bg) !important;}'
       . 'html body .archer-footer :is(h1,h2,h3,h4,h5,h6,.brxe-heading,p,li,a,.brxe-text,.brxe-text-basic,.brxe-nav-menu a,.brxe-logo){color:var(--a-footer-ink) !important;}'
       . 'html body .archer-footer .archer-credit{opacity:.72;}'
+      . 'html body .archer-footer :is(.brxe-nav-menu a,.bricks-nav-menu a,[class*="menu"] a){white-space:nowrap;}'
+      . 'html body .archer-footer .bricks-nav-menu{flex-wrap:wrap !important;row-gap:12px;}'
       . ':root{--a-footer-bg:' . (($s['bands']['footer'] ?? 'ink') === 'field' ? 'var(--a-dark)' : (($s['bands']['footer'] ?? 'ink') === 'ground' ? 'var(--a-surface)' : 'var(--a-dark)')) . ';--a-footer-ink:' . (($s['bands']['footer'] ?? 'ink') === 'ground' ? 'var(--a-ink)' : 'var(--a-dark-ink)') . ';}';
     return $css;
   }

@@ -30,6 +30,7 @@ class AISB_Archer_Generate {
     foreach ($nodes as &$n) {
       if (!is_array($n) || empty($n['settings']) || !is_array($n['settings'])) continue;
       $name = (string) ($n['name'] ?? '');
+      if ($name === 'form') { $n['settings'] = self::form_labels($n['settings']); continue; }
       if (!in_array($name, ['heading', 'text-basic', 'text', 'button', 'text-link'], true)) continue;
       foreach (['text', 'title', 'subtitle', 'description', 'content'] as $k) {
         if (isset($n['settings'][$k]) && is_string($n['settings'][$k])) {
@@ -41,6 +42,32 @@ class AISB_Archer_Generate {
     // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
     if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
     return $nodes;
+  }
+
+  /**
+   * Formulierlabels van het sjabloon staan in het Engels ("Name", "Email") terwijl de AI de
+   * plaatshouders vertaalt ("Uw naam"). De taal van de plaatshouders bepaalt de labels.
+   */
+  public static function form_labels(array $settings): array {
+    if (empty($settings['fields']) || !is_array($settings['fields'])) return $settings;
+    $ph = implode(' ', array_map(fn($f) => is_array($f) ? (string) ($f['placeholder'] ?? '') : '', $settings['fields']));
+    $lang = preg_match('/\b(uw|je|jouw|naam|bericht|telefoonnummer)\b/iu', $ph) ? 'nl' : (preg_match('/\b(votre|vos|nom|téléphone)\b/iu', $ph) ? 'fr' : '');
+    if ($lang === '') return $settings;
+    $map = [
+      'nl' => ['name' => 'Naam', 'full name' => 'Naam', 'your name' => 'Naam', 'first name' => 'Voornaam', 'last name' => 'Achternaam', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'E-mailadres', 'your email' => 'E-mail', 'phone' => 'Telefoon', 'phone number' => 'Telefoon', 'telephone' => 'Telefoon', 'message' => 'Bericht', 'your message' => 'Bericht', 'subject' => 'Onderwerp', 'company' => 'Bedrijf', 'date' => 'Datum', 'send' => 'Versturen', 'submit' => 'Versturen'],
+      'fr' => ['name' => 'Nom', 'full name' => 'Nom', 'your name' => 'Nom', 'first name' => 'Prénom', 'last name' => 'Nom', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'Adresse e-mail', 'your email' => 'E-mail', 'phone' => 'Téléphone', 'phone number' => 'Téléphone', 'telephone' => 'Téléphone', 'message' => 'Message', 'your message' => 'Message', 'subject' => 'Sujet', 'company' => 'Entreprise', 'date' => 'Date', 'send' => 'Envoyer', 'submit' => 'Envoyer'],
+    ][$lang];
+    foreach ($settings['fields'] as &$f) {
+      if (!is_array($f) || !isset($f['label']) || !is_string($f['label'])) continue;
+      $k = strtolower(trim(rtrim($f['label'], ' *:')));
+      if (isset($map[$k])) $f['label'] = $map[$k];
+    }
+    unset($f);
+    if (isset($settings['submitButtonText']) && is_string($settings['submitButtonText'])) {
+      $k = strtolower(trim($settings['submitButtonText']));
+      if (isset($map[$k])) $settings['submitButtonText'] = $map[$k];
+    }
+    return $settings;
   }
 
   /* ───────────────────────── Wireframes volgen de sitemap ───────────────────────── */
@@ -224,7 +251,13 @@ class AISB_Archer_Generate {
     $cut = mb_substr($text, 0, $max);
     if (preg_match('/^(.*[.!?])\s/u', $cut . ' ', $m) && mb_strlen($m[1]) >= $max * 0.6) return $m[1];
     $sp = mb_strrpos($cut, ' ');
-    $cut = $sp !== false && $sp > $max * 0.5 ? mb_substr($cut, 0, $sp) : $cut;
+    if ($sp !== false && $sp > $max * 0.5) {
+      $cut = mb_substr($cut, 0, $sp);
+    } else {
+      // Nooit midden in een woord knippen ("Velthof Interieurarchi"): het woord afmaken.
+      $next = mb_strpos($text, ' ', $max);
+      $cut = $next === false ? $text : mb_substr($text, 0, $next);
+    }
     // Geen losse verbindingswoorden op het einde ("…herstellingen en").
     $stop = '(en|of|het|de|een|uit|voor|van|met|op|in|aan|te|om|bij|and|or|the|a|to|of|for|with|et|ou|le|la|les|du|des|pour|y|o|el|los|las|und|oder|der|die|das|mit)';
     for ($i = 0; $i < 3; $i++) $cut = preg_replace('/[\s,;:–—-]+' . $stop . '$/iu', '', rtrim($cut, " ,;:-–—"));
