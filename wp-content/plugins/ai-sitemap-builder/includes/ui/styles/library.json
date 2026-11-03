@@ -1,0 +1,150 @@
+{
+  "_about": "Archer-stijlen: volledige ontwerpsystemen voor de Brixies-secties. Elke stijl zet de Brixies-variabelen (ruimte, breedte, letters, hoeken, grijzen, kleuren) en bepaalt welke achtergronden een website mag gebruiken: één grond voor alle secties, een tweede kleur alleen voor kaarten en hoogstens één bewuste band, plus de footer. Maten in px (Brixies zet de basis op 62,5%). Vloeiende maten: [min bij 360px, max bij 1440px].",
+  "styles": [
+    {
+      "id": "atelier",
+      "name": "Atelier",
+      "pitch": "Redactioneel en rustig: grote schreeftitels, veel wit, zwart als accent.",
+      "sectors": ["architecture", "fashion", "culture", "hospitality", "real-estate", "agency"],
+      "fonts": {
+        "heading": { "family": "Instrument Serif", "weights": [400], "weight": 400, "tracking": "-0.01em", "case": "none", "lineHeight": 1.02 },
+        "body": { "family": "Geist", "weights": [400, 500], "weight": 400, "lineHeight": 1.6 }
+      },
+      "type": { "display": [56, 116], "h2": [38, 68], "h3": [24, 32], "lead": [19, 23], "body": [17, 19], "small": [14, 15] },
+      "colours": { "base": "#F7F6F2", "surface": "#EEECE6", "surface2": "#E4E1D9", "ink": "#191917", "muted": "#66645D", "accent": "#191917", "accentInk": "#F7F6F2", "line": "#DAD7CE", "dark": "#191917", "darkInk": "#F2F1EC" },
+      "space": { "section": [112, 200], "heading": [48, 96], "content": 24, "grid": [24, 40], "container": 1240 },
+      "radius": { "button": 999, "card": 0, "image": 2, "field": 0 },
+      "button": { "weight": 500, "case": "none", "tracking": "0", "size": 15 },
+      "card": "none",
+      "bands": { "cta": "ground", "quote": "", "footer": "ink" },
+      "radiusBucket": "round"
+    },
+    {
+      "id": "nordic",
+      "name": "Nordic",
+      "pitch": "Licht en helder, strakke schreefloze letter, zacht groen accent.",
+      "sectors": ["health", "finance", "education", "nonprofit", "other", "saas"],
+      "fonts": {
+        "heading": { "family": "Inter Tight", "weights": [500, 600], "weight": 600, "tracking": "-0.035em", "case": "none", "lineHeight": 1.04 },
+        "body": { "family": "Inter", "weights": [400, 500], "weight": 400, "lineHeight": 1.6 }
+      },
+      "type": { "display": [44, 88], "h2": [32, 54], "h3": [21, 26], "lead": [18, 21], "body": [16, 18], "small": [14, 15] },
+      "colours": { "base": "#FFFFFF", "surface": "#F3F5F2", "surface2": "#E8ECE7", "ink": "#121512", "muted": "#5B635C", "accent": "#2F5A46", "accentInk": "#FFFFFF", "line": "#E2E6E1", "dark": "#15231C", "darkInk": "#EDF2EE" },
+      "space": { "section": [96, 168], "heading": [40, 80], "content": 20, "grid": [20, 32], "container": 1240 },
+      "radius": { "button": 10, "card": 16, "image": 16, "field": 10 },
+      "button": { "weight": 600, "case": "none", "tracking": "-0.01em", "size": 16 },
+      "card": "flat",
+      "bands": { "cta": "field", "quote": "ground", "footer": "ink" },
+      "radiusBucket": "soft"
+    },
+    {
+      "id": "studio",
+      "name": "Studio",
+      "pitch": "Groot, zelfzeker en grafisch: enorme titels, oranje accent, scherpe lijnen.",
+      "sectors": ["agency", "saas", "event", "music", "ecommerce"],
+      "fonts": {
+        "heading": { "family": "Geist", "weights": [500, 600], "weight": 600, "tracking": "-0.045em", "case": "none", "lineHeight": 0.98 },
+        "body": { "family": "Geist", "weights": [400, 500], "weight": 400, "lineHeight": 1.55 }
+      },
+      "type": { "display": [56, 132], "h2": [38, 76], "h3": [22, 28], "lead": [19, 23], "body": [16, 18], "small": [13, 14] },
+      "colours": { "base": "#FAFAF9", "surface": "#F0F0EE", "surface2": "#E5E5E2", "ink": "#0B0B0B", "muted": "#5F5F5B", "accent": "#FF4F1A", "accentInk": "#0B0B0B", "line": "#E0E0DC", "dark": "#0B0B0B", "darkInk": "#FAFAF9" },
+      "space": { "section": [96, 184], "heading": [48, 96], "content": 22, "grid": [16, 24], "container": 1320 },
+      "radius": { "button": 6, "card": 12, "image": 12, "field": 6 },
+      "button": { "weight": 600, "case": "none", "tracking": "-0.01em", "size": 16 },
+      "card": "hairline",
+      "bands": { "cta": "ink", "quote": "", "footer": "ink" },
+      "radiusBucket": "soft"
+    },
+    {
+      "id": "ambacht",
+      "name": "Ambacht",
+      "pitch": "Warm en eerlijk voor vakmensen: stevige letter, warme grond, diepblauw accent.",
+      "sectors": ["architecture", "physical-product", "restaurant", "other", "real-estate"],
+      "fonts": {
+        "heading": { "family": "Bricolage Grotesque", "weights": [600, 700], "weight": 700, "tracking": "-0.03em", "case": "none", "lineHeight": 1.02 },
+        "body": { "family": "DM Sans", "weights": [400, 500], "weight": 400, "lineHeight": 1.6 }
+      },
+      "type": { "display": [46, 94], "h2": [34, 58], "h3": [21, 27], "lead": [18, 22], "body": [17, 18], "small": [14, 15] },
+      "colours": { "base": "#FAF8F3", "surface": "#F1ECE2", "surface2": "#E7E0D2", "ink": "#211E19", "muted": "#675F54", "accent": "#1F3A5F", "accentInk": "#FFFFFF", "line": "#E3DCCF", "dark": "#1B2A3D", "darkInk": "#F3F0E9" },
+      "space": { "section": [96, 168], "heading": [40, 80], "content": 22, "grid": [20, 32], "container": 1240 },
+      "radius": { "button": 999, "card": 20, "image": 20, "field": 12 },
+      "button": { "weight": 600, "case": "none", "tracking": "0", "size": 16 },
+      "card": "flat",
+      "bands": { "cta": "field", "quote": "", "footer": "field" },
+      "radiusBucket": "round"
+    },
+    {
+      "id": "helder",
+      "name": "Helder",
+      "pitch": "Vertrouwd en toegankelijk: ronde vormen, zachte vlakken, petrol als accent.",
+      "sectors": ["health", "education", "nonprofit", "finance", "other"],
+      "fonts": {
+        "heading": { "family": "Manrope", "weights": [600, 700], "weight": 700, "tracking": "-0.025em", "case": "none", "lineHeight": 1.06 },
+        "body": { "family": "Manrope", "weights": [400, 500], "weight": 400, "lineHeight": 1.65 }
+      },
+      "type": { "display": [42, 78], "h2": [30, 50], "h3": [20, 25], "lead": [18, 21], "body": [16, 18], "small": [14, 15] },
+      "colours": { "base": "#FFFFFF", "surface": "#F1F5F7", "surface2": "#E5EDF1", "ink": "#0E1A24", "muted": "#526171", "accent": "#0E6E72", "accentInk": "#FFFFFF", "line": "#DCE5EA", "dark": "#0E1A24", "darkInk": "#EDF3F6" },
+      "space": { "section": [88, 152], "heading": [40, 72], "content": 20, "grid": [20, 32], "container": 1200 },
+      "radius": { "button": 12, "card": 20, "image": 24, "field": 12 },
+      "button": { "weight": 600, "case": "none", "tracking": "0", "size": 16 },
+      "card": "flat",
+      "bands": { "cta": "ground", "quote": "ground", "footer": "ink" },
+      "radiusBucket": "soft"
+    },
+    {
+      "id": "noir",
+      "name": "Noir",
+      "pitch": "Donker en exclusief: fijne schreef, champagne als accent, foto's groot.",
+      "sectors": ["hospitality", "real-estate", "fashion", "event", "restaurant"],
+      "fonts": {
+        "heading": { "family": "Cormorant Garamond", "weights": [500, 600], "weight": 500, "tracking": "-0.015em", "case": "none", "lineHeight": 1.0 },
+        "body": { "family": "Jost", "weights": [300, 400], "weight": 400, "lineHeight": 1.65 }
+      },
+      "type": { "display": [52, 112], "h2": [36, 66], "h3": [24, 30], "lead": [18, 22], "body": [16, 18], "small": [13, 14] },
+      "colours": { "base": "#0F0F0E", "surface": "#181816", "surface2": "#22221F", "ink": "#EFEBE3", "muted": "#A29C90", "accent": "#CDB389", "accentInk": "#0F0F0E", "line": "#2C2B28", "dark": "#090908", "darkInk": "#EFEBE3" },
+      "space": { "section": [112, 200], "heading": [48, 96], "content": 24, "grid": [16, 28], "container": 1280 },
+      "radius": { "button": 0, "card": 0, "image": 0, "field": 0 },
+      "button": { "weight": 500, "case": "uppercase", "tracking": "0.12em", "size": 13 },
+      "card": "hairline",
+      "bands": { "cta": "ground", "quote": "", "footer": "field" },
+      "radiusBucket": "sharp",
+      "dark": true
+    },
+    {
+      "id": "raster",
+      "name": "Raster",
+      "pitch": "Zwitsers en technisch: wit, zwart en één rode kleur, alles op een strak raster.",
+      "sectors": ["architecture", "agency", "physical-product", "saas", "other"],
+      "fonts": {
+        "heading": { "family": "Archivo", "weights": [600, 700], "weight": 700, "tracking": "-0.04em", "case": "none", "lineHeight": 1.0 },
+        "body": { "family": "Archivo", "weights": [400, 500], "weight": 400, "lineHeight": 1.55 }
+      },
+      "type": { "display": [48, 108], "h2": [34, 62], "h3": [20, 26], "lead": [18, 22], "body": [16, 18], "small": [13, 14] },
+      "colours": { "base": "#FFFFFF", "surface": "#F4F4F4", "surface2": "#EAEAEA", "ink": "#000000", "muted": "#555555", "accent": "#D21F14", "accentInk": "#FFFFFF", "line": "#DADADA", "dark": "#000000", "darkInk": "#FFFFFF" },
+      "space": { "section": [96, 176], "heading": [40, 88], "content": 20, "grid": [0, 0], "container": 1320 },
+      "radius": { "button": 0, "card": 0, "image": 0, "field": 0 },
+      "button": { "weight": 600, "case": "none", "tracking": "0", "size": 16 },
+      "card": "hairline",
+      "bands": { "cta": "accent", "quote": "", "footer": "ink" },
+      "radiusBucket": "sharp"
+    },
+    {
+      "id": "fris",
+      "name": "Fris",
+      "pitch": "Vriendelijk en modern voor lokale diensten: ronde letter, wit, kobaltblauw.",
+      "sectors": ["other", "health", "ecommerce", "education", "event", "restaurant"],
+      "fonts": {
+        "heading": { "family": "Plus Jakarta Sans", "weights": [700, 800], "weight": 700, "tracking": "-0.03em", "case": "none", "lineHeight": 1.05 },
+        "body": { "family": "Plus Jakarta Sans", "weights": [400, 500], "weight": 400, "lineHeight": 1.6 }
+      },
+      "type": { "display": [42, 82], "h2": [30, 52], "h3": [20, 25], "lead": [18, 21], "body": [16, 18], "small": [14, 15] },
+      "colours": { "base": "#FFFFFF", "surface": "#F2F5FD", "surface2": "#E6ECFB", "ink": "#0D1530", "muted": "#545D76", "accent": "#2152E8", "accentInk": "#FFFFFF", "line": "#DEE4F3", "dark": "#0D1530", "darkInk": "#EEF2FC" },
+      "space": { "section": [88, 152], "heading": [40, 72], "content": 20, "grid": [20, 28], "container": 1240 },
+      "radius": { "button": 999, "card": 18, "image": 18, "field": 12 },
+      "button": { "weight": 600, "case": "none", "tracking": "0", "size": 16 },
+      "card": "flat",
+      "bands": { "cta": "accent", "quote": "ground", "footer": "ink" },
+      "radiusBucket": "round"
+    }
+  ]
+}
