@@ -200,6 +200,8 @@
           secBg = palNeutral || palLight || guide.sectionBg2 || "";
         }
 
+        // Archer-stijl gekozen: geen afwisselende achtergronden, de stijl bepaalt ze.
+        if (guide.style) secBg = "";
         if (secBg) {
           // :not([style*='background-image']) beschermt secties met een achtergrondafbeelding
           css +=

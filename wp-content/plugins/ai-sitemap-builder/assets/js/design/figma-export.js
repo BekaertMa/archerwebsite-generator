@@ -152,9 +152,10 @@
     var palNeutral = find("Neutral") || (colours[5] ? colours[5].hex : "");
 
     // even secties: Light-kleur | sectionBg1-fallback
-    var computedBg1 = palLight || guide.sectionBg1 || "";
+    // Archer-stijl gekozen: geen afwisselende achtergronden (de sjablonen volgen de stijl).
+    var computedBg1 = guide.style ? "" : palLight || guide.sectionBg1 || "";
     // oneven secties: Neutral-kleur | Light-kleur | sectionBg2-fallback
-    var computedBg2 = palNeutral || palLight || guide.sectionBg2 || "";
+    var computedBg2 = guide.style ? "" : palNeutral || palLight || guide.sectionBg2 || "";
 
     guide.sectionBg1 = computedBg1;
     guide.sectionBg2 = computedBg2;
@@ -185,6 +186,7 @@
       find("Neutral") || (colours[5] ? colours[5].hex : "") || palLight;
 
     var bgFor = function (bgIdx) {
+      if (guide.style) return "";
       return bgIdx % 2 === 0
         ? palLight || guide.sectionBg1 || ""
         : palNeutral || palLight || guide.sectionBg2 || "";
