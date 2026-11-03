@@ -65,6 +65,11 @@
           ? iframe._localSectionIdx
           : iframe._sectionIdx;
       let urls = D.buildSectionImageMap()[iframe._pageSlug + ":" + localIdx];
+      // Archer: lege fotovakken (nog geen stockfoto gekozen) blijven leeg; geen foto's van elders lenen.
+      const archerManual = guide.images.some(function (img) {
+        return !img || img.archerEmpty || !(img.full || img.thumb);
+      });
+      if (archerManual && (!urls || !urls.some(Boolean))) return;
 
       // Fallback: als media_count = 0 maar er zijn wél <img> tags, gebruik
       // de guide-afbeeldingen cyclisch verdeeld op basis van de globale sectie-index.
@@ -84,7 +89,7 @@
       // Als er meer <img> slots zijn dan toegewezen URLs (bijv. een gallerij),
       // vul de extra slots met unieke afbeeldingen uit de volledige pool.
       const allImgs = guide.images;
-      if (nonLogoImgs.length > urls.length && allImgs.length > 1) {
+      if (!archerManual && nonLogoImgs.length > urls.length && allImgs.length > 1) {
         // bereken de globale pool-offset: hoeveel images gingen voor deze sectie?
         let poolOffset = 0;
         outer: for (let pi = 0; pi < D.wireframePages.length; pi++) {
@@ -101,7 +106,9 @@
         }
       }
       nonLogoImgs.forEach((img, ui) => {
-        img.src = urls[ui] || urls[ui % urls.length];
+        const archerUrl = archerManual ? urls[ui] : urls[ui] || urls[ui % urls.length];
+        if (!archerUrl) return;
+        img.src = archerUrl;
         img.srcset = "";
         img.style.objectFit = "cover";
       });

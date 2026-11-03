@@ -1556,14 +1556,14 @@
 
         for (var i = 0; i < imageCount; i++) {
           var url = urls[i];
-          if (!url) continue;
-          var img = urlToImg[url];
-          if (!img) continue;
-          var imgKey = img.full || img.thumb || "";
-          if (imgKey && !usedKeys[imgKey]) {
-            usedKeys[imgKey] = true;
-            orderedImages.push(img);
+          // Archer: een leeg fotovak houdt zijn plaats, anders schuiven de foto's van de
+          // volgende secties en pagina's door naar de verkeerde vakken.
+          var img = url ? urlToImg[url] : null;
+          if (!img) {
+            orderedImages.push({ full: "", thumb: "", alt: "", archerEmpty: true });
+            continue;
           }
+          orderedImages.push(img);
         }
       });
 
@@ -1643,11 +1643,17 @@
       }
     });
 
-    // Two animation frames so the browser applies the new styles before we read the DOM
+    // Two animation frames so the browser applies the new styles before we read the DOM.
+    // Archer: in een tab op de achtergrond (het publicatievenster heeft de focus) vuurt
+    // requestAnimationFrame niet, waardoor publiceren minutenlang bleef hangen. Een timer als vangnet;
+    // de stijlen worden toch toegepast zodra getComputedStyle ze leest.
     return new Promise(function (resolve) {
+      var done = false;
+      var finish = function () { if (!done) { done = true; resolve(); } };
       requestAnimationFrame(function () {
-        requestAnimationFrame(resolve);
+        requestAnimationFrame(finish);
       });
+      setTimeout(finish, 80);
     });
   }
 
