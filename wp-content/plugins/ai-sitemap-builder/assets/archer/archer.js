@@ -2138,6 +2138,132 @@
       if (host && host.parentElement) host.parentElement.insertBefore(box, host);
       else colourPanel.prepend(box);
       let round = Number((SG.guide && SG.guide.tasteDirection && SG.guide.tasteDirection.round) || 0);
+
+      /* ── Archer-stijlen: een volledig ontwerpsysteem kiezen (letters, kleuren, ruimte, vormen) ── */
+      const sbox = document.createElement("section");
+      sbox.className = "archer-styles";
+      sbox.setAttribute("aria-label", "Stijl");
+      sbox.innerHTML = '<div class="archer-taste-head"><h4>Stijl</h4></div>' +
+        '<p class="archer-taste-intro">Kies een stijl voor de hele website: letters, kleuren, witruimte en vormen horen samen. Daaronder kan je kleuren en letters nog verfijnen.</p>' +
+        '<div class="archer-style-grid" data-style-grid><p class="archer-muted">Stijlen laden…</p></div>' +
+        '<p class="archer-taste-status" data-style-status aria-live="polite"></p>';
+      box.before(sbox);
+      $(".archer-taste-head h4", box).textContent = "Kleuren en letters verfijnen";
+      $(".archer-taste-intro", box).textContent = "Andere combinaties binnen de gekozen stijl: kleuren of letters apart wisselen.";
+      let styles = [];
+      const styleFonts = document.createElement("link");
+      styleFonts.rel = "stylesheet";
+      document.head.appendChild(styleFonts);
+      const styleNow = () => (SG.guide && !Array.isArray(SG.guide) && SG.guide.style) || "";
+      const styleById = (id) => styles.find((x) => x.id === id);
+      // Kleur- en letteraanpassingen na het kiezen gaan voor op de stijl (zelfde regel als op de server).
+      const styleCssFor = (st) => {
+        if (!st) return "";
+        const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+        const get = (n) => ((cols.find((c) => c && c.name === n) || {}).hex || "");
+        const map = { Primary: "--a-accent", Secondary: "--a-dark", Dark: "--a-ink", Light: "--a-surface", Neutral: "--a-surface2" };
+        let o = "";
+        Object.keys(map).forEach((n) => { const h = get(n); if (/^#[0-9a-f]{6}$/i.test(h)) o += map[n] + ":" + h + ";"; });
+        const hf = SG.guide && SG.guide.headingFont, bf = SG.guide && SG.guide.bodyFont;
+        if (hf && hf !== st.headingFont) o += `--a-font-heading:'${hf}',ui-sans-serif,system-ui,sans-serif;`;
+        if (bf && bf !== st.bodyFont) o += `--a-font-body:'${bf}',ui-sans-serif,system-ui,sans-serif;`;
+        return st.css + (o ? ":root{" + o + "}" : "");
+      };
+      const injectStyle = (iframe) => {
+        let doc;
+        try { doc = iframe.contentDocument; } catch (e) { return; }
+        if (!doc || !doc.head) return;
+        let el = doc.getElementById("archer-style");
+        const st = styleById(styleNow());
+        if (!st) { if (el) el.remove(); return; }
+        if (!el) { el = doc.createElement("style"); el.id = "archer-style"; }
+        el.textContent = styleCssFor(st);
+        doc.head.appendChild(el); // na de stijlgids, vóór het kleurschema per sectie
+        const sch = doc.getElementById("archer-scheme");
+        if (sch) doc.head.appendChild(sch);
+      };
+      UI.injectStyle = injectStyle;
+      // Rustige achtergronden: alle secties op de grond, hoogstens één band per pagina (oproep) en de footer.
+      const bandSchemes = (st) => {
+        const out = { global: {}, pages: {} };
+        // Donkere stijl: de rol Dark is daar de lichte tekstkleur, dus een donkere band wordt 'field'.
+        const band = (b) => ((st.dark || (st.guide && st.guide.darkMode)) && b === "ink" ? "field" : b);
+        if (st.bands && st.bands.footer) out.global.footer = band(st.bands.footer);
+        (SG.wireframePages || []).forEach((p) => {
+          const map = {};
+          let cta = false;
+          (p.sections || []).forEach((sec) => {
+            const t = String((sec && sec.type) || "").toLowerCase();
+            if (!sec || !sec.uuid || /^(header|footer)$/.test(t)) return;
+            if (!cta && st.bands && st.bands.cta && /cta|call|oproep/.test(t)) { map[sec.uuid] = band(st.bands.cta); cta = true; return; }
+            if (st.bands && st.bands.quote && /testimon|review|quote|getuig/.test(t)) map[sec.uuid] = band(st.bands.quote);
+          });
+          if (Object.keys(map).length) out.pages[p.slug] = map;
+        });
+        return out;
+      };
+      const applyStyle = (st, quiet) => {
+        if (!st) return;
+        if (Array.isArray(SG.guide) || !SG.guide) SG.guide = {};
+        const g = st.guide;
+        setColours(g.colours);
+        setFonts(g.headingFont, g.bodyFont);
+        SG.guide.typography = JSON.parse(JSON.stringify(g.typography));
+        if (SG.renderTypography) SG.renderTypography(SG.guide.typography);
+        ["style", "radius", "sectionBg1", "sectionBg2", "darkMode", "groundsLight"].forEach((k) => (SG.guide[k] = g[k]));
+        SG.guide.sectionSchemes = bandSchemes(st);
+        SG.guide.tasteDirection = null;
+        SG.applyOverridesToAllIframes();
+        renderStyles();
+        if (typeof markRadius === "function") markRadius();
+        if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's.";
+        SG.saveDraft && SG.saveDraft();
+      };
+      const specimen = (st) => {
+        const c = st.colours;
+        return `<span class="archer-style-swatch" style="background:${esc(c.base)};color:${esc(c.ink)}">` +
+          `<span class="archer-style-aa" style="font-family:'${esc(st.headingFont)}',serif;font-weight:${st.headingWeight};letter-spacing:${esc(st.headingTracking)}">Aa</span>` +
+          `<span class="archer-style-lines"><i style="background:${esc(c.ink)}"></i><i style="background:${esc(c.muted)}"></i></span>` +
+          `<span class="archer-style-btn" style="background:${esc(c.accent)};color:${esc(c.accentInk)};border-radius:${Math.min(999, st.radius.button)}px">Knop</span>` +
+          `<span class="archer-style-chips"><b style="background:${esc(c.surface)}"></b><b style="background:${esc(c.accent)}"></b><b style="background:${esc(c.dark)}"></b></span>` +
+          `</span>`;
+      };
+      function renderStyles() {
+        const cur = styleNow();
+        $("[data-style-grid]", sbox).innerHTML = styles
+          .map((st) => `<button type="button" class="archer-style-card${cur === st.id ? " is-active" : ""}" data-style-id="${esc(st.id)}" aria-pressed="${cur === st.id ? "true" : "false"}">` +
+            specimen(st) +
+            `<span class="archer-style-name">${esc(st.name)}${st.fit && styles.indexOf(st) < 3 ? ' <em>past bij deze zaak</em>' : ""}</span>` +
+            `<span class="archer-style-pitch">${esc(st.pitch)}</span></button>`)
+          .join("");
+      }
+      let userPicked = false;
+      sbox.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-style-id]");
+        if (!b) return;
+        userPicked = true;
+        applyStyle(styleById(b.getAttribute("data-style-id")));
+      });
+      // Een nieuw project (nog geen stijlgids): de eerste stijl die bij de zaak past, toepassen.
+      // Pas beslissen als de opgeslagen stijlgids geladen is; een keuze van de gebruiker gaat altijd voor.
+      const guideEmpty = () => !(SG.extractedColours && SG.extractedColours.length) && !(SG.guide && !Array.isArray(SG.guide) && SG.guide.colours && SG.guide.colours.length) && !styleNow();
+      UI.styleAuto = guideEmpty();
+      (async () => {
+        let out;
+        try { out = await SG.post("aisb_archer_styles", { project_id: SG.projectId }); } catch (e) { out = null; }
+        if (!out || !out.success) {
+          $("[data-style-grid]", sbox).innerHTML = '<p class="archer-danger-text">De stijlen konden niet geladen worden.</p>';
+          return;
+        }
+        styles = out.data.styles || [];
+        const fams = Array.from(new Set(styles.map((x) => x.headingFont))).map((f) => "family=" + f.replace(/ /g, "+") + ":wght@400;500;600;700");
+        styleFonts.href = "https://fonts.googleapis.com/css2?" + fams.join("&") + "&display=swap";
+        renderStyles();
+        (SG.allIframes || []).forEach((f) => f._loaded && injectStyle(f));
+        setTimeout(() => {
+          if (!userPicked && UI.styleAuto && guideEmpty() && styles[0]) applyStyle(styles[0], true);
+        }, 1800);
+      })();
       let dealt = [];
       const fontLink = document.createElement("link");
       fontLink.rel = "stylesheet";
@@ -2285,7 +2411,7 @@
       // Nog geen kleuren: meteen de eerste richting toepassen zodra de stijlgids geladen is.
       setTimeout(() => {
         const empty = !(SG.extractedColours && SG.extractedColours.length) && !(SG.guide && SG.guide.colours && SG.guide.colours.length);
-        load(empty);
+        load(empty && !UI.styleAuto && !(SG.guide && SG.guide.style));
       }, 1200);
     })();
 
@@ -2581,7 +2707,20 @@
       st.textContent =
         `${sel}{background-color:${s.hex} !important;}body{background-color:${s.hex} !important;}` +
         `h1,h2,h3,h4,h5,h6,.brxe-heading{color:${css(head)} !important;}` +
-        `body,p,.brxe-text,.brxe-text-basic,.brxe-rich-text,li{color:${css(body)} !important;}`;
+        `body,p,.brxe-text,.brxe-text-basic,.brxe-rich-text,li{color:${css(body)} !important;}` +
+        bandButtons(bg, head, s.hex);
+    }
+    /** Knoppen op een band: omlijnd in de leeskleur; een knop in de kleur van de band wordt omgekeerd. */
+    function bandButtons(bg, head, hex) {
+      const g = SG.guide && !Array.isArray(SG.guide) ? SG.guide : {};
+      const p = (g.colours || []).find((c) => c && c.name === "Primary");
+      const prim = p && hexCol(p.hex);
+      const btn = 'html body .brxe-button.bricks-button:not(#archer-x):not(.archer-header *):not(.archer-footer *)';
+      let out = `${btn}:is(.outline,[class*="outline"],.brxe-button ~ .brxe-button){background-color:transparent !important;color:${css(head)} !important;border-color:${css(head)} !important;}`;
+      if (prim && ratio(prim, bg) < 3) {
+        out += `${btn}:not(.outline):not([class*="outline"]):not(.brxe-button ~ .brxe-button){background-color:${css(head)} !important;border-color:${css(head)} !important;color:${hex} !important;}`;
+      }
+      return out;
     }
     const schemeView = view !== "photos";
     function hookSchemeClicks(iframe) {
@@ -2979,6 +3118,7 @@
       const origInject = SG.injectOverrideIntoIframe;
       SG.injectOverrideIntoIframe = function (iframe) {
         const r = origInject.apply(this, arguments);
+        if (UI.injectStyle) UI.injectStyle(iframe);
         applyScheme(iframe);
         hookSchemeClicks(iframe);
         // Kort uitgesteld: bij het slepen in de kleurkiezer maar één keer per frame meten.

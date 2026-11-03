@@ -1033,3 +1033,22 @@ body.archer-app .archer-shell [data-images-grid] .aisb-sg-auto-card img,
 body.archer-app .archer-shell [data-uploaded-grid-inner] .aisb-sg-auto-card img { height: auto; aspect-ratio: 4 / 3; }
 .archer-stock-credit { margin: 6px 0 0; font-size: 11px; color: var(--ar-muted); }
 .archer-stock-credit a { color: inherit; }
+
+/* ── Stijl: galerij met de Archer-stijlen ── */
+body.archer-app .archer-styles { margin: 0 0 20px; }
+body.archer-app .archer-style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+body.archer-app .archer-style-card { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--ar-line, #dfe3ea); border-radius: 12px; cursor: pointer; background: #fff; transition: border-color .15s, box-shadow .15s; }
+body.archer-app .archer-style-card:hover { border-color: var(--ar-ink, #0b1033); }
+body.archer-app .archer-style-card:focus-visible { outline: 2px solid var(--ar-accent, #14b8a6); outline-offset: 2px; }
+body.archer-app .archer-style-card.is-active { border-color: var(--ar-accent, #14b8a6); box-shadow: 0 0 0 2px var(--ar-accent, #14b8a6); }
+body.archer-app .archer-style-swatch { position: relative; display: block; height: 92px; border-radius: 8px; overflow: hidden; }
+body.archer-app .archer-style-aa { position: absolute; left: 12px; top: 8px; font-size: 40px; line-height: 1; }
+body.archer-app .archer-style-lines { position: absolute; left: 12px; bottom: 14px; display: grid; gap: 5px; width: 46%; }
+body.archer-app .archer-style-lines i { display: block; height: 4px; border-radius: 2px; opacity: .85; }
+body.archer-app .archer-style-lines i + i { width: 70%; opacity: .5; }
+body.archer-app .archer-style-btn { position: absolute; right: 10px; bottom: 10px; font: 600 11px/1 system-ui, sans-serif; padding: 7px 10px; }
+body.archer-app .archer-style-chips { position: absolute; right: 10px; top: 10px; display: flex; gap: 4px; }
+body.archer-app .archer-style-chips b { display: block; width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+body.archer-app .archer-style-name { font-weight: 700; font-size: 14px; color: var(--ar-ink, #0b1033); }
+body.archer-app .archer-style-name em { font-style: normal; font-weight: 600; font-size: 11px; color: var(--ar-accent-ink, #0f766e); background: var(--ar-accent-soft, #e6f7f5); padding: 2px 6px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
+body.archer-app .archer-style-pitch { font-size: 12px; line-height: 1.4; color: var(--ar-muted, #5b6478); }
