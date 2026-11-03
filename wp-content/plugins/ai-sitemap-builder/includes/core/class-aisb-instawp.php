@@ -4456,6 +4456,26 @@ class AISB_InstaWP {
     });
   }
 
+  // Archer: kleuren lezen zoals de browser ze geeft (rgb/rgba) of als hex.
+  function aisbRgb(v) {
+    v = String(v || "").trim();
+    var h = /^#([0-9a-f]{6})$/i.exec(v);
+    if (h) return [parseInt(h[1].substr(0, 2), 16), parseInt(h[1].substr(2, 2), 16), parseInt(h[1].substr(4, 2), 16), 1];
+    var m = /rgba?\(([^)]+)\)/.exec(v);
+    if (!m) return null;
+    var p = m[1].split(/[\s,\/]+/).filter(Boolean).map(parseFloat);
+    return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+  }
+  function aisbOpaque(v) {
+    var c = aisbRgb(v);
+    return !!c && c[3] > 0.5;
+  }
+  function aisbNear(a, b) {
+    var x = aisbRgb(a), y = aisbRgb(b);
+    if (!x || !y) return false;
+    return Math.abs(x[0] - y[0]) + Math.abs(x[1] - y[1]) + Math.abs(x[2] - y[2]) < 60;
+  }
+
   function applySectionBackground(root, color) {
     if (!root || !color) return;
     root.style.setProperty("background-color", color, "important");
@@ -4482,7 +4502,29 @@ class AISB_InstaWP {
       .forEach(function (el) {
         el.style.setProperty("color", bodyColor, "important");
       });
+    // Archer: binnenblokken met een eigen vlak (kaarten) nemen de bandkleur over, zoals in het voorbeeld,
+    // zodat witte tekst nooit op een witte kaart staat.
+    root.querySelectorAll(".brxe-container,.brxe-block,.brxe-div").forEach(function (el) {
+      var cs = window.getComputedStyle(el);
+      if (cs.backgroundImage && cs.backgroundImage !== "none") return;
+      if (aisbOpaque(cs.backgroundColor)) el.style.setProperty("background-color", color, "important");
+    });
     root.querySelectorAll(".brxe-button,.bricks-button").forEach(function (el) {
+      var cs = window.getComputedStyle(el);
+      if (!aisbOpaque(cs.backgroundColor)) {
+        // Omlijnde knop: tekst en lijn in de leeskleur van de band.
+        el.style.setProperty("color", isDark ? "#ffffff" : paletteDark, "important");
+        el.style.setProperty("border-color", isDark ? "rgba(255,255,255,0.75)" : paletteDark, "important");
+        return;
+      }
+      if (aisbNear(cs.backgroundColor, color)) {
+        // Knop in dezelfde kleur als de band: omkeren, anders verdwijnt hij.
+        var inv = isDark ? "#ffffff" : paletteDark;
+        el.style.setProperty("background-color", inv, "important");
+        el.style.setProperty("border-color", inv, "important");
+        el.style.setProperty("color", color, "important");
+        return;
+      }
       el.style.setProperty("color", buttonText, "important");
     });
     root.querySelectorAll("a:not(.brxe-button)").forEach(function (el) {
@@ -4830,14 +4872,18 @@ JS;
   }
 
   private function apply_section_padding(array $nodes): array {
-    $top = '3rem';
-    $bottom = '3rem';
+    // Archer: de ruimte van het ontwerpsysteem (Brixies-variabele, door de stijl gezet) in plaats van vaste 3rem.
+    $top = 'var(--brxw-section-space-vertical)';
+    $bottom = 'var(--brxw-section-space-vertical)';
 
     foreach ($nodes as $index => $node) {
       if (!is_array($node)) continue;
 
+      // Archer: alleen de echte buitenste sectie. Bricks-id's zijn tekst ((int) 'abcdef' === 0), waardoor
+      // vroeger elk blok de sectieruimte kreeg (eerst 30 px overal, met de variabele overal 120 px).
+      $parent_id = $node['parent'] ?? 0;
       $is_root_wrapper = in_array(($node['name'] ?? ''), ['section', 'container', 'block'], true)
-        && (int) ($node['parent'] ?? 0) === 0;
+        && ($parent_id === 0 || $parent_id === '0' || $parent_id === '');
       if (!$is_root_wrapper) continue;
 
       $settings = isset($node['settings']) && is_array($node['settings']) ? $node['settings'] : [];
