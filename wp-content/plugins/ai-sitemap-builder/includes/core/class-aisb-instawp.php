@@ -3830,7 +3830,10 @@ class AISB_InstaWP {
 
     $font = preg_replace('/[;{}<>]/', '', $font);
     $font = preg_replace('/\s+/', ' ', $font);
-    $font = preg_replace('/\s*,\s*/', ', ', (string) $font);
+    // Archer: Bricks verwacht één lettertype in _typography.font-family en zet die soms als geheel
+    // tussen aanhalingstekens ("Geist, sans-serif"), waardoor de browser een schreefletter toont.
+    // Alleen de eerste familie bewaren; de terugvallers komen uit de stijl.
+    $font = trim(explode(',', (string) $font)[0], " '\"");
     return substr((string) $font, 0, 180);
   }
 
