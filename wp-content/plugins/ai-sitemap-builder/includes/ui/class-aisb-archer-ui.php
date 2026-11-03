@@ -9,6 +9,7 @@ require_once __DIR__ . '/class-aisb-archer-template-import.php';
 require_once __DIR__ . '/class-aisb-archer-chrome.php';
 require_once __DIR__ . '/class-aisb-archer-logo.php';
 require_once __DIR__ . '/class-aisb-archer-stock.php';
+require_once __DIR__ . '/class-aisb-archer-styles.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -56,6 +57,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Template_Import())->init();
     (new AISB_Archer_Chrome())->init();
     (new AISB_Archer_Stock())->init();
+    (new AISB_Archer_Styles())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
