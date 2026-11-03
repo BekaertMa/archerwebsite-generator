@@ -1407,6 +1407,8 @@
         if (isUrl) {
           brief = await UI.post("aisb_archer_site_brief", { url: opts.url });
           mark("read", "done", (brief.pages || []).length + 1 + " pagina's gevonden");
+          // Contactgegevens van de huidige website: alleen de velden die nog leeg zijn.
+          if (brief.contact && typeof UI.fillContact === "function") opts.contact = UI.fillContact(brief.contact);
           mark("plan", "active");
         }
         const plan = await UI.post("aisb_archer_plan", {
@@ -1416,6 +1418,7 @@
           languages: JSON.stringify(opts.languages || ["Dutch"]),
           page_count: opts.pageCount || "5-10",
           project_id: state.projectId || "",
+          contact: JSON.stringify(opts.contact || {}),
         });
         mark("plan", "done", plan.data.sitemap.length + " pagina's");
         mark("sections", "active");
