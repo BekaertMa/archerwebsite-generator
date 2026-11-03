@@ -1337,6 +1337,19 @@ class AISB_InstaWP {
       $front_page_updated = $this->set_remote_front_page($site, $front_page_id);
     }
 
+    // Archer: favicon (het logo van de klant, anders het icoon van Archer Websites).
+    $archer_favicon = false;
+    if (class_exists('AISB_Archer_Site')) {
+      $archer_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_login)) {
+        $archer_site_url = untrailingslashit((string) $site['site_url']);
+        $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
+        $archer_favicon = AISB_Archer_Site::publish_favicon((int) $project->ID, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+      }
+    }
+
     return [
       'transport' => 'xmlrpc-html',
       'front_page_id' => $front_page_id,
