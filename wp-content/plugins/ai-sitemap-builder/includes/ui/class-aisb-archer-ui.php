@@ -10,6 +10,7 @@ require_once __DIR__ . '/class-aisb-archer-chrome.php';
 require_once __DIR__ . '/class-aisb-archer-logo.php';
 require_once __DIR__ . '/class-aisb-archer-stock.php';
 require_once __DIR__ . '/class-aisb-archer-styles.php';
+require_once __DIR__ . '/class-aisb-archer-site.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -58,6 +59,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Chrome())->init();
     (new AISB_Archer_Stock())->init();
     (new AISB_Archer_Styles())->init();
+    (new AISB_Archer_Site())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
@@ -274,7 +276,7 @@ class AISB_Archer_UI {
       'sitemap'    => ['Je sitemap', "Dit zijn de pagina's van de website en de secties op elke pagina. Voeg secties of pagina's toe en schrap wat niet nodig is. Alles wordt automatisch bewaard."],
       'wireframes' => ['Je wireframes', "Zo komen de pagina's eruit te zien, nog zonder kleur of foto's. Kies per sectie een ander voorbeeld, zet vast wat goed is of pas de tekst aan. Alles wordt automatisch bewaard."],
       'style'      => ['Kies je stijl', 'De inhoud blijft dezelfde. Wat je hier kiest, zie je meteen op echte secties van de website.'],
-      'photos'     => ["Je foto's", "We plaatsten al passende stockfoto's van " . (AISB_Archer_Stock::pexels_key() ? 'Unsplash en Pexels' : 'Unsplash') . ". Vervang ze door eigen foto's wanneer je wil, ook na het publiceren."],
+      'photos'     => ["Je foto's", "Laad eigen foto's op, of kies stockfoto's van " . (AISB_Archer_Stock::pexels_key() ? 'Unsplash en Pexels' : 'Unsplash') . " voor één pagina of voor alle pagina's. Tot dan blijven de fotovakken leeg."],
       'publish'    => ['Bijna klaar: publiceer de website', 'Bekijk de website nog eens volledig. Publiceer daarna op een eigen webadres bij Archer.'],
     ];
     if (!isset($heads[$key])) return '';
@@ -530,7 +532,7 @@ class AISB_Archer_UI {
     if (!is_array($guide)) $guide = [];
     $font = (string) ($guide['headingFont'] ?? '');
     $colours = is_array($guide['colours'] ?? null) ? array_slice($guide['colours'], 0, 5) : [];
-    $imgs = (is_array($guide['images'] ?? null) ? count($guide['images']) : 0);
+    $imgs = (is_array($guide['images'] ?? null) ? count(array_filter($guide['images'], fn($i) => is_array($i) && empty($i['archerEmpty']) && !empty($i['full'] ?? $i['thumb'] ?? ''))) : 0);
     $own = (is_array($guide['uploadedImages'] ?? null) ? count($guide['uploadedImages']) : 0);
     $published = (string) get_post_meta($project_id, 'aisb_published_url', true);
     $steps = self::steps();
@@ -558,6 +560,14 @@ class AISB_Archer_UI {
         <strong><?php echo (int) ($imgs + $own); ?> foto's</strong>
         <span class="archer-muted"><?php echo (int) $own; ?> eigen · <?php echo (int) $imgs; ?> stock</span>
         <a href="<?php echo esc_url(self::step_url($steps[3], $project_id, $sitemap_id)); ?>">Wijzigen</a>
+      </div>
+      <?php $contact = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::contact($project_id) : ['address' => '', 'phone' => '', 'email' => '', 'socials' => []];
+        $filled = array_filter([$contact['phone'], $contact['email'], $contact['address']]); ?>
+      <div class="archer-summary-card" data-archer-contact-card data-contact="<?php echo esc_attr(wp_json_encode($contact)); ?>">
+        <span class="archer-summary-label">Contactgegevens</span>
+        <strong><?php echo $filled ? count($filled) . ' van 3 ingevuld' : 'Nog niet ingevuld'; ?></strong>
+        <span class="archer-muted" data-archer-contact-summary><?php echo esc_html($filled ? implode(' · ', $filled) : 'Adres, telefoon en e-mail voor de footer en de knoppen.'); ?></span>
+        <a href="#" data-archer-contact-edit>Wijzigen</a>
       </div>
       <div class="archer-summary-card <?php echo $published ? 'is-online' : ''; ?>" data-archer-published>
         <span class="archer-summary-label">Webadres</span>
@@ -727,7 +737,17 @@ class AISB_Archer_UI {
     if ($paras) $text .= "\nTekst:\n" . implode("\n", array_slice(array_keys($paras), 0, 60)) . "\n";
     $text = mb_substr($text, 0, 7000);
 
-    return ['url' => $url, 'title' => $title, 'text' => $text, 'pages_in_menu' => count($nav)];
+    // Contactgegevens apart, om de velden van stap 1 in te vullen.
+    $found = ['email' => '', 'phone' => '', 'socials' => []];
+    if (preg_match('#href=["\']mailto:([^"\'?]+)#i', $html, $m)) $found['email'] = sanitize_email(rawurldecode($m[1]));
+    elseif (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $plain, $m)) $found['email'] = sanitize_email($m[0]);
+    if (preg_match('#href=["\']tel:([^"\']+)#i', $html, $m)) $found['phone'] = trim(rawurldecode($m[1]));
+    elseif (preg_match('/(?:\+32|0)[\s\d\/.]{8,14}\d/', $plain, $m)) $found['phone'] = trim($m[0]);
+    if (preg_match_all('#href=["\'](https?://(?:www\.)?(?:linkedin|facebook|instagram|youtube|tiktok|twitter|x|pinterest)\.com/[^"\'\s]+)#i', $html, $m)) {
+      $found['socials'] = array_values(array_unique(array_slice($m[1], 0, 8)));
+    }
+
+    return ['url' => $url, 'title' => $title, 'text' => $text, 'pages_in_menu' => count($nav), 'contact' => $found];
   }
 
   /**
