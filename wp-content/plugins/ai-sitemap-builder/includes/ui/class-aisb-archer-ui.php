@@ -11,6 +11,7 @@ require_once __DIR__ . '/class-aisb-archer-logo.php';
 require_once __DIR__ . '/class-aisb-archer-stock.php';
 require_once __DIR__ . '/class-aisb-archer-styles.php';
 require_once __DIR__ . '/class-aisb-archer-site.php';
+require_once __DIR__ . '/class-aisb-archer-motion.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -375,13 +376,15 @@ class AISB_Archer_UI {
     }
 
     $is_staff = current_user_can('manage_options');
+    // Beheerders zien standaard de websites van alle gebruikers; ?archer_scope=mine toont alleen de eigen.
+    $scope = $is_staff && (($_GET['archer_scope'] ?? '') !== 'mine') ? 'all' : 'mine';
     $q = new WP_Query([
       'post_type'      => 'aisb_project',
       'post_status'    => 'publish',
-      'posts_per_page' => 100,
+      'posts_per_page' => $scope === 'all' ? 300 : 100,
       'orderby'        => 'modified',
       'order'          => 'DESC',
-      'author'         => get_current_user_id(),
+      'author'         => $scope === 'all' ? '' : get_current_user_id(),
       'fields'         => 'ids',
       'meta_query'     => [
         'relation' => 'OR',
@@ -414,6 +417,12 @@ class AISB_Archer_UI {
         <div class="archer-page-head-text">
           <h1 class="archer-h1">Mijn websites</h1>
           <p class="archer-lead">Ga verder waar je gebleven was, of start een nieuwe website.</p>
+          <?php if ($is_staff) : ?>
+            <p class="archer-scope" role="group" aria-label="Welke websites">
+              <a class="archer-scope-opt<?php echo $scope === 'all' ? ' is-active' : ''; ?>" href="<?php echo esc_url(remove_query_arg('archer_scope')); ?>"<?php echo $scope === 'all' ? ' aria-current="true"' : ''; ?>>Alle gebruikers</a>
+              <a class="archer-scope-opt<?php echo $scope === 'mine' ? ' is-active' : ''; ?>" href="<?php echo esc_url(add_query_arg('archer_scope', 'mine')); ?>"<?php echo $scope === 'mine' ? ' aria-current="true"' : ''; ?>>Alleen mijn websites</a>
+            </p>
+          <?php endif; ?>
         </div>
         <div class="archer-page-head-aside">
           <a class="archer-btn archer-btn-primary" href="<?php echo esc_url($new_url); ?>">+ Nieuwe website</a>
@@ -448,6 +457,14 @@ class AISB_Archer_UI {
                 <span class="archer-muted archer-small">Bewerkt <?php echo esc_html(self::time_ago((int) $modified)); ?></span>
               </div>
               <h2 class="archer-site-card-title"><?php echo esc_html($title); ?></h2>
+              <?php
+              $owner_id = (int) get_post_field('post_author', $pid);
+              if ($is_staff && $owner_id !== get_current_user_id()) :
+                $owner = get_userdata($owner_id);
+                $owner_name = $owner ? ($owner->display_name ?: $owner->user_email) : 'onbekende gebruiker';
+                ?>
+                <p class="archer-site-card-owner archer-small">Van <?php echo esc_html($owner_name); ?><?php echo ($owner && $owner->user_email && $owner->user_email !== $owner_name) ? ' · ' . esc_html($owner->user_email) : ''; ?></p>
+              <?php endif; ?>
               <?php if ($brief) : ?><p class="archer-site-card-brief"><?php echo esc_html($brief); ?></p><?php endif; ?>
 
               <ol class="archer-progress" aria-label="Voortgang: <?php echo (int) $done_count; ?> van 5 stappen klaar">

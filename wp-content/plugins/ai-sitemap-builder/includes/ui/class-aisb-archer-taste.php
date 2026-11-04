@@ -436,7 +436,8 @@ class AISB_Archer_Taste {
     // Archer-stijl gekozen: haar ontwerpsysteem komt eerst (de @import van de letters moet vooraan staan)
     // en vervangt de algemene knop- en titelregels van system_css.
     $style = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::of($guide) : null;
-    return ($style ? AISB_Archer_Styles::css($style, $guide) : '') . self::house_rules($guide, (bool) $style);
+    return ($style ? AISB_Archer_Styles::css($style, $guide) : '') . self::house_rules($guide, (bool) $style)
+      . (class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::css() : '');
   }
 
   private static function house_rules($guide, bool $style): string {
