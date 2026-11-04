@@ -513,7 +513,14 @@ class AISB_Archer_Site {
       if ($ctx['convert'] !== '' && preg_match('/(offerte|afspraak|reserv|boek|aanvra|devis|rendez|quote|book)/u', $t)) return $link($ctx['convert']);
       return $link($ctx['contact']);
     }
-    $page = self::page_for($text, $ctx['pages']);
+    $page = '';
+    // "Bekijk foto's", "Ons werk", "Projecten bekijken": naar de pagina met realisaties als die er is.
+    if (preg_match("/(foto|realisatie|project|portfolio|ons werk|referentie|galerij|gallery|photos|réalisation)/u", $t)) {
+      foreach ($ctx['pages'] as $p) {
+        if (empty($p['detail']) && preg_match('/(^|-)(realisaties?|projecten|projects?|portfolio|referenties?|galerij|gallery|ons-werk|realisations?)(-|$)/', (string) ($p['slug'] ?? ''))) { $page = (string) $p['slug']; break; }
+      }
+    }
+    if ($page === '') $page = self::page_for($text, $ctx['pages']);
     return $link($page !== '' ? $page : $ctx['contact']);
   }
 
@@ -619,9 +626,20 @@ class AISB_Archer_Site {
       // Kaarten en blokken met een lege link: naar de pagina die bij de titel past, anders geen link.
       if (array_key_exists('link', $s) && self::is_dead_link($s['link']) && in_array($name, ['block', 'div', 'container', 'image', 'heading', 'icon'], true)) {
         $text = $name === 'heading' ? self::text_of($n) : self::subtree_text($nodes, $ix, $id, 120);
-        $page = $text !== '' ? self::page_for($text, $ctx['pages']) : '';
-        if ($page !== '') $s['link'] = ['type' => 'external', 'url' => $link($page)];
-        else unset($s['link']);
+        // Een blok rond een adres, telefoonnummer of e-mailadres (footer, contactkaart): de echte link.
+        $plain = self::plain($text);
+        $href = '';
+        if ($d['email'] !== '' && stripos($plain, $d['email']) !== false) $href = 'mailto:' . $d['email'];
+        elseif ($d['phone'] !== '' && strpos(preg_replace('/\D/', '', $plain), preg_replace('/\D/', '', $d['phone'])) !== false) $href = self::tel($d['phone']);
+        elseif ($d['address'] !== '' && stripos($plain, trim(explode(',', $d['address'])[0])) !== false) $href = self::maps($d['address']);
+        $page = $href === '' && $text !== '' ? self::page_for($text, $ctx['pages']) : '';
+        if ($href !== '') $s['link'] = ['type' => 'external', 'url' => $href] + (strpos($href, 'maps') !== false ? ['newTab' => true] : []);
+        elseif ($page !== '') $s['link'] = ['type' => 'external', 'url' => $link($page)];
+        else {
+          unset($s['link']);
+          // Een <a> zonder link is geen link: een gewoon blok.
+          if (($s['tag'] ?? '') === 'a') $s['tag'] = 'div';
+        }
         $nodes[$i]['settings'] = $s;
       }
     }
@@ -759,6 +777,26 @@ class AISB_Archer_Site {
     return $out ? implode(';', $out) . ';' : '';
   }
 
+
+  /**
+   * Titel en zoekomschrijving per pagina uit de sitemap van het project (voor het publiceren).
+   * @return array<string,array{title:string,description:string}>
+   */
+  public static function seo_by_slug(int $pid): array {
+    $sid = (int) get_post_meta($pid, 'aisb_latest_sitemap_id', true);
+    $json = $sid ? json_decode((string) get_post_meta($sid, 'aisb_sitemap_json', true), true) : null;
+    $out = [];
+    foreach ((array) ($json['sitemap'] ?? []) as $p) {
+      if (!is_array($p)) continue;
+      $slug = sanitize_title((string) ($p['slug'] ?? ''));
+      if ($slug === '') continue;
+      $title = trim(wp_strip_all_tags((string) ($p['page_title'] ?? '')));
+      $desc = trim(wp_strip_all_tags((string) ($p['seo']['meta_description'] ?? '')));
+      if ($desc === '') $desc = trim(wp_strip_all_tags((string) ($p['page_purpose'] ?? '')));
+      $out[$slug] = ['title' => $title, 'description' => mb_substr($desc, 0, 160)];
+    }
+    return $out;
+  }
 
   /** Alle secties van de export (header en footer doet AISB_Archer_Chrome::apply). */
   public static function apply_to_export(array $pages, int $pid, callable $link): array {

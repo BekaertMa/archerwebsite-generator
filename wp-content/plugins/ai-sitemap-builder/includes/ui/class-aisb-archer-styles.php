@@ -333,6 +333,8 @@ class AISB_Archer_Styles {
       . 'html body .archer-header :is(.brxe-nav-menu > nav > ul > li > a,.brxe-nav-menu .brx-submenu-toggle > *,.brxe-logo,.brxe-text-basic,.bricks-mobile-menu-toggle){color:var(--a-ink) !important;}'
       // Header 1 maakt van het laatste menu-item een knop (achtergrond --dark, tekst --light): als stijlknop tonen.
       . 'html body .archer-header .header-1__menu .bricks-nav-menu > .menu-item:last-child > a{background-color:var(--a-accent) !important;color:var(--a-accent-ink) !important;border-radius:var(--a-radius-button) !important;padding:.75em 1.3em !important;}'
+      // Knop in de header: dezelfde hoeken als de andere knoppen (het sjabloon zet ze vaak hard op 0).
+      . 'html body .archer-header .brxe-button.bricks-button{border-radius:var(--a-radius-button) !important;}'
       // Smal scherm: de naam krijgt de ruimte (geen vier regels), de knop wordt compacter.
       . '@media (max-width:767px){html body .archer-header .brxe-logo{flex:1 1 auto !important;min-width:0;font-size:17px !important;line-height:1.15 !important;}'
       . 'html body .archer-header .brxe-button.bricks-button{padding:10px 16px !important;font-size:14px !important;white-space:nowrap;}}'

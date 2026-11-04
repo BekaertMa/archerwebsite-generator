@@ -216,6 +216,10 @@ class AISB_Archer_Chrome {
     return strcasecmp($p['type'], 'contact') === 0 || (bool) preg_match('/(^|-)(contact|kontakt)(-|$)/i', $p['slug']);
   }
 
+  public static function is_conversion(array $p): bool {
+    return (bool) preg_match('/(^|-)(offerte|offertes|quote|devis|afspraak|afspraken|appointment|rendez-vous|reserv|boek|booking|prijsaanvraag|waardebepaling|schatting)/i', $p['slug']);
+  }
+
   /** Mag in het menu: geen home (het logo), geen juridische pagina's, geen sjabloon per item. */
   public static function menu_page(array $p): bool {
     return $p['slug'] !== 'home' && !$p['detail'] && !self::is_legal($p);
@@ -224,7 +228,9 @@ class AISB_Archer_Chrome {
   /** Vast voorstel (zonder AI): hoofdpagina's met hun subpagina's, contact als knop. */
   public static function proposal(array $pages): array {
     $cta = '';
-    foreach ($pages as $p) if ($p['parent'] === '' && self::is_contact($p)) { $cta = $p['slug']; break; }
+    // De knop in de header: de conversiepagina (offerte, afspraak, reservatie) als die er is, anders contact.
+    foreach ($pages as $p) if ($p['parent'] === '' && self::is_conversion($p)) { $cta = $p['slug']; break; }
+    if ($cta === '') foreach ($pages as $p) if ($p['parent'] === '' && self::is_contact($p)) { $cta = $p['slug']; break; }
     $items = [];
     foreach ($pages as $p) {
       if ($p['parent'] !== '' || !self::menu_page($p) || $p['slug'] === $cta) continue;
