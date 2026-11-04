@@ -166,7 +166,7 @@ class AISB_Archer_Site {
   /* ───────────────────────── Iconen ───────────────────────── */
 
   /**
-   * Trefwoorden (nl, fr, en) → Font Awesome 6 Free Solid. De eerste die past wint; volgorde = van specifiek naar algemeen.
+   * Trefwoorden (nl, fr, en) → icoon (Font Awesome 6-naam, omgezet naar Iconoir via ICONOIR). De eerste die past wint; volgorde = van specifiek naar algemeen.
    */
   const ICONS = [
     'fire-flame-curved' => 'verwarm|ketel|cv-|condensatie|chauffage|chaudi|heating|boiler|warmte|kachel|houtkachel|pellet',
@@ -234,6 +234,105 @@ class AISB_Archer_Site {
   const FALLBACK_ICONS = ['circle-check', 'star', 'gem', 'thumbs-up', 'heart', 'compass'];
 
   const GENERIC_ICONS = ['helmet-safety', 'hammer', 'screwdriver-wrench', 'comments', 'handshake', 'calculator', 'list-check', 'award', 'clock', 'users', 'euro-sign', 'chart-line'];
+
+  /** Font Awesome-naam → Iconoir-naam (https://iconoir.com). Wat hier ontbreekt, wordt 'sparks' (merken blijven Font Awesome). */
+  const ICONOIR = [
+    'fire-flame-curved' => 'fire-flame', 'fire' => 'fire-flame', 'fan' => 'air-conditioner', 'sun' => 'sun-light', 'bolt' => 'flash',
+    'faucet' => 'droplet', 'droplet' => 'droplet', 'bath' => 'bathroom', 'kitchen-set' => 'cutlery', 'couch' => 'sofa',
+    'ruler-combined' => 'ruler', 'swatchbook' => 'palette', 'helmet-safety' => 'tools', 'hammer' => 'hammer', 'screwdriver-wrench' => 'wrench',
+    'wrench' => 'wrench', 'house' => 'home', 'home' => 'home', 'store' => 'shop', 'folder-open' => 'folder',
+    'images' => 'media-image-list', 'image' => 'media-image', 'building' => 'building', 'car' => 'car', 'truck' => 'delivery-truck',
+    'utensils' => 'cutlery', 'mug-hot' => 'coffee-cup', 'bread-slice' => 'bread-slice', 'tooth' => 'emoji', 'stethoscope' => 'healthcare',
+    'paw' => 'heart', 'scissors' => 'scissor', 'spa' => 'yoga', 'dumbbell' => 'gym', 'graduation-cap' => 'graduation-cap',
+    'scale-balanced' => 'suitcase', 'calculator' => 'calculator', 'chart-line' => 'graph-up', 'laptop-code' => 'laptop', 'laptop' => 'laptop',
+    'shield-halved' => 'shield-check', 'shield' => 'shield', 'tree' => 'tree', 'seedling' => 'leaf', 'person-digging' => 'soil',
+    'trowel' => 'tools', 'paint-roller' => 'fill-color', 'broom' => 'sparks', 'key' => 'key', 'solar-panel' => 'sun-light',
+    'snowflake' => 'snow-flake', 'leaf' => 'leaf', 'recycle' => 'refresh-double', 'camera' => 'camera', 'calendar-check' => 'calendar-check',
+    'calendar' => 'calendar', 'calendar-days' => 'calendar', 'comments' => 'chat-bubble', 'comment' => 'chat-bubble', 'handshake' => 'community',
+    'clock' => 'clock', 'euro-sign' => 'euro', 'award' => 'medal', 'trophy' => 'trophy', 'medal' => 'medal',
+    'map-location-dot' => 'map', 'map' => 'map', 'location-dot' => 'map-pin', 'location-pin' => 'map-pin', 'map-marker-alt' => 'map-pin',
+    'phone' => 'phone', 'phone-volume' => 'phone', 'envelope' => 'mail', 'envelope-open' => 'mail-open', 'users' => 'group',
+    'user' => 'user', 'user-group' => 'group', 'lightbulb' => 'light-bulb', 'list-check' => 'task-list', 'list' => 'list',
+    'circle-check' => 'check-circle', 'check-circle' => 'check-circle', 'square-check' => 'check-square', 'check' => 'check', 'star' => 'star',
+    'gem' => 'sparks', 'thumbs-up' => 'thumbs-up', 'heart' => 'heart', 'compass' => 'compass', 'arrow-right' => 'arrow-right',
+    'arrow-left' => 'arrow-left', 'arrow-up-right-from-square' => 'open-new-window', 'up-right-from-square' => 'open-new-window', 'circle-minus' => 'minus-circle', 'minus' => 'minus',
+    'plus' => 'plus', 'circle-plus' => 'plus-circle', 'xmark' => 'xmark', 'times' => 'xmark', 'bars' => 'menu',
+    'chevron-down' => 'nav-arrow-down', 'chevron-right' => 'nav-arrow-right', 'chevron-left' => 'nav-arrow-left', 'chevron-up' => 'nav-arrow-up', 'angle-down' => 'nav-arrow-down',
+    'angle-right' => 'nav-arrow-right', 'angle-left' => 'nav-arrow-left', 'angle-up' => 'nav-arrow-up', 'quote-left' => 'quote', 'quote-right' => 'quote',
+    'circle-info' => 'info-circle', 'circle-question' => 'help-circle', 'cube' => 'box-3d-point', 'cubes' => 'box-3d-point', 'play' => 'play',
+    'download' => 'download', 'magnifying-glass' => 'search', 'search' => 'search', 'globe' => 'globe', 'cart-shopping' => 'cart',
+    'tag' => 'label', 'gift' => 'gift', 'headset' => 'headset', 'gear' => 'settings', 'rocket' => 'rocket',
+    'bullseye' => 'compass', 'briefcase' => 'suitcase', 'money-bill' => 'wallet', 'temperature-high' => 'temperature-high', 'water' => 'droplet',
+    'flask' => 'flask', 'book' => 'book', 'file' => 'page', 'file-lines' => 'page', 'link' => 'link',
+    'share' => 'share-android', 'eye' => 'eye', 'lock' => 'lock', 'bed' => 'bed', 'wifi' => 'wifi',
+    'instagram' => 'instagram', 'linkedin' => 'linkedin', 'x-twitter' => 'x', 'twitter' => 'x', 'youtube' => 'youtube',
+    'tiktok' => 'tiktok', 'facebook' => 'facebook', 'pinterest' => 'pinterest', 'whatsapp' => 'whatsapp',
+  ];
+
+  const ICONOIR_BRANDS = ['instagram', 'linkedin', 'x', 'youtube', 'tiktok', 'facebook', 'pinterest', 'whatsapp'];
+
+  private static $iconoir_svg = null;
+
+  /** Iconoir-naam voor een Font Awesome-klasse ("fab fa-linkedin-in", "fas fa-circle-check"), of '' als er geen is. */
+  public static function iconoir_name(string $fa): string {
+    if (preg_match('/\biconoir-([a-z0-9-]+)/', $fa, $m)) return $m[1];
+    if (!preg_match('/\bfa-([a-z0-9-]+)/', $fa, $m)) return '';
+    $n = $m[1];
+    if (isset(self::ICONOIR[$n])) return self::ICONOIR[$n];
+    if (strpos($fa, 'fab ') === 0 || strpos($fa, 'fa-brands') !== false) {
+      $b = preg_replace('/^square-|-square$|-in$|-f$|-official$/', '', $n);
+      return isset(self::ICONOIR[$b]) ? self::ICONOIR[$b] : '';
+    }
+    return 'sparks';
+  }
+
+  /** CSS voor één icoon: masker met de SVG als data-URI, kleur volgt de tekst (currentColor). */
+  public static function iconoir_css(string $name): string {
+    if (self::$iconoir_svg === null) self::$iconoir_svg = (array) include __DIR__ . '/iconoir-icons.php';
+    $svg = self::$iconoir_svg[$name] ?? '';
+    if ($svg === '') return '';
+    $uri = 'data:image/svg+xml,' . strtr(str_replace('"', "'", $svg), ['<' => '%3C', '>' => '%3E', '#' => '%23', "\n" => ' ']);
+    $sel = '.iconoir-' . $name;
+    // min-width/min-height: een leeg <i> krijgt elders soms width:auto (dan zou het icoon 0px breed zijn).
+    return $sel . '{display:inline-block;width:1em;height:1em;min-width:1em;min-height:1em;line-height:1;vertical-align:-0.125em;flex-shrink:0;}'
+      . $sel . '::before{content:"";display:block;width:1em;height:1em;background-color:currentColor;'
+      . '-webkit-mask:url("' . $uri . '") center/contain no-repeat;mask:url("' . $uri . '") center/contain no-repeat;}';
+  }
+
+  /**
+   * Alle Font Awesome-iconen van de sjablonen naar Iconoir. Bricks tekent een lettertype-icoon als <i class="...">;
+   * de vorm komt uit CSS die bij het element zelf staat (_cssCustom), zodat voorbeeld en gepubliceerde site
+   * niets extra moeten laden.
+   */
+  public static function iconoir(array $nodes): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !is_array($n['settings'] ?? null)) continue;
+      $used = [];
+      $s = self::iconoir_walk($n['settings'], $used);
+      $cur = preg_replace('#\s*/\*archer-iconoir\*/.*?/\*/archer-iconoir\*/#s', '', (string) ($s['_cssCustom'] ?? ''));
+      if ($used) {
+        $css = '';
+        foreach (array_keys($used) as $name) $css .= self::iconoir_css($name);
+        $cur = trim($cur . "\n/*archer-iconoir*/" . $css . '/*/archer-iconoir*/');
+      }
+      if ($cur !== '') $s['_cssCustom'] = $cur; else unset($s['_cssCustom']);
+      $nodes[$i]['settings'] = $s;
+    }
+    return $nodes;
+  }
+
+  private static function iconoir_walk($v, array &$used) {
+    if (!is_array($v)) return $v;
+    if (isset($v['icon']) && is_string($v['icon']) && (isset($v['library']) || preg_match('/\b(fa[sbr]?|fa-solid|fa-brands|fa-regular)\b|iconoir-/', $v['icon']))) {
+      if (!empty($v['svg']) || ($v['library'] ?? '') === 'svg') return $v;
+      $name = self::iconoir_name($v['icon']);
+      if ($name === '') return $v; // merk zonder Iconoir-variant: Font Awesome blijft
+      $used[$name] = 1;
+      return ['library' => 'iconoir', 'icon' => 'iconoir-' . $name] + array_diff_key($v, ['library' => 1, 'icon' => 1]);
+    }
+    foreach ($v as $k => $x) if (is_array($x)) $v[$k] = self::iconoir_walk($x, $used);
+    return $v;
+  }
 
   /** Treffers [icoon, positie]: trefwoorden van 6+ tekens ook midden in een samenstelling, kortere aan het begin van een woord. */
   private static function icon_hits(string $t): array {
@@ -488,8 +587,9 @@ class AISB_Archer_Site {
 
       // Sociale media: alleen de platformen met een adres.
       $icon = (string) ($s['icon']['icon'] ?? '');
-      if (strpos($icon, 'fab ') === 0 && array_key_exists('link', $s)) {
-        $platform = '';
+      $brand = preg_match('/\biconoir-(' . implode('|', self::ICONOIR_BRANDS) . ')$/', $icon, $bm) ? $bm[1] : '';
+      if ((strpos($icon, 'fab ') === 0 || $brand !== '') && array_key_exists('link', $s)) {
+        $platform = $brand === 'whatsapp' ? '' : $brand;
         foreach (['linkedin', 'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest'] as $k) if (strpos($icon, $k) !== false) $platform = $k;
         if (strpos($icon, 'x-twitter') !== false || strpos($icon, 'fa-twitter') !== false) $platform = 'x';
         // Buiten de header en footer (teamkaarten, getuigenissen): geen sociale iconen, die horen bij personen.
@@ -536,19 +636,25 @@ class AISB_Archer_Site {
       }
       if ($drop) $nodes = self::remove($nodes, $drop);
     }
-    return $nodes;
+    return self::iconoir($nodes);
   }
 
   /** Alle secties van de export (header en footer doet AISB_Archer_Chrome::apply). */
   public static function apply_to_export(array $pages, int $pid, callable $link): array {
     foreach ($pages as &$page) {
+      $first = true;
       foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
         if (!is_array($sec)) continue;
         $type = strtolower((string) ($sec['type'] ?? ''));
         if (in_array($type, ['header', 'footer'], true)) continue;
         foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
-          if (!empty($sec[$key]) && is_array($sec[$key])) $page['sections'][$k][$key] = self::apply_nodes($sec[$key], $pid, $link, '');
+          if (empty($sec[$key]) || !is_array($sec[$key])) continue;
+          $nodes = self::apply_nodes($sec[$key], $pid, $link, '');
+          // Eerste inhoudssectie: de hero komt een keer binnen (AISB_Archer_Motion).
+          if ($first && class_exists('AISB_Archer_Motion')) $nodes = AISB_Archer_Motion::hero_nodes($nodes);
+          $page['sections'][$k][$key] = $nodes;
         }
+        $first = false;
       }
     }
     unset($page);

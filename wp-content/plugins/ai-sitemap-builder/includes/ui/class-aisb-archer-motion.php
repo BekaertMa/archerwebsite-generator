@@ -6,37 +6,64 @@ if (!defined('ABSPATH')) exit;
  * weinig, kort en met een reden. Een website van een kmo bezoekt men af en toe, dus er is ruimte voor
  * één binnenkomst van de hero, maar niet voor een fade-in op elke sectie.
  *
- * - Knoppen: drukfeedback (scale .97, 160ms) en een kleurovergang bij hover (150ms, alleen met muis).
- * - Hero: titel, tekst, knoppen en beeld komen één keer binnen (opacity + 8px, 400ms, 60ms na elkaar),
- *   alleen als de pagina nog niet getekend is (anders zou de inhoud even verdwijnen).
+ * - Knoppen: drukfeedback (scale .97, 160ms) en een kleurovergang bij hover (150ms).
+ * - Hero: titel, tekst, knoppen en beeld komen één keer binnen (opacity + 8px, 400ms, 60ms na elkaar).
+ *   CSS-keyframes in de eigen CSS van de herosectie (hero_nodes): die staat in de <head>, dus de animatie
+ *   start bij de eerste weergave. Het runtime-script draait pas na DOMContentLoaded, als de pagina al getekend is.
  * - Beelden lager op de pagina: één keer onthuld bij het binnenscrollen (clip-path, 600ms). Geen tekst.
  * - Minder beweging gevraagd: geen verplaatsing of onthulling, alleen een korte fade van de hero.
  *
- * css() gaat mee in de huisregels (voorbeeld en site), js() alleen naar de gepubliceerde site.
+ * css() gaat mee in de huisregels (voorbeeld en site), js() en hero_nodes() alleen naar de gepubliceerde site.
  */
 class AISB_Archer_Motion {
 
   const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
   const EASE_IN_OUT = 'cubic-bezier(0.77, 0, 0.175, 1)';
+  const MARK = '/*archer-hero-in*/';
 
   public static function css(): string {
     $btn = 'html body :is(.brxe-button.bricks-button,.brxe-form button[type=submit].bricks-button)';
     return ':root{--a-ease-out:' . self::EASE_OUT . ';--a-ease-in-out:' . self::EASE_IN_OUT . ';}'
-      // Niet tijdens de binnenkomst van de hero: die zet zelf opacity en transform in overgang.
-      . str_replace(')', '):not(.archer-in)', $btn) . '{transition:transform 160ms var(--a-ease-out),background-color 150ms ease,color 150ms ease,border-color 150ms ease;}'
+      . $btn . '{transition:transform 160ms var(--a-ease-out),background-color 150ms ease,color 150ms ease,border-color 150ms ease;}'
       . $btn . ':active{transform:scale(0.97);}'
       . '@media (prefers-reduced-motion:reduce){' . $btn . ':active{transform:none;}}'
-      // Onthullen en binnenkomen: de begintoestand zet het script, de eindtoestand en de overgang staan hier.
-      // Begintoestand zonder overgang: sommige sjablonen (knoppen) hebben een eigen transition op opacity.
-      . 'html.archer-motion .archer-in{opacity:0;transform:translateY(8px);}'
-      . 'html.archer-motion .archer-in:not(.is-in){transition:none !important;}'
-      . 'html.archer-motion .archer-in.is-in{opacity:1;transform:none;transition:opacity 400ms var(--a-ease-out),transform 400ms var(--a-ease-out);transition-delay:var(--archer-delay,0ms);}'
       . 'html.archer-motion .archer-reveal{clip-path:inset(0 0 100% 0);}'
       . 'html.archer-motion .archer-reveal.is-in{clip-path:inset(0 0 0 0);transition:clip-path 600ms var(--a-ease-in-out);}'
-      . '@media (prefers-reduced-motion:reduce){'
-      . 'html.archer-motion .archer-in{transform:none;}'
-      . 'html.archer-motion .archer-in.is-in{transition:opacity 200ms ease;transition-delay:0ms;}'
-      . 'html.archer-motion .archer-reveal{clip-path:none;}}';
+      . '@media (prefers-reduced-motion:reduce){html.archer-motion .archer-reveal{clip-path:none;}}';
+  }
+
+  /** CSS voor de herosectie (klasse archer-hero; %root% wordt niet overal vervangen). */
+  public static function hero_css(bool $cover): string {
+    $a = 'animation:archer-hero-in 400ms ' . self::EASE_OUT . ' backwards;';
+    $d = fn(int $ms) => 'animation-delay:' . $ms . 'ms;';
+    return self::MARK
+      . '@keyframes archer-hero-in{from{opacity:0;transform:translateY(8px);}}'
+      . '@keyframes archer-hero-fade{from{opacity:0;}}'
+      . '.archer-hero :is(h1,h2).brxe-heading{' . $a . $d(60) . '}'
+      . '.archer-hero :is(.brxe-text-basic,.brxe-text,.brxe-rich-text):not(.brxe-heading){' . $a . $d(0) . '}'
+      . '.archer-hero :is(h1,h2).brxe-heading ~ :is(.brxe-text-basic,.brxe-text,.brxe-rich-text){' . $d(120) . '}'
+      . '.archer-hero .brxe-button{' . $a . $d(180) . '}'
+      . '.archer-hero .brxe-button ~ .brxe-button{' . $d(240) . '}'
+      . ($cover ? '' : '.archer-hero .brxe-image{' . $a . $d(240) . '}')
+      . '@media (prefers-reduced-motion:reduce){.archer-hero :is(.brxe-heading,.brxe-text-basic,.brxe-text,.brxe-rich-text,.brxe-button,.brxe-image){animation-name:archer-hero-fade;animation-duration:200ms;animation-delay:0ms;}}'
+      . self::MARK;
+  }
+
+  /** De eerste inhoudssectie van een pagina krijgt de binnenkomst (eenmalig, ook bij opnieuw publiceren). */
+  public static function hero_nodes(array $nodes): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || ($n['name'] ?? '') !== 'section' || !empty($n['parent'])) continue;
+      $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
+      $cover = strpos(' ' . (string) ($s['_cssClasses'] ?? '') . ' ', ' archer-cover ') !== false;
+      $q = preg_quote(self::MARK, '#');
+      $cur = trim((string) preg_replace('#' . $q . '.*?' . $q . '#s', '', (string) ($s['_cssCustom'] ?? '')));
+      $s['_cssCustom'] = trim($cur . "\n" . self::hero_css($cover));
+      $cls = trim((string) ($s['_cssClasses'] ?? ''));
+      if (strpos(' ' . $cls . ' ', ' archer-hero ') === false) $s['_cssClasses'] = trim($cls . ' archer-hero');
+      $nodes[$i]['settings'] = $s;
+      break;
+    }
+    return $nodes;
   }
 
   public static function js(): string {
@@ -44,54 +71,17 @@ class AISB_Archer_Motion {
 (function () {
   if (window.__archerMotion) return;
   window.__archerMotion = 1;
-  var doc = document.documentElement;
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var painted = (performance.getEntriesByType ? performance.getEntriesByType("paint") : []).some(function (p) {
-    return p.name === "first-contentful-paint";
-  });
+  if (reduce || !("IntersectionObserver" in window)) return;
+  document.documentElement.classList.add("archer-motion");
   var vh = window.innerHeight || 800;
   var inView = function (el) { var r = el.getBoundingClientRect(); return r.top < vh && r.bottom > 0; };
-  doc.classList.add("archer-motion");
-
-  // Hero: één keer binnenkomen, alleen als er nog niets getekend is.
   var sections = Array.prototype.slice.call(document.querySelectorAll(".brxe-section")).filter(function (s) {
     return !s.closest(".archer-header,.archer-footer,header,footer") && s.offsetHeight > 0;
   });
   var hero = sections[0];
-  if (hero && !painted) {
-    var parts = [];
-    hero.querySelectorAll("h1,h2,.brxe-heading,p,.brxe-text-basic,.brxe-button,.brxe-image,img").forEach(function (el) {
-      if (parts.length >= 8 || !inView(el)) return;
-      if (hero.classList.contains("archer-cover") && (el.matches(".brxe-image") || el.tagName === "IMG")) return; // achtergrondfoto blijft staan
-      if (parts.some(function (p) { return p.contains(el); })) return;
-      parts.push(el);
-    });
-    parts.forEach(function (el, i) {
-      el.classList.add("archer-in");
-      el.style.setProperty("--archer-delay", (reduce ? 0 : i * 60) + "ms");
-    });
-    // Na afloop alles opruimen: geen achterblijvende vertraging op knoppen, en nooit inhoud die verborgen
-    // blijft als de animatie niet afspeelt (achtergrondtab, trage machine).
-    var cleaned = false;
-    var cleanup = function () {
-      if (cleaned) return;
-      cleaned = true;
-      parts.forEach(function (el) {
-        el.classList.remove("archer-in", "is-in");
-        el.style.removeProperty("--archer-delay");
-      });
-    };
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        parts.forEach(function (el) { el.classList.add("is-in"); });
-        setTimeout(cleanup, 1000);
-      });
-    });
-    setTimeout(cleanup, 1600);
-  }
 
   // Beelden lager op de pagina: één keer onthullen bij het binnenscrollen. Geen logo's, iconen of kleine beelden.
-  if (reduce || !("IntersectionObserver" in window)) return;
   var imgs = Array.prototype.slice.call(document.querySelectorAll(".brxe-section .brxe-image")).filter(function (el) {
     if (hero && hero.contains(el)) return false;
     if (el.closest(".archer-header,.archer-footer,.archer-cover,.brxe-logo,[class*='logo']")) return false;

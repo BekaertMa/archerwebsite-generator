@@ -43,7 +43,7 @@ class AISB_Archer_Generate {
     // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
     if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
     // Iconen die bij de tekst passen in plaats van de standaardkubus; geen verzonnen cijfers (tellers).
-    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes)));
+    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::iconoir(AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes))));
     return $nodes;
   }
 
