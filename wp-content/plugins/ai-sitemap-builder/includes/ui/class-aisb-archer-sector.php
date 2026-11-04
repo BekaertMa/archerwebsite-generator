@@ -1,1 +1,122 @@
-PD9waHAKaWYgKCFkZWZpbmVkKCdBQlNQQVRIJykpIGV4aXQ7CgovKioKICogU2VjdG9yYWR2aWVzIHVpdCBVSS9VWCBQcm8gTWF4IChnaXRodWIuY29tL25leHRsZXZlbGJ1aWxkZXIvdWktdXgtcHJvLW1heC1za2lsbCwgTUlUKSBib3Zlbm9wIGRlIEFyY2hlci1zdGlqbGVuOgogKiAtIGRlIHN0YXAgU3Rpamwgc29ydGVlcnQgZGUgOCBzdGlqbGVuIG9wIHdhdCBVSS9VWCBQcm8gTWF4IHZvb3IgZGUgc2VjdG9yIGFhbnJhYWR0IGVuIHRvb250IHdhYXJvbTsKICogLSBkZSBwcm9tcHRzIHZvb3Igc2l0ZW1hcCBlbiBzZWN0aWVzIGtyaWpnZW4gZGUgb3Bib3V3LCBkZSBtdXN0LWhhdmVzIGVuIHdhdCB0ZSB2ZXJtaWpkZW47CiAqIC0gZGUgY29udHJvbGUgdm9vciBwdWJsaWNlcmVuIChBSVNCX0FyY2hlcl9DaGVja3MpIGdlYnJ1aWt0IGRlIG11c3QtaGF2ZXMuCiAqIERlIGtlbm5pcyBzdGFhdCBpbiBzZWN0b3Ivc2VjdG9ycy5waHAuCiAqLwpjbGFzcyBBSVNCX0FyY2hlcl9TZWN0b3IgewoKICAvKiogQXJjaGVyLXN0aWpsIOKGkiBzdGlqbGVuIGluIGRlIG5hbWVuIHZhbiBVSS9VWCBQcm8gTWF4IChzdHlsZXMuY3N2KSBkaWUgZXJvcCBsaWprZW4sIHN0ZXJrc3RlIGVlcnN0LiAqLwogIGNvbnN0IFNUWUxFX1RBR1MgPSBbCiAgICAnYXRlbGllcicgPT4gWydFZGl0b3JpYWwgR3JpZCAvIE1hZ2F6aW5lJywgJ0V4YWdnZXJhdGVkIE1pbmltYWxpc20nLCAnTWluaW1hbGlzbSAmIFN3aXNzIFN0eWxlJywgJ01pbmltYWxpc3QgTW9ub2Nocm9tZScsICdTdG9yeXRlbGxpbmctRHJpdmVuJ10sCiAgICAnbm9yZGljJyA9PiBbJ01pbmltYWxpc20gJiBTd2lzcyBTdHlsZScsICdTb2Z0IFVJIEV2b2x1dGlvbicsICdBY2Nlc3NpYmxlICYgRXRoaWNhbCcsICdGbGF0IERlc2lnbicsICdUcnVzdCAmIEF1dGhvcml0eSddLAogICAgJ3N0dWRpbycgPT4gWydWaWJyYW50ICYgQmxvY2stYmFzZWQnLCAnQnJ1dGFsaXNtJywgJ01vdGlvbi1Ecml2ZW4nLCAnS2luZXRpYyBUeXBvZ3JhcGh5JywgJ0JvbGQgVHlwb2dyYXBoeSAoTW9iaWxlIFBvc3RlciknXSwKICAgICdhbWJhY2h0JyA9PiBbJ09yZ2FuaWMgQmlvcGhpbGljJywgJ05hdHVyZSBEaXN0aWxsZWQnLCAnRmxhdCBEZXNpZ24nLCAnQWNjZXNzaWJsZSAmIEV0aGljYWwnLCAnVmludGFnZSBBbmFsb2cgLyBSZXRybyBGaWxtJ10sCiAgICAnaGVsZGVyJyA9PiBbJ1NvZnQgVUkgRXZvbHV0aW9uJywgJ0FjY2Vzc2libGUgJiBFdGhpY2FsJywgJ0luY2x1c2l2ZSBEZXNpZ24nLCAnRmxhdCBEZXNpZ24nLCAnQ2xheW1vcnBoaXNtJ10sCiAgICAnbm9pcicgPT4gWydEYXJrIE1vZGUgKE9MRUQpJywgJ0V4YWdnZXJhdGVkIE1pbmltYWxpc20nLCAnTGlxdWlkIEdsYXNzJywgJ0dsYXNzbW9ycGhpc20nLCAnRWRpdG9yaWFsIEdyaWQgLyBNYWdhemluZSddLAogICAgJ3Jhc3RlcicgPT4gWydTd2lzcyBNb2Rlcm5pc20gMi4wJywgJ01pbmltYWxpc20gJiBTd2lzcyBTdHlsZScsICdCcnV0YWxpc20nLCAnQmF1aGF1cyAo5YyF6LGq5pavKScsICdNaW5pbWFsaXN0IE1vbm9jaHJvbWUnXSwKICAgICdmcmlzJyA9PiBbJ0ZsYXQgRGVzaWduJywgJ1ZpYnJhbnQgJiBCbG9jay1iYXNlZCcsICdBY2Nlc3NpYmxlICYgRXRoaWNhbCcsICdNaW5pbWFsICYgRGlyZWN0JywgJ01pY3JvLWludGVyYWN0aW9ucyddLAogIF07CgogIHByaXZhdGUgc3RhdGljICRkYXRhID0gbnVsbDsKCiAgcHVibGljIHN0YXRpYyBmdW5jdGlvbiBhbGwoKTogYXJyYXkgewogICAgaWYgKHNlbGY6OiRkYXRhID09PSBudWxsKSBzZWxmOjokZGF0YSA9IChhcnJheSkgaW5jbHVkZSBfX0RJUl9fIC4gJy9zZWN0b3Ivc2VjdG9ycy5waHAnOwogICAgcmV0dXJuIHNlbGY6OiRkYXRhOwogIH0KCiAgLyoqIFNsZXV0ZWwgdmFuIGRlIGJlc3QgcGFzc2VuZGUgc2VjdG9yLCBvZiAnJyBhbHMgbmlldHMgZHVpZGVsaWprIHBhc3QuICovCiAgcHVibGljIHN0YXRpYyBmdW5jdGlvbiBkZXRlY3Qoc3RyaW5nICR0ZXh0KTogc3RyaW5nIHsKICAgICR0ID0gbWJfc3RydG9sb3dlcih3cF9zdHJpcF9hbGxfdGFncygkdGV4dCkpOwogICAgJGJlc3QgPSAnJzsKICAgICRzY29yZSA9IDA7CiAgICBmb3JlYWNoIChzZWxmOjphbGwoKSBhcyAka2V5ID0+ICRzKSB7CiAgICAgICRuID0gKGludCkgQHByZWdfbWF0Y2hfYWxsKCcvKD88IVtccHtMfV0pKD86JyAuICRzWydtYXRjaCddIC4gJykvdScsICR0KTsKICAgICAgaWYgKCRuID4gJHNjb3JlKSB7ICRiZXN0ID0gJGtleTsgJHNjb3JlID0gJG47IH0KICAgIH0KICAgIHJldHVybiAkYmVzdDsKICB9CgogIHB1YmxpYyBzdGF0aWMgZnVuY3Rpb24gZm9yX3Byb2plY3QoaW50ICRwaWQpOiBzdHJpbmcgewogICAgJGNhY2hlZCA9IChzdHJpbmcpIGdldF9wb3N0X21ldGEoJHBpZCwgJ2FyY2hlcl9zZWN0b3InLCB0cnVlKTsKICAgICRicmllZiA9IChzdHJpbmcpIGdldF9wb3N0X21ldGEoJHBpZCwgJ2Fpc2JfcHJvamVjdF9icmllZicsIHRydWUpOwogICAgJGhhc2ggPSBtZDUoJGJyaWVmIC4gJ3wnIC4gZ2V0X3RoZV90aXRsZSgkcGlkKSk7CiAgICBpZiAoJGNhY2hlZCAhPT0gJycgJiYgc3RycG9zKCRjYWNoZWQsICRoYXNoIC4gJzonKSA9PT0gMCkgcmV0dXJuIChzdHJpbmcpIHN1YnN0cigkY2FjaGVkLCBzdHJsZW4oJGhhc2gpICsgMSk7CiAgICAka2V5ID0gc2VsZjo6ZGV0ZWN0KGdldF90aGVfdGl0bGUoJHBpZCkgLiAiXG4iIC4gJGJyaWVmKTsKICAgIHVwZGF0ZV9wb3N0X21ldGEoJHBpZCwgJ2FyY2hlcl9zZWN0b3InLCAkaGFzaCAuICc6JyAuICRrZXkpOwogICAgcmV0dXJuICRrZXk7CiAgfQoKICBwdWJsaWMgc3RhdGljIGZ1bmN0aW9uIGdldChzdHJpbmcgJGtleSk6ID9hcnJheSB7CiAgICAkYWxsID0gc2VsZjo6YWxsKCk7CiAgICByZXR1cm4gaXNzZXQoJGFsbFska2V5XSkgPyAkYWxsWyRrZXldICsgWydrZXknID0+ICRrZXldIDogbnVsbDsKICB9CgogIC8qKiBTY29yZSB2YW4gZWVuIEFyY2hlci1zdGlqbCB2b29yIGVlbiBzZWN0b3I6IHN0aWpsdmVyd2FudHNjaGFwLCBrbGV1cnRvb24sIGRvbmtlci9saWNodCBlbiBkZSBlaWdlbiBzZWN0b3JsaWpzdC4gKi8KICBwdWJsaWMgc3RhdGljIGZ1bmN0aW9uIHNjb3JlKGFycmF5ICRzdHlsZSwgYXJyYXkgJHNlY3Rvciwgc3RyaW5nICRhcmNoZXJfc2VjdG9yID0gJycpOiBmbG9hdCB7CiAgICAkdGFncyA9IHNlbGY6OlNUWUxFX1RBR1NbJHN0eWxlWydpZCddXSA/PyBbXTsKICAgICRzY29yZSA9IDAuMDsKICAgIGZvcmVhY2ggKGFycmF5X3ZhbHVlcygkc2VjdG9yWydzdHlsZXMnXSkgYXMgJGkgPT4gJHdhbnQpIHsKICAgICAgJHBvcyA9IGFycmF5X3NlYXJjaCgkd2FudCwgJHRhZ3MsIHRydWUpOwogICAgICBpZiAoJHBvcyA9PT0gZmFsc2UpIGNvbnRpbnVlOwogICAgICAkc2NvcmUgKz0gKCRpIDwgMiA/IDMuMCA6IDEuNSkgKiAoMSAtIDAuMTIgKiAkcG9zKTsgLy8gcHJpbWFpcmUgYWFuYmV2ZWxpbmcgdGVsdCBtZWVyLCBuZXQgYWxzIGRlIHN0ZXJrc3RlIHZlcndhbnRzY2hhcAogICAgfQogICAgLy8gS2xldXJ0b29uOiBhY2NlbnQgdmFuIGRlIHN0aWpsIHRlZ2Vub3ZlciBkZSBwcmltYWlyZSBrbGV1ciBlbiBoZXQgYWNjZW50IHZhbiBkZSBzZWN0b3IuCiAgICAkYWNjID0gKHN0cmluZykgKCRzdHlsZVsnY29sb3VycyddWydhY2NlbnQnXSA/PyAnJyk7CiAgICAkYmVzdCA9IDAuMDsKICAgIGZvcmVhY2ggKChhcnJheSkgJHNlY3RvclsncGFsZXR0ZSddIGFzICRoZXgpICRiZXN0ID0gbWF4KCRiZXN0LCBzZWxmOjpodWVfbWF0Y2goJGFjYywgKHN0cmluZykgJGhleCkpOwogICAgJHNjb3JlICs9IDEuNSAqICRiZXN0OwogICAgaWYgKCFlbXB0eSgkc3R5bGVbJ2RhcmsnXSkgJiYgIWVtcHR5KCRzZWN0b3JbJ2F2b2lkX2RhcmsnXSkpICRzY29yZSAtPSA1OwogICAgaWYgKCRhcmNoZXJfc2VjdG9yICE9PSAnJyAmJiBpbl9hcnJheSgkYXJjaGVyX3NlY3RvciwgKGFycmF5KSAoJHN0eWxlWydzZWN0b3JzJ10gPz8gW10pLCB0cnVlKSkgJHNjb3JlICs9IDE7CiAgICByZXR1cm4gcm91bmQoJHNjb3JlLCAyKTsKICB9CgogIC8qKiAwLi4xOiBob2UgZGljaHQgdHdlZSBrbGV1cmVuIGJpaiBlbGthYXIgbGlnZ2VuIGluIHRvb24gKGVuIG9mIHplIGFsbGViZWkgbmV1dHJhYWwgemlqbikuICovCiAgcHJpdmF0ZSBzdGF0aWMgZnVuY3Rpb24gaHVlX21hdGNoKHN0cmluZyAkYSwgc3RyaW5nICRiKTogZmxvYXQgewogICAgWyRoYSwgJHNhXSA9IHNlbGY6OmhzKCRhKTsKICAgIFskaGIsICRzYl0gPSBzZWxmOjpocygkYik7CiAgICBpZiAoJHNhIDwgMC4xNSB8fCAkc2IgPCAwLjE1KSByZXR1cm4gKCRzYSA8IDAuMTUgJiYgJHNiIDwgMC4xNSkgPyAxLjAgOiAwLjA7CiAgICAkZCA9IGFicygkaGEgLSAkaGIpOwogICAgJGQgPSBtaW4oJGQsIDM2MCAtICRkKTsKICAgIHJldHVybiAkZCA8PSAyNSA/IDEuMCA6ICgkZCA8PSA2MCA/IDAuNSA6IDAuMCk7CiAgfQoKICBwcml2YXRlIHN0YXRpYyBmdW5jdGlvbiBocyhzdHJpbmcgJGhleCk6IGFycmF5IHsKICAgICRoID0gbHRyaW0oJGhleCwgJyMnKTsKICAgIGlmICghcHJlZ19tYXRjaCgnL15bMC05YS1mXXs2fSQvaScsICRoKSkgcmV0dXJuIFswLCAwXTsKICAgICRyID0gaGV4ZGVjKHN1YnN0cigkaCwgMCwgMikpIC8gMjU1OyAkZyA9IGhleGRlYyhzdWJzdHIoJGgsIDIsIDIpKSAvIDI1NTsgJGIgPSBoZXhkZWMoc3Vic3RyKCRoLCA0LCAyKSkgLyAyNTU7CiAgICAkbWF4ID0gbWF4KCRyLCAkZywgJGIpOyAkbWluID0gbWluKCRyLCAkZywgJGIpOyAkZCA9ICRtYXggLSAkbWluOwogICAgJGwgPSAoJG1heCArICRtaW4pIC8gMjsKICAgICRzID0gJGQgPT0gMCA/IDAgOiAkZCAvICgxIC0gYWJzKDIgKiAkbCAtIDEpKTsKICAgIGlmICgkZCA9PSAwKSAkaHVlID0gMDsKICAgIGVsc2VpZiAoJG1heCA9PT0gJHIpICRodWUgPSA2MCAqIGZtb2QoKCgkZyAtICRiKSAvICRkKSwgNik7CiAgICBlbHNlaWYgKCRtYXggPT09ICRnKSAkaHVlID0gNjAgKiAoKCgkYiAtICRyKSAvICRkKSArIDIpOwogICAgZWxzZSAkaHVlID0gNjAgKiAoKCgkciAtICRnKSAvICRkKSArIDQpOwogICAgcmV0dXJuIFtmbW9kKCRodWUgKyAzNjAsIDM2MCksICRzXTsKICB9CgogIC8qKiBBZHZpZXMgdm9vciBkZSBzdGFwIFN0aWpsIChOZWRlcmxhbmRzKS4gKi8KICBwdWJsaWMgc3RhdGljIGZ1bmN0aW9uIGFkdmljZShhcnJheSAkc2VjdG9yKTogYXJyYXkgewogICAgcmV0dXJuIFsna2V5JyA9PiAkc2VjdG9yWydrZXknXSwgJ2xhYmVsJyA9PiAkc2VjdG9yWydsYWJlbCddLCAnc291cmNlJyA9PiAkc2VjdG9yWyd1dXBtJ11dICsgJHNlY3RvclsnYWR2aWNlJ107CiAgfQoKICAvKiogUmVnZWxzIHZvb3IgZGUgQUkgKHNpdGVtYXAgZW4gc2VjdGllcyksIGluIGhldCBFbmdlbHMgem9hbHMgZGUgcmVzdCB2YW4gZGllIHByb21wdHMuICovCiAgcHVibGljIHN0YXRpYyBmdW5jdGlvbiBwcm9tcHRfcnVsZXMoaW50ICRwaWQpOiBzdHJpbmcgewogICAgcmV0dXJuIHNlbGY6OnByb21wdF9ydWxlc19mb3Ioc2VsZjo6Zm9yX3Byb2plY3QoJHBpZCkpOwogIH0KCiAgcHVibGljIHN0YXRpYyBmdW5jdGlvbiBwcm9tcHRfcnVsZXNfZm9yKHN0cmluZyAka2V5KTogc3RyaW5nIHsKICAgICRzID0gc2VsZjo6Z2V0KCRrZXkpOwogICAgaWYgKCEkcykgcmV0dXJuICcnOwogICAgJGEgPSAkc1snYWR2aWNlJ107CiAgICByZXR1cm4gIlNFQ1RPUiBHVUlEQU5DRSAoVUkvVVggUHJvIE1heCwgcHJvZHVjdCB0eXBlIFwiIiAuICRzWyd1dXBtJ10gLiAiXCI7IHdyaXRlIHRoZSBzaXRlIGl0c2VsZiBpbiB0aGUgc2l0ZSdzIGxhbmd1YWdlKTpcbiIKICAgICAgLiAnLSBSZWNvbW1lbmRlZCBwYWdlIGZsb3c6ICcgLiAkYVsnb3Bib3V3J10gLiAiXG4iCiAgICAgIC4gJy0gU3VnZ2VzdGVkIHNlY3Rpb25zIChhZGFwdCwgZG8gbm90IGNvcHkgYmxpbmRseSk6ICcgLiBpbXBsb2RlKCcgPiAnLCAkc1snc2VjdGlvbnMnXSkgLiAiXG4iCiAgICAgIC4gJy0gTXVzdCBoYXZlOiAnIC4gaW1wbG9kZSgnOyAnLCAkYVsnbW9ldCddKSAuICJcbiIKICAgICAgLiAnLSBBdm9pZDogJyAuIGltcGxvZGUoJzsgJywgJGFbJ3Zlcm1pamQnXSkgLiAiXG4iOwogIH0KfQo=
+<?php
+if (!defined('ABSPATH')) exit;
+
+/**
+ * Sectoradvies uit UI/UX Pro Max (github.com/nextlevelbuilder/ui-ux-pro-max-skill, MIT) bovenop de Archer-stijlen:
+ * - de stap Stijl sorteert de 8 stijlen op wat UI/UX Pro Max voor de sector aanraadt en toont waarom;
+ * - de prompts voor sitemap en secties krijgen de opbouw, de must-haves en wat te vermijden;
+ * - de controle voor publiceren (AISB_Archer_Checks) gebruikt de must-haves.
+ * De kennis staat in sector/sectors.php.
+ */
+class AISB_Archer_Sector {
+
+  /** Archer-stijl → stijlen in de namen van UI/UX Pro Max (styles.csv) die erop lijken, sterkste eerst. */
+  const STYLE_TAGS = [
+    'atelier' => ['Editorial Grid / Magazine', 'Exaggerated Minimalism', 'Minimalism & Swiss Style', 'Minimalist Monochrome', 'Storytelling-Driven'],
+    'nordic' => ['Minimalism & Swiss Style', 'Soft UI Evolution', 'Accessible & Ethical', 'Flat Design', 'Trust & Authority'],
+    'studio' => ['Vibrant & Block-based', 'Brutalism', 'Motion-Driven', 'Kinetic Typography', 'Bold Typography (Mobile Poster)'],
+    'ambacht' => ['Organic Biophilic', 'Nature Distilled', 'Flat Design', 'Accessible & Ethical', 'Vintage Analog / Retro Film'],
+    'helder' => ['Soft UI Evolution', 'Accessible & Ethical', 'Inclusive Design', 'Flat Design', 'Claymorphism'],
+    'noir' => ['Dark Mode (OLED)', 'Exaggerated Minimalism', 'Liquid Glass', 'Glassmorphism', 'Editorial Grid / Magazine'],
+    'raster' => ['Swiss Modernism 2.0', 'Minimalism & Swiss Style', 'Brutalism', 'Bauhaus (包豪斯)', 'Minimalist Monochrome'],
+    'fris' => ['Flat Design', 'Vibrant & Block-based', 'Accessible & Ethical', 'Minimal & Direct', 'Micro-interactions'],
+  ];
+
+  private static $data = null;
+
+  public static function all(): array {
+    if (self::$data === null) self::$data = (array) include __DIR__ . '/sector/sectors.php';
+    return self::$data;
+  }
+
+  /** Sleutel van de best passende sector, of '' als niets duidelijk past. */
+  public static function detect(string $text): string {
+    $t = mb_strtolower(wp_strip_all_tags($text));
+    $best = '';
+    $score = 0;
+    foreach (self::all() as $key => $s) {
+      $n = (int) @preg_match_all('/(?<![\p{L}])(?:' . $s['match'] . ')/u', $t);
+      if ($n > $score) { $best = $key; $score = $n; }
+    }
+    return $best;
+  }
+
+  public static function for_project(int $pid): string {
+    $cached = (string) get_post_meta($pid, 'archer_sector', true);
+    $brief = (string) get_post_meta($pid, 'aisb_project_brief', true);
+    $hash = md5($brief . '|' . get_the_title($pid));
+    if ($cached !== '' && strpos($cached, $hash . ':') === 0) return (string) substr($cached, strlen($hash) + 1);
+    $key = self::detect(get_the_title($pid) . "\n" . $brief);
+    update_post_meta($pid, 'archer_sector', $hash . ':' . $key);
+    return $key;
+  }
+
+  public static function get(string $key): ?array {
+    $all = self::all();
+    return isset($all[$key]) ? $all[$key] + ['key' => $key] : null;
+  }
+
+  /** Score van een Archer-stijl voor een sector: stijlverwantschap, kleurtoon, donker/licht en de eigen sectorlijst. */
+  public static function score(array $style, array $sector, string $archer_sector = ''): float {
+    $tags = self::STYLE_TAGS[$style['id']] ?? [];
+    $score = 0.0;
+    foreach (array_values($sector['styles']) as $i => $want) {
+      $pos = array_search($want, $tags, true);
+      if ($pos === false) continue;
+      $score += ($i < 2 ? 3.0 : 1.5) * (1 - 0.12 * $pos); // primaire aanbeveling telt meer, net als de sterkste verwantschap
+    }
+    // Kleurtoon: accent van de stijl tegenover de primaire kleur en het accent van de sector.
+    $acc = (string) ($style['colours']['accent'] ?? '');
+    $best = 0.0;
+    foreach ((array) $sector['palette'] as $hex) $best = max($best, self::hue_match($acc, (string) $hex));
+    $score += 1.5 * $best;
+    if (!empty($style['dark']) && !empty($sector['avoid_dark'])) $score -= 5;
+    if ($archer_sector !== '' && in_array($archer_sector, (array) ($style['sectors'] ?? []), true)) $score += 1;
+    return round($score, 2);
+  }
+
+  /** 0..1: hoe dicht twee kleuren bij elkaar liggen in toon (en of ze allebei neutraal zijn). */
+  private static function hue_match(string $a, string $b): float {
+    [$ha, $sa] = self::hs($a);
+    [$hb, $sb] = self::hs($b);
+    if ($sa < 0.15 || $sb < 0.15) return ($sa < 0.15 && $sb < 0.15) ? 1.0 : 0.0;
+    $d = abs($ha - $hb);
+    $d = min($d, 360 - $d);
+    return $d <= 25 ? 1.0 : ($d <= 60 ? 0.5 : 0.0);
+  }
+
+  private static function hs(string $hex): array {
+    $h = ltrim($hex, '#');
+    if (!preg_match('/^[0-9a-f]{6}$/i', $h)) return [0, 0];
+    $r = hexdec(substr($h, 0, 2)) / 255; $g = hexdec(substr($h, 2, 2)) / 255; $b = hexdec(substr($h, 4, 2)) / 255;
+    $max = max($r, $g, $b); $min = min($r, $g, $b); $d = $max - $min;
+    $l = ($max + $min) / 2;
+    $s = $d == 0 ? 0 : $d / (1 - abs(2 * $l - 1));
+    if ($d == 0) $hue = 0;
+    elseif ($max === $r) $hue = 60 * fmod((($g - $b) / $d), 6);
+    elseif ($max === $g) $hue = 60 * ((($b - $r) / $d) + 2);
+    else $hue = 60 * ((($r - $g) / $d) + 4);
+    return [fmod($hue + 360, 360), $s];
+  }
+
+  /** Advies voor de stap Stijl (Nederlands). */
+  public static function advice(array $sector): array {
+    return ['key' => $sector['key'], 'label' => $sector['label'], 'source' => $sector['uupm']] + $sector['advice'];
+  }
+
+  /** Regels voor de AI (sitemap en secties), in het Engels zoals de rest van die prompts. */
+  public static function prompt_rules(int $pid): string {
+    return self::prompt_rules_for(self::for_project($pid));
+  }
+
+  public static function prompt_rules_for(string $key): string {
+    $s = self::get($key);
+    if (!$s) return '';
+    $a = $s['advice'];
+    return "SECTOR GUIDANCE (UI/UX Pro Max, product type \"" . $s['uupm'] . "\"; write the site itself in the site's language):\n"
+      . '- Recommended page flow: ' . $a['opbouw'] . "\n"
+      . '- Suggested sections (adapt, do not copy blindly): ' . implode(' > ', $s['sections']) . "\n"
+      . '- Must have: ' . implode('; ', $a['moet']) . "\n"
+      . '- Avoid: ' . implode('; ', $a['vermijd']) . "\n";
+  }
+}
