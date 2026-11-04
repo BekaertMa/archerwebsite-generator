@@ -40,6 +40,19 @@
 
   /** Hoeken van knoppen en velden (dezelfde waarden als AISB_Archer_Taste::RADIUS). */
   UI.RADIUS = { sharp: "0px", soft: "6px", round: "999px" };
+  /** Hoeken die een Archer-stijl overschrijven (zelfde waarden als AISB_Archer_Styles::RADII). */
+  UI.RADII = {
+    sharp: { button: 0, card: 0, image: 0, field: 0 },
+    soft: { button: 8, card: 14, image: 14, field: 8 },
+    round: { button: 999, card: 24, image: 24, field: 12 },
+  };
+  UI.radiusVars = (key) => {
+    const r = UI.RADII[key];
+    if (!r) return "";
+    return `--a-radius-button:${r.button}px;--a-radius-card:${r.card}px;--a-radius-image:${r.image}px;--a-radius-field:${r.field}px;` +
+      `--archer-radius:${r.button}px;--brxw-radius-xs:${Math.min(r.card, 6)}px;--brxw-radius-s:${Math.min(r.card, 10)}px;` +
+      `--brxw-radius-m:${r.card}px;--brxw-radius-l:${r.card}px;--brxw-radius-xl:${r.card}px;`;
+  };
   UI.applyRadius = (doc, key) => {
     if (!doc || !doc.head) return;
     const v = UI.RADIUS[key];
@@ -253,6 +266,44 @@
       b.addEventListener("click", () => setMode(b.getAttribute("data-archer-mode"))),
     );
 
+    // Contactgegevens van de zaak: komen in de footer, het contactblok en de belknoppen.
+    const card = $(".archer-start-card", start);
+    const genBtn = card && $("[data-aisb-generate]", card);
+    if (card && genBtn && !$("[data-archer-contact]", card)) {
+      const box = document.createElement("details");
+      box.className = "archer-more archer-contact-box";
+      box.setAttribute("data-archer-contact", "");
+      box.open = true;
+      box.innerHTML =
+        '<summary>Contactgegevens <span class="archer-muted">(aanbevolen)</span></summary>' +
+        '<p class="archer-muted archer-small">Komen in de footer, op de contactpagina en achter de knoppen "Bel ons" en "Mail ons". Leeg laten mag: dan staat er een plaatshouder die je later invult.</p>' +
+        '<div class="aisb-brief-grid">' +
+        '<div class="aisb-field"><label class="aisb-label" for="archer-c-address">Adres</label><input id="archer-c-address" class="archer-input" autocomplete="street-address" placeholder="Straat 1, 9000 Gent"></div>' +
+        '<div class="aisb-field"><label class="aisb-label" for="archer-c-phone">Telefoon</label><input id="archer-c-phone" type="tel" class="archer-input" autocomplete="tel" placeholder="09 123 45 67"></div>' +
+        '<div class="aisb-field"><label class="aisb-label" for="archer-c-email">E-mail</label><input id="archer-c-email" type="email" class="archer-input" autocomplete="email" placeholder="info@zaak.be"></div>' +
+        '<div class="aisb-field"><label class="aisb-label" for="archer-c-socials">Sociale media <span class="archer-muted">(links, optioneel)</span></label><input id="archer-c-socials" class="archer-input" placeholder="instagram.com/zaak, facebook.com/zaak"></div>' +
+        "</div>";
+      genBtn.before(box);
+    }
+    UI.readContact = () => ({
+      address: (($("#archer-c-address") || {}).value || "").trim(),
+      phone: (($("#archer-c-phone") || {}).value || "").trim(),
+      email: (($("#archer-c-email") || {}).value || "").trim(),
+      socials: (($("#archer-c-socials") || {}).value || "").trim(),
+    });
+    /** Lege velden aanvullen met wat op de huidige website staat; geeft de gegevens terug. */
+    UI.fillContact = (found) => {
+      const set = (id, v) => {
+        const el = $(id);
+        if (el && !el.value.trim() && v) el.value = v;
+      };
+      set("#archer-c-phone", found.phone || "");
+      set("#archer-c-email", found.email || "");
+      set("#archer-c-address", found.address || "");
+      set("#archer-c-socials", (found.socials || []).join(", "));
+      return UI.readContact();
+    };
+
     // Nederlandse knoptekst tijdens het genereren.
     const btnLabel = "Genereer de sitemap →";
     if (app.btnGen && !app.btnGen.disabled) app.btnGen.textContent = btnLabel;
@@ -283,7 +334,7 @@
               urlEl.focus();
               return;
             }
-            opts = { mode: "url", url, prompt: (($("#archer-site-extra") || {}).value || "").trim(), languages, pageCount };
+            opts = { mode: "url", url, prompt: (($("#archer-site-extra") || {}).value || "").trim(), languages, pageCount, contact: UI.readContact() };
           } else {
             const prompt = (app.promptEl.value || "").trim();
             if (prompt.length < 10) {
@@ -291,7 +342,7 @@
               app.promptEl.focus();
               return;
             }
-            opts = { mode: "desc", prompt, languages, pageCount };
+            opts = { mode: "desc", prompt, languages, pageCount, contact: UI.readContact() };
           }
           app.setStatus("");
           app.btnGen.disabled = true;
@@ -1911,13 +1962,54 @@
     const view = panel.getAttribute("data-archer-sg-view");
 
     const wfReady = () => Array.isArray(SG.wireframePages) && SG.wireframePages.length > 0;
+    // Stockfoto's komen pas na een klik ("Kies stockfoto's voor deze pagina" of "voor alle pagina's").
+    // Tot dan staan de lege fotovakken van de sjablonen er; guide.images houdt per fotovak een lege plaats.
+    const EMPTY = () => ({ full: "", thumb: "", alt: "", archerEmpty: true });
+    const isEmpty = (img) => !img || img.archerEmpty === true || !(img.full || img.thumb);
+    const isStock = (img) => !isEmpty(img) && (!!img.source || /unsplash|pexels/i.test(img.full || ""));
+    const mediaCountOf = (s) => (s && s.media_count) || 0;
+    const sectionRange = (slug, sIdx) => {
+      let base = 0;
+      for (const p of SG.wireframePages || []) {
+        const secs = p.sections || [];
+        for (let i = 0; i < secs.length; i++) {
+          if (p.slug === slug && i === sIdx) return { start: base, count: mediaCountOf(secs[i]) };
+          base += mediaCountOf(secs[i]);
+        }
+      }
+      return { start: base, count: 0 };
+    };
+    const pageSlots = () => {
+      let base = 0;
+      return (SG.wireframePages || []).map((p) => {
+        const secs = p.sections || [];
+        const count = secs.reduce((n, x) => n + mediaCountOf(x), 0);
+        const r = { slug: p.slug, title: p.title || p.slug, start: base, count, sections: secs.map((x) => x.name || x.section_name || x.type || "").filter(Boolean).slice(0, 10).join(", ") };
+        base += count;
+        return r;
+      });
+    };
+    const padImages = () => {
+      if (!wfReady()) return (SG.guide && SG.guide.images) || [];
+      const total = (SG.wireframePages || []).reduce((n, p) => n + (p.sections || []).reduce((m, x) => m + mediaCountOf(x), 0), 0);
+      if (!SG.guide.images || !Array.isArray(SG.guide.images)) SG.guide.images = [];
+      const imgs = SG.guide.images;
+      while (imgs.length < total) imgs.push(EMPTY());
+      if (total && imgs.length > total) imgs.length = total;
+      return imgs;
+    };
+    UI.photoHelpers = { EMPTY, isEmpty, isStock, pageSlots, padImages };
     if (typeof SG.autoAssignImages === "function" && !SG.autoAssignImages._archer) {
       const origAuto = SG.autoAssignImages;
       SG.autoAssignImages = function () {
         if (!wfReady()) return Promise.resolve();
-        return origAuto.apply(this, arguments);
+        // Niet meer automatisch: alleen lege fotovakken klaarzetten.
+        padImages();
+        SG.imagesLoaded = true;
+        return Promise.resolve();
       };
       SG.autoAssignImages._archer = true;
+      SG.autoAssignImages._orig = origAuto;
       if (SG.onStep3Enter === origAuto) SG.onStep3Enter = SG.autoAssignImages;
     }
     // Weergave kiezen: stijl = kleuren + lettertypes, foto's = afbeeldingen.
@@ -1930,6 +2022,26 @@
     if (typeof SG.injectImagesIntoIframe === "function" && !SG.injectImagesIntoIframe._archer) {
       const origInject = SG.injectImagesIntoIframe;
       SG.injectImagesIntoIframe = function (iframe) {
+        const all = (SG.guide && SG.guide.images) || [];
+        const manual = all.some(isEmpty);
+        let doc0 = null;
+        try { doc0 = iframe.contentDocument; } catch (e) {}
+        // Oorspronkelijke fotovakken onthouden, om lege vakken leeg te laten.
+        if (doc0) doc0.querySelectorAll("img").forEach((img) => {
+          if (!img.hasAttribute("data-archer-orig")) img.setAttribute("data-archer-orig", img.getAttribute("src") || "");
+        });
+        const restore = (img) => {
+          const o = img.getAttribute("data-archer-orig");
+          if (o !== null && img.getAttribute("src") !== o) { img.setAttribute("src", o); img.removeAttribute("srcset"); }
+        };
+        if (manual) {
+          const r = sectionRange(iframe._pageSlug, iframe._sectionIdx);
+          const slots = all.slice(r.start, r.start + r.count);
+          if (!r.count || slots.every(isEmpty)) {
+            if (doc0) doc0.querySelectorAll("img[data-archer-orig]").forEach((img) => { if (!img.closest(".brxe-logo") && !img.classList.contains("bricks-site-logo")) restore(img); });
+            return;
+          }
+        }
         let held = [];
         try {
           const doc = iframe.contentDocument;
@@ -1940,7 +2052,15 @@
           });
         } catch (e) {}
         try {
-          return origInject.apply(this, arguments);
+          const res = origInject.apply(this, arguments);
+          if (manual && doc0) {
+            const r = sectionRange(iframe._pageSlug, iframe._sectionIdx);
+            doc0.querySelectorAll("img[data-aisb-img-ui]").forEach((img) => {
+              const ui = parseInt(img.getAttribute("data-aisb-img-ui"), 10);
+              if (isNaN(ui) || ui >= r.count || isEmpty(all[r.start + ui])) restore(img);
+            });
+          }
+          return res;
         } finally {
           held.forEach(([img, mark]) => {
             mark.replaceWith(img);
@@ -1962,15 +2082,18 @@
       const grid = SG.el && SG.el.autoImagesContainer;
       const imgs = (SG.guide && SG.guide.images) || [];
       if (!grid) return;
-      if (imgs.length && !grid.querySelector(".aisb-sg-auto-card")) {
+      if (imgs.some((i) => !isEmpty(i)) && !grid.querySelector(".aisb-sg-auto-card")) {
         grid.innerHTML = imgs
-          .map((img, i) => `<div class="aisb-sg-auto-card" data-image-index="${i}" title="Klik om te wisselen"><img src="${esc(img.thumb || img.full || "")}" alt="${esc(img.alt || "")}" loading="lazy"></div>`)
+          .map((img, i) => (isEmpty(img) ? "" : `<div class="aisb-sg-auto-card" data-image-index="${i}" title="Klik om te wisselen"><img src="${esc(img.thumb || img.full || "")}" alt="${esc(img.alt || "")}" loading="lazy"></div>`))
           .join("");
       }
       const total = mediaTotal();
       if (SG.el.uploadTotalNeeded) SG.el.uploadTotalNeeded.textContent = total;
       if (SG.el.uploadHint) SG.el.uploadHint.textContent = `${(SG.uploadedImages || []).length} eigen foto's · ${total} foto's nodig`;
       if (SG.refreshImageLibraryState) SG.refreshImageLibraryState();
+      // Het aantal stockfoto's: alleen gevulde vakken tellen.
+      const tabCount = $("[data-unsplash-tab-count]");
+      if (tabCount) tabCount.textContent = "(" + imgs.filter((i) => !isEmpty(i)).length + ")";
     };
     if (view === "photos") {
       let tries = 0;
@@ -1979,14 +2102,115 @@
         if (!wfReady() && tries <= 80) return;
         clearInterval(waitPages);
         if (!wfReady()) return;
-        const has = SG.guide && SG.guide.images && SG.guide.images.length;
-        if (has) SG.imagesLoaded = true;
-        else if (typeof SG.autoAssignImages === "function") {
-          SG.imagesLoaded = false;
-          await SG.autoAssignImages();
-        }
+        padImages();
+        SG.imagesLoaded = true;
         showStock();
+        initStockButtons();
       }, 500);
+    }
+
+    /** Knoppen "Kies stockfoto's voor deze pagina" en "voor alle pagina's". */
+    function initStockButtons() {
+      const host = $("[data-wizard-panel='3']", panel);
+      if (!host || $("[data-archer-stock]", host)) return;
+      const box = document.createElement("section");
+      box.className = "archer-stock-box";
+      box.setAttribute("data-archer-stock", "");
+      box.innerHTML =
+        "<h4>Stockfoto's</h4>" +
+        '<p class="archer-muted archer-small">De fotovakken blijven leeg tot je stockfoto\'s kiest. Per pagina zoeken we foto\'s die bij die pagina passen. Eigen foto\'s kan je altijd opladen.</p>' +
+        '<div class="archer-stock-actions">' +
+        '<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-stock-page>Kies stockfoto\'s voor deze pagina</button>' +
+        '<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-stock-all>Kies stockfoto\'s voor alle pagina\'s</button>' +
+        "</div>" +
+        '<p class="archer-small" data-stock-status aria-live="polite"></p>';
+      host.prepend(box);
+      const status = $("[data-stock-status]", box);
+      const pageNow = () => {
+        const sel = $(".archer-sg-page-select", panel);
+        const slug = (sel && sel.value) || "home";
+        return pageSlots().find((p) => p.slug === slug) || pageSlots()[0];
+      };
+      const count = () => {
+        const imgs = padImages();
+        const filled = imgs.filter((i) => !isEmpty(i)).length;
+        const pg = pageNow();
+        const pgFilled = pg ? imgs.slice(pg.start, pg.start + pg.count).filter((i) => !isEmpty(i)).length : 0;
+        status.textContent = `${filled} van ${imgs.length} fotovakken gevuld` + (pg ? ` · ${pg.title}: ${pgFilled} van ${pg.count}` : "");
+        const btn = $("[data-stock-page]", box);
+        if (btn && pg) btn.textContent = pg.count && pgFilled >= pg.count ? `Andere stockfoto's voor ${pg.title}` : `Kies stockfoto's voor ${pg.title}`;
+      };
+      const fill = async (pg, replace) => {
+        const imgs = padImages();
+        const idx = [];
+        for (let i = pg.start; i < pg.start + pg.count; i++) if (isEmpty(imgs[i]) || (replace && isStock(imgs[i]))) idx.push(i);
+        if (!idx.length) return 0;
+        const exclude = imgs.filter((i) => !isEmpty(i)).map((i) => i.full);
+        const out = await SG.post("aisb_archer_stock_page", {
+          project_id: SG.projectId, page_slug: pg.slug, page_title: pg.title, sections: pg.sections,
+          need: idx.length, exclude: JSON.stringify(exclude.slice(-150)),
+        });
+        if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Geen stockfoto's gevonden.");
+        // Foto's die intussen al op een andere pagina staan, overslaan (de pagina's lopen tegelijk).
+        const taken = new Set(imgs.filter((x) => !isEmpty(x)).map((x) => x.full));
+        const found = (out.data.images || []).filter((x) => x && x.full && !taken.has(x.full));
+        let n = 0;
+        idx.forEach((i, k) => { if (found[k]) { imgs[i] = found[k]; n++; } });
+        return n;
+      };
+      const done = () => {
+        SG.imagesLoaded = true;
+        if (SG.applyImagesToAllIframes) SG.applyImagesToAllIframes();
+        const grid = SG.el && SG.el.autoImagesContainer;
+        if (grid) grid.innerHTML = "";
+        showStock();
+        if (typeof SG.saveDraft === "function") SG.saveDraft();
+        count();
+      };
+      const busy = (on) => $$("button", box).forEach((b) => (b.disabled = on));
+      $("[data-stock-page]", box).addEventListener("click", async () => {
+        const pg = pageNow();
+        if (!pg || !pg.count) { status.textContent = "Deze pagina heeft geen fotovakken."; return; }
+        busy(true);
+        status.textContent = `Foto's zoeken voor ${pg.title}…`;
+        try {
+          const imgs = padImages();
+          const full = imgs.slice(pg.start, pg.start + pg.count).every((i) => !isEmpty(i));
+          const n = await fill(pg, full);
+          done();
+          if (!n) status.textContent += " · alle vakken hadden al een foto";
+        } catch (err) {
+          status.textContent = err.message || "Er ging iets mis.";
+        } finally { busy(false); }
+      });
+      $("[data-stock-all]", box).addEventListener("click", async () => {
+        busy(true);
+        const list = pageSlots().filter((p) => p.count);
+        let k = 0;
+        status.textContent = `Foto's zoeken voor ${list.length} pagina's…`;
+        try {
+          // Drie pagina's tegelijk; elke pagina krijgt foto's die bij haar onderwerp passen.
+          let next = 0;
+          const worker = async () => {
+            while (next < list.length) {
+              const pg = list[next++];
+              try { await fill(pg, false); } catch (e) { console.warn("[Archer] stockfoto's", pg.slug, e); }
+              k++;
+              status.textContent = `Foto's zoeken… ${k} van ${list.length} pagina's`;
+              if (SG.applyImagesToAllIframes) SG.applyImagesToAllIframes();
+            }
+          };
+          await Promise.all([worker(), worker(), worker()]);
+          done();
+        } finally { busy(false); }
+      });
+      const sel = $(".archer-sg-page-select", panel);
+      if (sel) sel.addEventListener("change", count);
+      count();
+      // De tekst onderaan de stap volgt de nieuwe werkwijze.
+      $$(".archer-step-footer .archer-muted, [data-archer-step-footer] .archer-muted").forEach((el) => {
+        if (/stockfoto/i.test(el.textContent)) el.textContent = "Geen eigen foto's? Kies stockfoto's per pagina of voor alle pagina's, of publiceer met lege fotovakken.";
+      });
     }
 
     // Teksten van de wizard in gewone taal.
@@ -2025,12 +2249,12 @@
       "Pick a different font if you prefer — or keep the AI suggestion.": "Kies zelf een ander lettertype, of houd het voorstel.",
       "Heading font": "Titels",
       "Body font": "Lopende tekst",
-      "Upload your own images or let AI find matching stock photos.": "Upload eigen foto's of houd de passende stockfoto's die AI koos.",
+      "Upload your own images or let AI find matching stock photos.": "Upload eigen foto's of kies stockfoto's per pagina.",
       "Drag & drop images here or": "Sleep foto's hierheen of",
       "No uploaded images yet.": "Nog geen eigen foto's.",
       "Your uploads": "Eigen foto's",
       "Unsplash images": "Stockfoto's",
-      "Unsplash images will be loaded automatically…": "De stockfoto's worden geladen…",
+      "Unsplash images will be loaded automatically…": "Nog geen stockfoto's gekozen.",
     });
 
     /* Live voorbeeld: standaard ingezoomd op de startpagina, met een keuzelijst per pagina. */
@@ -2138,6 +2362,139 @@
       if (host && host.parentElement) host.parentElement.insertBefore(box, host);
       else colourPanel.prepend(box);
       let round = Number((SG.guide && SG.guide.tasteDirection && SG.guide.tasteDirection.round) || 0);
+
+      /* ── Archer-stijlen: een volledig ontwerpsysteem kiezen (letters, kleuren, ruimte, vormen) ── */
+      const sbox = document.createElement("section");
+      sbox.className = "archer-styles";
+      sbox.setAttribute("aria-label", "Stijl");
+      sbox.innerHTML = '<div class="archer-taste-head"><h4>Stijl</h4></div>' +
+        '<p class="archer-taste-intro">Kies een stijl voor de hele website: letters, kleuren, witruimte en vormen horen samen. Daaronder kan je kleuren en letters nog verfijnen.</p>' +
+        '<div class="archer-style-grid" data-style-grid><p class="archer-muted">Stijlen laden…</p></div>' +
+        '<p class="archer-taste-status" data-style-status aria-live="polite"></p>';
+      box.before(sbox);
+      $(".archer-taste-head h4", box).textContent = "Kleuren en letters verfijnen";
+      $(".archer-taste-intro", box).textContent = "Andere combinaties binnen de gekozen stijl: kleuren of letters apart wisselen.";
+      let styles = [];
+      const styleFonts = document.createElement("link");
+      styleFonts.rel = "stylesheet";
+      document.head.appendChild(styleFonts);
+      const styleNow = () => (SG.guide && !Array.isArray(SG.guide) && SG.guide.style) || "";
+      const styleById = (id) => styles.find((x) => x.id === id);
+      // Kleur- en letteraanpassingen na het kiezen gaan voor op de stijl (zelfde regel als op de server).
+      const styleCssFor = (st) => {
+        if (!st) return "";
+        const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+        const get = (n) => ((cols.find((c) => c && c.name === n) || {}).hex || "");
+        const map = { Primary: "--a-accent", Secondary: "--a-dark", Dark: "--a-ink", Light: "--a-surface", Neutral: "--a-surface2" };
+        let o = "";
+        Object.keys(map).forEach((n) => { const h = get(n); if (/^#[0-9a-f]{6}$/i.test(h)) o += map[n] + ":" + h + ";"; });
+        const hf = SG.guide && SG.guide.headingFont, bf = SG.guide && SG.guide.bodyFont;
+        if (hf && hf !== st.headingFont) o += `--a-font-heading:'${hf}',ui-sans-serif,system-ui,sans-serif;`;
+        if (bf && bf !== st.bodyFont) o += `--a-font-body:'${bf}',ui-sans-serif,system-ui,sans-serif;`;
+        const rk = SG.guide && !Array.isArray(SG.guide) ? SG.guide.radius : "";
+        if (rk && rk !== ((st.guide && st.guide.radius) || "")) o += UI.radiusVars(rk);
+        return st.css + (o ? ":root{" + o + "}" : "");
+      };
+      const injectStyle = (iframe) => {
+        let doc;
+        try { doc = iframe.contentDocument; } catch (e) { return; }
+        if (!doc || !doc.head) return;
+        let el = doc.getElementById("archer-style");
+        const st = styleById(styleNow());
+        if (!st) { if (el) el.remove(); return; }
+        const css = styleCssFor(st);
+        if (!el) { el = doc.createElement("style"); el.id = "archer-style"; }
+        if (el.textContent !== css) el.textContent = css;
+        // Vaste plek: direct na de stijlgids, daarna het kleurschema per sectie. De overige
+        // voorbeeldregels (contrast, geen overgangen, hoeken) blijven erna staan.
+        const ov = doc.getElementById("aisb-sg-override") || doc.getElementById("archer-house");
+        if (ov && ov.parentNode === doc.head) ov.after(el);
+        else if (!el.parentNode) doc.head.appendChild(el);
+        const sch = doc.getElementById("archer-scheme");
+        if (sch) el.after(sch);
+      };
+      UI.injectStyle = injectStyle;
+      // Rustige achtergronden: alle secties op de grond, hoogstens één band per pagina (oproep) en de footer.
+      const bandSchemes = (st) => {
+        const out = { global: {}, pages: {} };
+        // Donkere stijl: de rol Dark is daar de lichte tekstkleur, dus een donkere band wordt 'field'.
+        const band = (b) => ((st.dark || (st.guide && st.guide.darkMode)) && b === "ink" ? "field" : b);
+        if (st.bands && st.bands.footer) out.global.footer = band(st.bands.footer);
+        (SG.wireframePages || []).forEach((p) => {
+          const map = {};
+          let cta = false;
+          (p.sections || []).forEach((sec) => {
+            const t = String((sec && sec.type) || "").toLowerCase();
+            if (!sec || !sec.uuid || /^(header|footer)$/.test(t)) return;
+            if (!cta && st.bands && st.bands.cta && /cta|call|oproep/.test(t)) { map[sec.uuid] = band(st.bands.cta); cta = true; return; }
+            if (st.bands && st.bands.quote && /testimon|review|quote|getuig/.test(t)) map[sec.uuid] = band(st.bands.quote);
+          });
+          if (Object.keys(map).length) out.pages[p.slug] = map;
+        });
+        return out;
+      };
+      const applyStyle = (st, quiet) => {
+        if (!st) return;
+        if (Array.isArray(SG.guide) || !SG.guide) SG.guide = {};
+        const g = st.guide;
+        setColours(g.colours);
+        setFonts(g.headingFont, g.bodyFont);
+        SG.guide.typography = JSON.parse(JSON.stringify(g.typography));
+        if (SG.renderTypography) SG.renderTypography(SG.guide.typography);
+        ["style", "radius", "sectionBg1", "sectionBg2", "darkMode", "groundsLight"].forEach((k) => (SG.guide[k] = g[k]));
+        SG.guide.sectionSchemes = bandSchemes(st);
+        SG.guide.tasteDirection = null;
+        SG.applyOverridesToAllIframes();
+        renderStyles();
+        if (UI.markRadius) UI.markRadius();
+        if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's.";
+        SG.saveDraft && SG.saveDraft();
+      };
+      const specimen = (st) => {
+        const c = st.colours;
+        return `<span class="archer-style-swatch" style="background:${esc(c.base)};color:${esc(c.ink)}">` +
+          `<span class="archer-style-aa" style="font-family:'${esc(st.headingFont)}',serif;font-weight:${st.headingWeight};letter-spacing:${esc(st.headingTracking)}">Aa</span>` +
+          `<span class="archer-style-lines"><i style="background:${esc(c.ink)}"></i><i style="background:${esc(c.muted)}"></i></span>` +
+          `<span class="archer-style-btn" style="background:${esc(c.accent)};color:${esc(c.accentInk)};border-radius:${Math.min(999, st.radius.button)}px">Knop</span>` +
+          `<span class="archer-style-chips"><b style="background:${esc(c.surface)}"></b><b style="background:${esc(c.accent)}"></b><b style="background:${esc(c.dark)}"></b></span>` +
+          `</span>`;
+      };
+      function renderStyles() {
+        const cur = styleNow();
+        $("[data-style-grid]", sbox).innerHTML = styles
+          .map((st) => `<button type="button" class="archer-style-card${cur === st.id ? " is-active" : ""}" data-style-id="${esc(st.id)}" aria-pressed="${cur === st.id ? "true" : "false"}">` +
+            specimen(st) +
+            `<span class="archer-style-name">${esc(st.name)}${st.fit && styles.indexOf(st) < 3 ? ' <em>past bij deze zaak</em>' : ""}</span>` +
+            `<span class="archer-style-pitch">${esc(st.pitch)}</span></button>`)
+          .join("");
+      }
+      let userPicked = false;
+      sbox.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-style-id]");
+        if (!b) return;
+        userPicked = true;
+        applyStyle(styleById(b.getAttribute("data-style-id")));
+      });
+      // Een nieuw project (nog geen stijlgids): de eerste stijl die bij de zaak past, toepassen.
+      // Pas beslissen als de opgeslagen stijlgids geladen is; een keuze van de gebruiker gaat altijd voor.
+      const guideEmpty = () => !(SG.extractedColours && SG.extractedColours.length) && !(SG.guide && !Array.isArray(SG.guide) && SG.guide.colours && SG.guide.colours.length) && !styleNow();
+      UI.styleAuto = guideEmpty();
+      (async () => {
+        let out;
+        try { out = await SG.post("aisb_archer_styles", { project_id: SG.projectId }); } catch (e) { out = null; }
+        if (!out || !out.success) {
+          $("[data-style-grid]", sbox).innerHTML = '<p class="archer-danger-text">De stijlen konden niet geladen worden.</p>';
+          return;
+        }
+        styles = out.data.styles || [];
+        const fams = Array.from(new Set(styles.map((x) => x.headingFont))).map((f) => "family=" + f.replace(/ /g, "+") + ":wght@400;500;600;700");
+        styleFonts.href = "https://fonts.googleapis.com/css2?" + fams.join("&") + "&display=swap";
+        renderStyles();
+        (SG.allIframes || []).forEach((f) => f._loaded && injectStyle(f));
+        setTimeout(() => {
+          if (!userPicked && UI.styleAuto && guideEmpty() && styles[0]) applyStyle(styles[0], true);
+        }, 1800);
+      })();
       let dealt = [];
       const fontLink = document.createElement("link");
       fontLink.rel = "stylesheet";
@@ -2263,13 +2620,17 @@
           b.setAttribute("aria-pressed", on ? "true" : "false");
         });
       markRadius();
+      UI.markRadius = markRadius;
       box.addEventListener("click", (e) => {
         const rb = e.target.closest("[data-radius]");
         if (rb) {
           if (!SG.guide || Array.isArray(SG.guide)) SG.guide = {};
           SG.guide.radius = rb.getAttribute("data-radius");
           markRadius();
-          (SG.allIframes || []).forEach((f) => { try { UI.applyRadius(f.contentDocument, SG.guide.radius); } catch (err) {} });
+          (SG.allIframes || []).forEach((f) => {
+            try { UI.applyRadius(f.contentDocument, SG.guide.radius); } catch (err) {}
+            if (UI.injectStyle && f._loaded) UI.injectStyle(f);
+          });
           SG.saveDraft && SG.saveDraft();
           return;
         }
@@ -2285,7 +2646,7 @@
       // Nog geen kleuren: meteen de eerste richting toepassen zodra de stijlgids geladen is.
       setTimeout(() => {
         const empty = !(SG.extractedColours && SG.extractedColours.length) && !(SG.guide && SG.guide.colours && SG.guide.colours.length);
-        load(empty);
+        load(empty && !UI.styleAuto && !(SG.guide && SG.guide.style));
       }, 1200);
     })();
 
@@ -2566,6 +2927,7 @@
       }
       doc.head.appendChild(st); // altijd na de stijl van de stijlgids
       UI.applyRadius(doc, SG.guide && !Array.isArray(SG.guide) ? SG.guide.radius : "");
+      if (UI.markRadius) UI.markRadius(); // de opgeslagen stijlgids komt pas na het opbouwen van de knoppen binnen
       renderSchemeBar(iframe);
       const id = getScheme(iframe);
       const s = id && schemeList().find((x) => x.id === id);
@@ -2581,7 +2943,20 @@
       st.textContent =
         `${sel}{background-color:${s.hex} !important;}body{background-color:${s.hex} !important;}` +
         `h1,h2,h3,h4,h5,h6,.brxe-heading{color:${css(head)} !important;}` +
-        `body,p,.brxe-text,.brxe-text-basic,.brxe-rich-text,li{color:${css(body)} !important;}`;
+        `body,p,.brxe-text,.brxe-text-basic,.brxe-rich-text,li{color:${css(body)} !important;}` +
+        bandButtons(bg, head, s.hex);
+    }
+    /** Knoppen op een band: omlijnd in de leeskleur; een knop in de kleur van de band wordt omgekeerd. */
+    function bandButtons(bg, head, hex) {
+      const g = SG.guide && !Array.isArray(SG.guide) ? SG.guide : {};
+      const p = (g.colours || []).find((c) => c && c.name === "Primary");
+      const prim = p && hexCol(p.hex);
+      const btn = 'html body .brxe-button.bricks-button:not(#archer-x):not(.archer-header *):not(.archer-footer *)';
+      let out = `${btn}:is(.outline,[class*="outline"],.brxe-button ~ .brxe-button){background-color:transparent !important;color:${css(head)} !important;border-color:${css(head)} !important;}`;
+      if (prim && ratio(prim, bg) < 3) {
+        out += `${btn}:not(.outline):not([class*="outline"]):not(.brxe-button ~ .brxe-button){background-color:${css(head)} !important;border-color:${css(head)} !important;color:${hex} !important;}`;
+      }
+      return out;
     }
     const schemeView = view !== "photos";
     function hookSchemeClicks(iframe) {
@@ -2979,6 +3354,7 @@
       const origInject = SG.injectOverrideIntoIframe;
       SG.injectOverrideIntoIframe = function (iframe) {
         const r = origInject.apply(this, arguments);
+        if (UI.injectStyle) UI.injectStyle(iframe);
         applyScheme(iframe);
         hookSchemeClicks(iframe);
         // Kort uitgesteld: bij het slepen in de kleurkiezer maar één keer per frame meten.
@@ -3059,12 +3435,174 @@
         } else if (/Publish failed/i.test(txt)) pub.textContent = "Publiceren mislukt";
       }).observe(pub, { childList: true, characterData: true, subtree: true });
     }
+    if (pub) initPublishFlow(pub);
+    initContactCard();
     const figma = $(".aisb-design-figma-btn");
     if (figma) figma.textContent = "Figma-export (Archer-team)";
     const figmaIn = $("#aisb-design-figma-import-btn");
     if (figmaIn) figmaIn.textContent = "Figma-import (Archer-team)";
     const hint = $(".aisb-design-hint", wrap);
     if (hint) hint.textContent = "Scroll om te verschuiven · Ctrl + scroll om te zoomen · dubbelklik om alles te tonen";
+  }
+
+  /**
+   * Publiceren in de eigen pagina, met een scherm in de Archer-stijl, in plaats van een apart venster.
+   * Een apart venster zette deze tab op de achtergrond; daar wachtte de export op een animatieframe dat
+   * nooit kwam, en bleef "Publishing your AI website" minutenlang staan.
+   */
+  function initPublishFlow(pub) {
+    const D = window.AISB_Design;
+    if (!D || pub._archerFlow) return;
+    pub._archerFlow = true;
+    const STEPS = [
+      { key: "save", label: "Wijzigingen bewaren" },
+      { key: "export", label: "Pagina's en stijl klaarmaken" },
+      { key: "send", label: "Website opbouwen op het webadres" },
+      { key: "done", label: "Menu's, logo en favicon afwerken" },
+    ];
+    let overlay = null;
+    let timer = null;
+    const render = (state, extra) => {
+      if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.className = "archer-publish-overlay";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        document.body.appendChild(overlay);
+      }
+      const cur = STEPS.findIndex((s) => s.key === state.step);
+      const list = STEPS.map((s, i) => {
+        const st = state.error && i === cur ? "is-error" : i < cur || state.done ? "is-done" : i === cur ? "is-active" : "";
+        return `<li class="${st}"><span class="archer-publish-dot" aria-hidden="true"></span>${esc(s.label)}</li>`;
+      }).join("");
+      const pct = Math.round(state.pct || 0);
+      overlay.innerHTML =
+        `<div class="archer-publish-card${state.done ? " is-done" : state.error ? " is-error" : ""}">` +
+        '<div class="archer-publish-mark" aria-hidden="true"></div>' +
+        (state.done
+          ? '<h2>Je website staat online</h2><p class="archer-publish-sub">Alles staat klaar op het webadres. Je kan de teksten en foto\'s daar nog aanpassen.</p>'
+          : state.error
+            ? '<h2>Publiceren lukte niet</h2><p class="archer-publish-sub">' + esc(state.error) + "</p>"
+            : '<h2>Je website wordt gepubliceerd</h2><p class="archer-publish-sub">Even geduld: dit duurt meestal minder dan een minuut. Je kan dit venster open laten.</p>') +
+        `<div class="archer-publish-bar"><span style="width:${state.done ? 100 : pct}%"></span></div>` +
+        `<ol class="archer-publish-steps">${list}</ol>` +
+        (state.done
+          ? `<div class="archer-publish-actions"><a class="archer-btn archer-btn-primary" href="${esc(extra.url)}" target="_blank" rel="noopener">Bekijk de website</a><button type="button" class="archer-btn archer-btn-ghost" data-archer-publish-close>Sluiten</button></div>` +
+            `<p class="archer-publish-url">${esc(String(extra.base || "").replace(/^https?:\/\//, "").replace(/\/$/, ""))}</p>`
+          : state.error
+            ? '<div class="archer-publish-actions"><button type="button" class="archer-btn archer-btn-primary" data-archer-publish-retry>Opnieuw proberen</button><button type="button" class="archer-btn archer-btn-ghost" data-archer-publish-close>Sluiten</button></div>'
+            : "") +
+        "</div>";
+      const close = $("[data-archer-publish-close]", overlay);
+      if (close) close.addEventListener("click", () => { overlay.remove(); overlay = null; });
+      const retry = $("[data-archer-publish-retry]", overlay);
+      if (retry) retry.addEventListener("click", () => run());
+    };
+    const run = async () => {
+      if (pub.dataset.aisbPublishing === "1") return;
+      pub.dataset.aisbPublishing = "1";
+      pub.disabled = true;
+      // De balk loopt mee op de verwachte duur van elke stap; de stappen zelf bepalen waar we zijn.
+      const state = { step: "save", pct: 2 };
+      const ceil = { save: 12, export: 30, send: 88, done: 96 };
+      clearInterval(timer);
+      timer = setInterval(() => {
+        state.pct = Math.min(ceil[state.step] || 95, state.pct + (state.step === "send" ? 1.2 : 2.5));
+        render(state);
+      }, 600);
+      render(state);
+      try {
+        await UI.flushAll();
+        if (D.saveAllEdits) await D.saveAllEdits();
+        state.step = "export"; state.pct = Math.max(state.pct, 14); render(state);
+        if (typeof D.exportLiveDesign !== "function") throw new Error("De export is nog niet klaar. Herlaad de pagina en probeer opnieuw.");
+        const exportData = await D.exportLiveDesign();
+        state.step = "send"; state.pct = Math.max(state.pct, 32); render(state);
+        const result = await D.post("aisb_publish_instawp_site", { project_id: D.projectId, export_payload: JSON.stringify(exportData) });
+        if (!result || !result.success) throw new Error((result && result.data && result.data.message) || "De server kon de website niet publiceren.");
+        state.step = "done"; state.pct = 97; render(state);
+        const data = result.data || {};
+        const base = data.wp_url || "";
+        const url = data.frontend_auto_login_url || data.magic_login_url || base;
+        clearInterval(timer);
+        state.done = true;
+        render(state, { url, base });
+        pub.textContent = "Gepubliceerd";
+        const card = $("[data-archer-published]");
+        if (card) {
+          card.classList.add("is-online");
+          card.innerHTML =
+            '<span class="archer-summary-label">Webadres</span><strong>Online</strong>' +
+            `<a href="${esc(base)}" target="_blank" rel="noopener">${esc(base.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>`;
+        }
+      } catch (err) {
+        clearInterval(timer);
+        console.error("[Archer] publiceren", err);
+        state.error = (err && err.message) || "Er ging iets mis.";
+        render(state);
+        pub.textContent = "Publiceren";
+      } finally {
+        delete pub.dataset.aisbPublishing;
+        pub.disabled = false;
+      }
+    };
+    // Voor de klikhandler van de stijlgids (die een apart venster opent).
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target.closest || e.target.closest("#aisb-design-publish-btn") !== pub) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        run();
+      },
+      true,
+    );
+  }
+
+  /** Contactgegevens wijzigen vanuit de samenvatting van de stap Publiceren. */
+  function initContactCard() {
+    const card = $("[data-archer-contact-card]");
+    if (!card) return;
+    const edit = $("[data-archer-contact-edit]", card);
+    if (!edit) return;
+    edit.addEventListener("click", (e) => {
+      e.preventDefault();
+      let c = {};
+      try { c = JSON.parse(card.getAttribute("data-contact") || "{}"); } catch (err) {}
+      const socials = Object.values(c.socials || {}).join(", ");
+      const dlg = document.createElement("div");
+      dlg.className = "archer-publish-overlay";
+      dlg.innerHTML =
+        '<form class="archer-publish-card archer-contact-form">' +
+        "<h2>Contactgegevens</h2>" +
+        '<p class="archer-publish-sub">Komen in de footer, op de contactpagina en achter de knoppen. Publiceer daarna opnieuw.</p>' +
+        `<label class="aisb-label">Adres<input name="address" class="archer-input" value="${esc(c.address || "")}" placeholder="Straat 1, 9000 Gent"></label>` +
+        `<label class="aisb-label">Telefoon<input name="phone" type="tel" class="archer-input" value="${esc(c.phone || "")}"></label>` +
+        `<label class="aisb-label">E-mail<input name="email" type="email" class="archer-input" value="${esc(c.email || "")}"></label>` +
+        `<label class="aisb-label">Sociale media (links)<input name="socials" class="archer-input" value="${esc(socials)}"></label>` +
+        '<p class="archer-small" data-msg></p>' +
+        '<div class="archer-publish-actions"><button class="archer-btn archer-btn-primary" type="submit">Bewaren</button><button type="button" class="archer-btn archer-btn-ghost" data-close>Annuleren</button></div>' +
+        "</form>";
+      document.body.appendChild(dlg);
+      $("[data-close]", dlg).addEventListener("click", () => dlg.remove());
+      $("form", dlg).addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const val = { address: f.address.value, phone: f.phone.value, email: f.email.value, socials: f.socials.value };
+        $("[data-msg]", dlg).textContent = "Bewaren…";
+        try {
+          const out = await UI.post("aisb_archer_contact", { project_id: CFG.projectId, contact: JSON.stringify(val) });
+          const saved = out.contact || val;
+          card.setAttribute("data-contact", JSON.stringify(saved));
+          const filled = [saved.phone, saved.email, saved.address].filter(Boolean);
+          $("strong", card).textContent = filled.length ? filled.length + " van 3 ingevuld" : "Nog niet ingevuld";
+          $("[data-archer-contact-summary]", card).textContent = filled.length ? filled.join(" · ") : "Adres, telefoon en e-mail voor de footer en de knoppen.";
+          dlg.remove();
+        } catch (err) {
+          $("[data-msg]", dlg).textContent = err.message || "Bewaren lukte niet.";
+        }
+      });
+    });
   }
 
   /* ── Start ──────────────────────────────────────────────── */

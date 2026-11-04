@@ -420,6 +420,8 @@
         } else {
           secBg = palNeutral || palLight || SG.guide.sectionBg2 || "";
         }
+        // Archer-stijl gekozen: de stijl en de Brixies-variabelen bepalen achtergronden en tekstkleuren.
+        if (SG.guide && SG.guide.style) secBg = "";
         if (secBg) {
           // Sectie- en container-achtergrond overschrijven met paletkleur.
           // Gebruik !important om Bricks ID-selector CSS te overrulen.

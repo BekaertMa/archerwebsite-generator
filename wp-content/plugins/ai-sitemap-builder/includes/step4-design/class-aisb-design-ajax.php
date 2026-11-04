@@ -425,7 +425,7 @@ class AISB_Design_Ajax {
 
   private function assert_project_ownership(int $project_id): void {
     $project = get_post($project_id);
-    if (!$project || $project->post_type !== 'aisb_project' || (int)$project->post_author !== (int)get_current_user_id()) {
+    if (!$project || $project->post_type !== 'aisb_project' || (int)$project->post_author !== (int)get_current_user_id() && !current_user_can('manage_options')) {
       wp_send_json_error(['message' => 'Forbidden'], 403);
     }
   }

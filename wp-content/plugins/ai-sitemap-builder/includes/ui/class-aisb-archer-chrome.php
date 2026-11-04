@@ -439,6 +439,8 @@ class AISB_Archer_Chrome {
     $nodes = $remove ? self::remove($nodes, $remove) : $nodes;
     // Altijd onderaan: "Website door Archer Websites", ook als het sjabloon geen copyrightregel heeft.
     if ($region === 'footer' && !$credited) $nodes = self::add_credit($nodes, $ctx);
+    // Contactgegevens, sociale media en links (adres, telefoon, e-mail; lege items weg).
+    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::apply_nodes($nodes, (int) $ctx['project_id'], $link, $region);
     return $nodes;
   }
 
@@ -625,6 +627,8 @@ class AISB_Archer_Chrome {
       }
     }
     unset($page);
+    // Knoppen en links in alle andere secties: naar de juiste pagina, tel: of mailto:.
+    if (class_exists('AISB_Archer_Site')) $pages = AISB_Archer_Site::apply_to_export($pages, $project_id, $link);
     return $pages;
   }
 

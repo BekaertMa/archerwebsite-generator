@@ -188,7 +188,7 @@ body.archer-app .archer-shell .aisb-card {
 body.archer-app .archer-shell .aisb-output-card,
 body.archer-app .archer-shell .archer-wf-card,
 body.archer-app .archer-shell .archer-sg-card,
-body.archer-app .archer-shell .archer-publish-card { background: transparent; border: 0; padding: 0; }
+body.archer-app .archer-shell .archer-publish-card { background: transparent; border: 0; padding: 0; width: 100% !important; max-width: none !important; }
 
 /* ── Knoppen ────────────────────────────────────────────── */
 
@@ -1020,7 +1020,8 @@ body.archer-app .archer-shell .archer-btn.archer-btn-sm.is-active { background: 
 /* ── Stijl: één pagina, gewoon scrollen (geen canvas) ─── */
 body.archer-app .archer-shell .aisb-sg-canvas.archer-sg-pageview { overflow-y: auto !important; overflow-x: hidden !important; cursor: default !important; height: calc(100vh - 210px) !important; min-height: 480px; background: var(--ar-bg); }
 body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-canvas-inner { transform: none !important; position: static !important; display: block !important; width: auto !important; height: auto !important; padding: 0 !important; }
-body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-pages-grid { display: block !important; padding: 0 !important; gap: 0 !important; min-width: 0 !important; width: auto !important; }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; width: 1200px !important; max-width: none !important; }
 
 /* ── Foto's: overzicht in 2 kolommen, 5px tussenruimte ── */
 body.archer-app .archer-shell [data-images-grid],
@@ -1033,3 +1034,83 @@ body.archer-app .archer-shell [data-images-grid] .aisb-sg-auto-card img,
 body.archer-app .archer-shell [data-uploaded-grid-inner] .aisb-sg-auto-card img { height: auto; aspect-ratio: 4 / 3; }
 .archer-stock-credit { margin: 6px 0 0; font-size: 11px; color: var(--ar-muted); }
 .archer-stock-credit a { color: inherit; }
+
+/* ── Stijl: galerij met de Archer-stijlen ── */
+body.archer-app .archer-styles { margin: 0 0 20px; }
+body.archer-app .archer-style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+body.archer-app .archer-style-card { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--ar-line, #dfe3ea); border-radius: 12px; cursor: pointer; background: #fff; transition: border-color .15s, box-shadow .15s; }
+body.archer-app .archer-style-card:hover { border-color: var(--ar-ink, #0b1033); }
+body.archer-app .archer-style-card:focus-visible { outline: 2px solid var(--ar-accent, #14b8a6); outline-offset: 2px; }
+body.archer-app .archer-style-card.is-active { border-color: var(--ar-accent, #14b8a6); box-shadow: 0 0 0 2px var(--ar-accent, #14b8a6); }
+body.archer-app .archer-style-swatch { position: relative; display: block; height: 92px; border-radius: 8px; overflow: hidden; }
+body.archer-app .archer-style-aa { position: absolute; left: 12px; top: 8px; font-size: 40px; line-height: 1; }
+body.archer-app .archer-style-lines { position: absolute; left: 12px; bottom: 14px; display: grid; gap: 5px; width: 46%; }
+body.archer-app .archer-style-lines i { display: block; height: 4px; border-radius: 2px; opacity: .85; }
+body.archer-app .archer-style-lines i + i { width: 70%; opacity: .5; }
+body.archer-app .archer-style-btn { position: absolute; right: 10px; bottom: 10px; font: 600 11px/1 system-ui, sans-serif; padding: 7px 10px; }
+body.archer-app .archer-style-chips { position: absolute; right: 10px; top: 10px; display: flex; gap: 4px; }
+body.archer-app .archer-style-chips b { display: block; width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+body.archer-app .archer-style-name { font-weight: 700; font-size: 14px; color: var(--ar-ink, #0b1033); }
+body.archer-app .archer-style-name em { font-style: normal; font-weight: 600; font-size: 11px; color: var(--ar-accent-ink, #0f766e); background: var(--ar-accent-soft, #e6f7f5); padding: 2px 6px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
+body.archer-app .archer-style-pitch { font-size: 12px; line-height: 1.4; color: var(--ar-muted, #5b6478); }
+
+/* ── Publiceren: scherm in de Archer-stijl ─────────────────── */
+.archer-publish-overlay {
+  position: fixed; inset: 0; z-index: 100000;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(9, 9, 48, 0.55); backdrop-filter: blur(6px);
+  font-family: "Poppins", system-ui, sans-serif; color: #2B2B3D;
+}
+.archer-publish-overlay .archer-publish-card {
+  width: min(480px, 100%); background: #fff; border-radius: 20px; padding: 36px 32px 28px;
+  box-shadow: 0 24px 64px rgba(9, 9, 48, 0.25); display: flex; flex-direction: column; gap: 14px;
+}
+.archer-publish-overlay .archer-publish-card h2 {
+  font-family: "Urbanist", "Poppins", system-ui, sans-serif; font-size: 26px; line-height: 1.15; font-weight: 700;
+  color: #090930; margin: 0; letter-spacing: -0.01em;
+}
+.archer-publish-sub { margin: 0; color: #4A4D63; font-size: 14px; line-height: 1.55; }
+.archer-publish-mark {
+  width: 44px; height: 44px; border-radius: 12px; background: #DCEBEA; position: relative; margin-bottom: 4px;
+}
+.archer-publish-mark::after {
+  content: ""; position: absolute; inset: 11px; border-radius: 50%;
+  border: 3px solid #1B5A5B; border-right-color: transparent; animation: archer-spin 0.9s linear infinite;
+}
+@keyframes archer-spin { to { transform: rotate(360deg); } }
+.archer-publish-bar { height: 8px; border-radius: 999px; background: #EEF1F6; overflow: hidden; }
+.archer-publish-bar span { display: block; height: 100%; border-radius: 999px; background: #1B5A5B; transition: width 0.5s ease; }
+.archer-publish-steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; font-size: 14px; }
+.archer-publish-steps li { display: flex; align-items: center; gap: 10px; color: #5B5F73; }
+.archer-publish-steps li.is-active { color: #090930; font-weight: 600; }
+.archer-publish-steps li.is-done { color: #1B5A5B; }
+.archer-publish-steps li.is-error { color: #B42318; font-weight: 600; }
+.archer-publish-dot { width: 10px; height: 10px; border-radius: 50%; background: #C4D3E8; flex: none; }
+.archer-publish-steps li.is-active .archer-publish-dot { background: #090930; box-shadow: 0 0 0 4px #E2E9F4; }
+.archer-publish-steps li.is-done .archer-publish-dot { background: #1B5A5B; }
+.archer-publish-steps li.is-error .archer-publish-dot { background: #B42318; }
+.archer-publish-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.archer-publish-url { margin: 0; font-size: 13px; color: #5B5F73; word-break: break-all; }
+.archer-publish-overlay .archer-publish-card.is-done .archer-publish-mark::after,
+.archer-publish-overlay .archer-publish-card.is-error .archer-publish-mark::after {
+  animation: none; inset: 0; border: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font: 700 22px/1 system-ui, sans-serif; color: #1B5A5B; content: "\2713";
+}
+.archer-publish-overlay .archer-publish-card.is-error .archer-publish-mark { background: #FDECEA; }
+.archer-publish-overlay .archer-publish-card.is-error .archer-publish-mark::after { content: "!"; color: #B42318; }
+.archer-contact-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.archer-contact-form .archer-input { width: 100%; }
+.archer-contact-box { margin-top: 4px; }
+.archer-contact-box .aisb-brief-grid { margin-top: 8px; }
+
+/* ── Stockfoto's per pagina ─────────────────────────────── */
+.archer-stock-box { border: 1px solid var(--ar-line); border-radius: var(--ar-radius); padding: 16px; margin-bottom: 16px; background: #fff; display: grid; gap: 8px; }
+.archer-stock-box h4 { margin: 0; font-family: var(--ar-display); color: var(--ar-navy); }
+.archer-stock-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Mijn websites: beheerders kiezen tussen alle gebruikers en hun eigen websites. */
+body.archer-app .archer-shell .archer-scope { display: inline-flex; gap: 4px; padding: 4px; margin: 14px 0 0; background: var(--ar-bg-2); border-radius: 999px; }
+body.archer-app .archer-shell .archer-scope-opt { padding: 7px 14px; border-radius: 999px; font: 600 14px/1.2 var(--ar-font); color: var(--ar-muted); text-decoration: none; transition: background-color 150ms ease, color 150ms ease; }
+body.archer-app .archer-shell .archer-scope-opt.is-active { background: #fff; color: var(--ar-navy); box-shadow: 0 1px 2px rgba(9, 9, 48, 0.08); }
+@media (hover: hover) and (pointer: fine) { body.archer-app .archer-shell .archer-scope-opt:not(.is-active):hover { color: var(--ar-navy); } }
+body.archer-app .archer-shell .archer-site-card-owner { margin: -4px 0 6px; color: var(--ar-teal); font-weight: 600; overflow-wrap: anywhere; }

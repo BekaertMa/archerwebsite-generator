@@ -27,9 +27,11 @@ class AISB_Archer_Generate {
   /** Kuist de teksten van alle Bricks-elementen van een wireframe-sectie op. */
   public static function clean_nodes($nodes) {
     if (!is_array($nodes)) return $nodes;
+    $lang = self::nodes_lang($nodes);
     foreach ($nodes as &$n) {
       if (!is_array($n) || empty($n['settings']) || !is_array($n['settings'])) continue;
       $name = (string) ($n['name'] ?? '');
+      if ($name === 'form') { $n['settings'] = self::form_labels($n['settings'], $lang); continue; }
       if (!in_array($name, ['heading', 'text-basic', 'text', 'button', 'text-link'], true)) continue;
       foreach (['text', 'title', 'subtitle', 'description', 'content'] as $k) {
         if (isset($n['settings'][$k]) && is_string($n['settings'][$k])) {
@@ -40,7 +42,70 @@ class AISB_Archer_Generate {
     unset($n);
     // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
     if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
+    // Iconen die bij de tekst passen in plaats van de standaardkubus; geen verzonnen cijfers (tellers).
+    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes)));
     return $nodes;
+  }
+
+  /** Taal van de teksten in een sectie (nl, fr, en of ''), voor wat de AI niet vertaalde. */
+  public static function nodes_lang(array $nodes): string {
+    $t = ' ';
+    foreach ($nodes as $n) {
+      foreach (['text', 'title', 'content'] as $k) if (isset($n['settings'][$k]) && is_string($n['settings'][$k])) $t .= ' ' . mb_strtolower(wp_strip_all_tags($n['settings'][$k]));
+    }
+    $score = [
+      'nl' => preg_match_all('/\s(de|het|een|en|van|voor|uw|je|met|op|wij|we|zijn|niet|ook)\s/u', $t),
+      'fr' => preg_match_all('/\s(le|la|les|des|une|et|pour|votre|vous|nous|avec|sur|est)\s/u', $t),
+      'en' => preg_match_all('/\s(the|and|for|your|you|with|our|is|are|this)\s/u', $t),
+    ];
+    arsort($score);
+    $top = (string) array_key_first($score);
+    return $score[$top] >= 3 ? $top : '';
+  }
+
+  /**
+   * Formulierlabels van het sjabloon staan in het Engels ("Name", "Email") terwijl de AI de
+   * plaatshouders vertaalt ("Uw naam"). De taal van de plaatshouders bepaalt de labels.
+   */
+  public static function form_labels(array $settings, string $section_lang = ''): array {
+    if (empty($settings['fields']) || !is_array($settings['fields'])) return $settings;
+    $ph = implode(' ', array_map(fn($f) => is_array($f) ? (string) ($f['placeholder'] ?? '') : '', $settings['fields']));
+    $lang = preg_match('/\b(uw|je|jouw|naam|bericht|telefoonnummer)\b/iu', $ph) ? 'nl' : (preg_match('/\b(votre|vos|nom|téléphone)\b/iu', $ph) ? 'fr' : '');
+    // De AI liet het formulier soms helemaal in het Engels: dan beslist de taal van de rest van de sectie.
+    if ($lang === '' && in_array($section_lang, ['nl', 'fr'], true)) $lang = $section_lang;
+    if ($lang === '') return $settings;
+    $ph_map = [
+      'nl' => ['your name' => 'Uw naam', 'name' => 'Uw naam', 'full name' => 'Uw naam', 'your email' => 'Uw e-mailadres', 'email' => 'Uw e-mailadres', 'your e-mail' => 'Uw e-mailadres', 'email address' => 'Uw e-mailadres', 'your message' => 'Uw bericht', 'message' => 'Uw bericht', 'your phone' => 'Uw telefoonnummer', 'phone' => 'Uw telefoonnummer', 'phone number' => 'Uw telefoonnummer', 'subject' => 'Onderwerp', 'company' => 'Bedrijf'],
+      'fr' => ['your name' => 'Votre nom', 'name' => 'Votre nom', 'full name' => 'Votre nom', 'your email' => 'Votre e-mail', 'email' => 'Votre e-mail', 'your e-mail' => 'Votre e-mail', 'email address' => 'Votre adresse e-mail', 'your message' => 'Votre message', 'message' => 'Votre message', 'your phone' => 'Votre téléphone', 'phone' => 'Votre téléphone', 'phone number' => 'Votre téléphone', 'subject' => 'Sujet', 'company' => 'Entreprise'],
+    ][$lang];
+    $consent = [
+      'nl' => 'Ik heb het <a href="/privacy-policy" target="_blank">privacybeleid</a> gelezen en ga ermee akkoord.',
+      'fr' => 'J\'ai lu et j\'accepte la <a href="/privacy-policy" target="_blank">politique de confidentialité</a>.',
+    ][$lang];
+    foreach ($settings['fields'] as &$pf) {
+      if (!is_array($pf)) continue;
+      if (isset($pf['placeholder']) && is_string($pf['placeholder'])) {
+        $k = strtolower(trim(rtrim($pf['placeholder'], ' *:.…')));
+        if (isset($ph_map[$k])) $pf['placeholder'] = $ph_map[$k];
+      }
+      if (isset($pf['options']) && is_string($pf['options']) && preg_match('/i have read|privacy policy|i agree|accept/i', $pf['options'])) $pf['options'] = $consent;
+    }
+    unset($pf);
+    $map = [
+      'nl' => ['name' => 'Naam', 'full name' => 'Naam', 'your name' => 'Naam', 'first name' => 'Voornaam', 'last name' => 'Achternaam', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'E-mailadres', 'your email' => 'E-mail', 'phone' => 'Telefoon', 'phone number' => 'Telefoon', 'telephone' => 'Telefoon', 'message' => 'Bericht', 'your message' => 'Bericht', 'subject' => 'Onderwerp', 'company' => 'Bedrijf', 'date' => 'Datum', 'send' => 'Versturen', 'submit' => 'Versturen'],
+      'fr' => ['name' => 'Nom', 'full name' => 'Nom', 'your name' => 'Nom', 'first name' => 'Prénom', 'last name' => 'Nom', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'Adresse e-mail', 'your email' => 'E-mail', 'phone' => 'Téléphone', 'phone number' => 'Téléphone', 'telephone' => 'Téléphone', 'message' => 'Message', 'your message' => 'Message', 'subject' => 'Sujet', 'company' => 'Entreprise', 'date' => 'Date', 'send' => 'Envoyer', 'submit' => 'Envoyer'],
+    ][$lang];
+    foreach ($settings['fields'] as &$f) {
+      if (!is_array($f) || !isset($f['label']) || !is_string($f['label'])) continue;
+      $k = strtolower(trim(rtrim($f['label'], ' *:')));
+      if (isset($map[$k])) $f['label'] = $map[$k];
+    }
+    unset($f);
+    if (isset($settings['submitButtonText']) && is_string($settings['submitButtonText'])) {
+      $k = strtolower(trim($settings['submitButtonText']));
+      if (isset($map[$k])) $settings['submitButtonText'] = $map[$k];
+    }
+    return $settings;
   }
 
   /* ───────────────────────── Wireframes volgen de sitemap ───────────────────────── */
@@ -116,11 +181,18 @@ class AISB_Archer_Generate {
       . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n"
       . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n";
     $system = 'Return valid JSON only. No markdown. No explanation.';
+    // De hele pagina van boven naar onder: elke sectie weet wat erboven en eronder staat.
+    $flow = [];
+    foreach ($to_translate as $key => $section) $flow[(string) $key] = trim((string) ($section['purpose'] ?? ''));
     $calls = [];
     $limits = [];
     foreach ($to_translate as $key => $section) {
       $limits[$key] = self::limits_for($section);
+      $map = [];
+      foreach ($flow as $fk => $fp) $map[] = '- ' . $fk . ($fk === (string) $key ? ' (THIS SECTION)' : '') . ': ' . ($fp !== '' ? $fp : 'section');
       $calls[(string) $key] = ['system' => $system, 'user' => $base
+        . "PAGE FLOW (all sections of this page, top to bottom):\n" . implode("\n", $map) . "\n"
+        . "You write ONLY " . $key . ". The page reads as one story from top to bottom: this section covers its own purpose and nothing else. Do not repeat what another section of this page covers: no second introduction of the business, no restating the hero claim, no list of the same services or the same benefits again, no same examples or sentences. Use fresh wording; a reader who scrolls must learn something new in every section.\n"
         . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
         . "Target JSON:\n" . wp_json_encode([$key => $section])];
     }
@@ -178,6 +250,100 @@ class AISB_Archer_Generate {
         }
       }
     }
+    // Herhaling over secties heen (drie keer dezelfde uitleg): één herschrijfvraag voor de dubbels.
+    $out = self::dedupe_sections($self, $out, $to_translate, $limits, $system);
+    return $out;
+  }
+
+  /** Woorden die tellen voor de vergelijking (zonder lidwoorden en kleine woorden). */
+  private static function words(string $t): array {
+    $t = remove_accents(mb_strtolower(wp_strip_all_tags($t)));
+    $w = preg_split('/[^a-z0-9]+/', $t, -1, PREG_SPLIT_NO_EMPTY);
+    $stop = array_flip(['de','het','een','en','of','van','voor','naar','met','op','in','aan','te','om','bij','uw','je','jouw','wij','we','ons','onze','is','zijn','die','dat','dit','deze','ook','als','door','tot','u','le','la','les','des','du','et','pour','avec','vous','votre','nous','the','and','for','with','your','our','you','we','to','of','a']);
+    return array_values(array_unique(array_filter($w, fn($x) => strlen($x) > 2 && !isset($stop[$x]))));
+  }
+
+  /**
+   * Zoekt teksten die in een vorige sectie van dezelfde pagina al (bijna) zo stonden en laat die
+   * herschrijven, met de rest van de pagina als context. Eén extra AI-vraag, alleen als er dubbels zijn.
+   */
+  private static function dedupe_sections(self $self, array $out, array $to_translate, array $limits, string $system): array {
+    $items = [];
+    $dup = [];
+    $heads = [];
+    // Header en footer (logo, menu) herhalen de naam van de zaak; die niet herschrijven.
+    $chrome = [];
+    $keys = array_map('strval', array_keys($to_translate));
+    if (count($keys) >= 3) { $chrome[$keys[0]] = 1; $chrome[end($keys)] = 1; }
+    foreach ($to_translate as $key => $sec) {
+      $p = mb_strtolower((string) ($sec['purpose'] ?? ''));
+      if (preg_match('/^(header|footer|navigati|voet|hoofding|pied)/u', $p)) $chrome[(string) $key] = 1;
+    }
+    foreach ($out as $key => $sec) {
+      foreach ((array) ($sec['modules'] ?? []) as $mid => $mod) {
+        $type = (string) ($to_translate[$key]['modules'][$mid]['type'] ?? ($mod['type'] ?? ''));
+        foreach ((array) ($mod['settings'] ?? []) as $sk => $val) {
+          if (!is_string($val)) continue;
+          $plain = trim(wp_strip_all_tags($val));
+          // Twee secties met dezelfde titel ("Gratis plaatsbezoek" als hero en als oproep): de tweede herschrijven.
+          if ($type === 'heading' && count(preg_split('/\s+/u', $plain)) >= 2 && !isset($chrome[(string) $key])) {
+            $hk = mb_strtolower(preg_replace('/[^\p{L}\p{N}]+/u', ' ', $plain));
+            if (isset($heads[$hk]) && $heads[$hk] !== (string) $key) {
+              $dup[(string) $key][$mid . '|' . $sk] = ['text' => $plain, 'repeats' => 'the same heading is already used in ' . $heads[$hk], 'section_purpose' => (string) ($to_translate[$key]['purpose'] ?? '')];
+            } else {
+              $heads[$hk] = (string) $key;
+            }
+          }
+          $w = self::words($plain);
+          if (count($w) < 3) continue;
+          $items[] = ['key' => (string) $key, 'ref' => $mid . '|' . $sk, 'text' => $plain, 'w' => $w];
+        }
+      }
+    }
+    $n = count($items);
+    for ($i = 0; $i < $n; $i++) {
+      if (isset($chrome[$items[$i]['key']])) continue;
+      for ($j = 0; $j < $i; $j++) {
+        if ($items[$i]['key'] === $items[$j]['key']) continue;
+        $a = $items[$i]['w']; $b = $items[$j]['w'];
+        $common = count(array_intersect($a, $b));
+        $jac = $common / max(1, count(array_unique(array_merge($a, $b))));
+        $cover = $common / max(1, min(count($a), count($b)));
+        if ($jac >= 0.45 || ($cover >= 0.75 && min(count($a), count($b)) >= 4)) {
+          $dup[$items[$i]['key']][$items[$i]['ref']] = ['text' => $items[$i]['text'], 'repeats' => $items[$j]['text'], 'section_purpose' => (string) ($to_translate[$items[$i]['key']]['purpose'] ?? '')];
+          break;
+        }
+      }
+    }
+    if (!$dup) return $out;
+    $page = [];
+    foreach ($out as $key => $sec) {
+      $texts = [];
+      foreach ((array) ($sec['modules'] ?? []) as $mod) foreach ((array) ($mod['settings'] ?? []) as $val) if (is_string($val) && trim($val) !== '') $texts[] = mb_substr(trim(wp_strip_all_tags($val)), 0, 160);
+      $page[$key] = ['purpose' => (string) ($to_translate[$key]['purpose'] ?? ''), 'texts' => array_slice($texts, 0, 12)];
+    }
+    $ask = [];
+    foreach ($dup as $key => $refs) {
+      foreach ($refs as $ref => $d) {
+        [$mid] = explode('|', $ref, 2);
+        $max = (int) ($limits[$key][$mid] ?? 0);
+        $ask[$key . '|' . $ref] = $d + ['max_chars' => $max ?: max(40, (int) ceil(mb_strlen($d['text']) * 1.1))];
+      }
+    }
+    error_log('[AISB] Archer: ' . count($ask) . ' herhaalde tekst(en) op deze pagina herschrijven.');
+    $user = "These texts on one web page repeat what another section of the same page already says. Rewrite each one so it fits the purpose of its own section and adds something new (a different angle, a concrete detail from the page context, the next step for the reader). Keep the language, tone and register. Stay under max_chars, complete phrases, no ellipsis, plain text. Never invent facts, numbers, names or reviews.\n"
+      . "Return JSON: {\"<id>\": \"<new text>\"} with the same ids.\n\nPAGE (section => purpose and current texts):\n" . wp_json_encode($page, JSON_UNESCAPED_UNICODE)
+      . "\n\nREWRITE:\n" . wp_json_encode($ask, JSON_UNESCAPED_UNICODE);
+    $res = $self->ai_multi(['d' => ['system' => $system, 'user' => $user]], 'copy', 45)['d'] ?? null;
+    if (!is_array($res)) return $out;
+    foreach ($ask as $id => $d) {
+      if (!isset($res[$id]) || !is_string($res[$id])) continue;
+      $new = trim(wp_strip_all_tags($res[$id]));
+      if ($new === '') continue;
+      [$key, $mid, $sk] = explode('|', $id, 3);
+      if (!isset($out[$key]['modules'][$mid]['settings'][$sk])) continue;
+      $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $d['max_chars'] * 1.1 ? $new : self::trim_to($new, (int) $d['max_chars']);
+    }
     return $out;
   }
 
@@ -224,7 +390,13 @@ class AISB_Archer_Generate {
     $cut = mb_substr($text, 0, $max);
     if (preg_match('/^(.*[.!?])\s/u', $cut . ' ', $m) && mb_strlen($m[1]) >= $max * 0.6) return $m[1];
     $sp = mb_strrpos($cut, ' ');
-    $cut = $sp !== false && $sp > $max * 0.5 ? mb_substr($cut, 0, $sp) : $cut;
+    if ($sp !== false && $sp > $max * 0.5) {
+      $cut = mb_substr($cut, 0, $sp);
+    } else {
+      // Nooit midden in een woord knippen ("Velthof Interieurarchi"): het woord afmaken.
+      $next = mb_strpos($text, ' ', $max);
+      $cut = $next === false ? $text : mb_substr($text, 0, $next);
+    }
     // Geen losse verbindingswoorden op het einde ("…herstellingen en").
     $stop = '(en|of|het|de|een|uit|voor|van|met|op|in|aan|te|om|bij|and|or|the|a|to|of|for|with|et|ou|le|la|les|du|des|pour|y|o|el|los|las|und|oder|der|die|das|mit)';
     for ($i = 0; $i < 3; $i++) $cut = preg_replace('/[\s,;:–—-]+' . $stop . '$/iu', '', rtrim($cut, " ,;:-–—"));
@@ -503,6 +675,10 @@ class AISB_Archer_Generate {
     if (!$languages) $languages = ['Dutch'];
     $page_count = sanitize_text_field((string) wp_unslash($_POST['page_count'] ?? '5-10'));
     if (!in_array($page_count, ['1', '2-5', '5-10', '10-15', '15+'], true)) $page_count = '5-10';
+    // Contactgegevens uit stap 1: bewaard per project en meegegeven aan de AI.
+    $contact_raw = json_decode((string) wp_unslash($_POST['contact'] ?? '{}'), true);
+    $contact = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::clean(is_array($contact_raw) ? $contact_raw : []) : null;
+    $contact_lines = $contact ? AISB_Archer_Site::brief_lines($contact) : '';
 
     if ($mode === 'url') {
       $src = AISB_Archer_Sitemap_Rules::get_source();
@@ -512,7 +688,7 @@ class AISB_Archer_Generate {
       $context_prompt = $brief;
     } else {
       if (mb_strlen($prompt) < 10) wp_send_json_error(['message' => 'Beschrijf de zaak iets uitgebreider.'], 400);
-      $data = $this->plan_from_prompt($prompt, $languages, $page_count);
+      $data = $this->plan_from_prompt($prompt . ($contact_lines !== '' ? "\n\n" . $contact_lines : ''), $languages, $page_count);
       if (is_wp_error($data)) wp_send_json_error(['message' => $data->get_error_message()], 502);
       $brief = $prompt;
       $context_prompt = $prompt;
@@ -526,6 +702,7 @@ class AISB_Archer_Generate {
       if (empty($data['sitemap'][$i]['page_type'])) $data['sitemap'][$i]['page_type'] = self::guess_type((string) $p['slug'], (string) ($p['page_title'] ?? ''));
     }
 
+    if ($contact_lines !== '') $brief .= "\n\n" . $contact_lines;
     $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
     if ($project_id && !$this->can_access($project_id)) $project_id = 0;
     if (!$project_id) {
@@ -535,6 +712,7 @@ class AISB_Archer_Generate {
       update_post_meta($project_id, 'aisb_project_brief', wp_kses_post(mb_substr($brief, 0, 12000)));
       update_post_meta($project_id, 'aisb_project_languages', wp_json_encode($languages));
     }
+    if ($contact) AISB_Archer_Site::save((int) $project_id, $contact);
     // Bestaande website: het logo meteen in de stijlgids (als er nog geen logo is).
     if ($mode === 'url' && !empty($src['logo']) && class_exists('AISB_Archer_Logo')) {
       AISB_Archer_Logo::store((int) $project_id, (string) $src['logo']);
@@ -744,6 +922,7 @@ PROMPT;
       . "- section_name: short and specific to this business (2–5 words).\n"
       . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
       . "- key_content: 2–4 concrete items from the brief.\n"
+      . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
       . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
     $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')

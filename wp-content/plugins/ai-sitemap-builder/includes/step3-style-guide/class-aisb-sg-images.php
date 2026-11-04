@@ -287,7 +287,7 @@ class AISB_SG_Images {
     if (!$post || $post->post_type !== 'aisb_project') {
       wp_send_json_error(['message' => 'Project not found'], 404);
     }
-    if ((int)$post->post_author !== (int)get_current_user_id()) {
+    if ((int)$post->post_author !== (int)get_current_user_id() && !current_user_can('manage_options')) {
       wp_send_json_error(['message' => 'Forbidden'], 403);
     }
   }

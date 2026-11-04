@@ -17,6 +17,7 @@ class AISB_Archer_Stock {
   const OPTION = 'archer_pexels_key';
 
   public function init(): void {
+    add_action('wp_ajax_aisb_archer_stock_page', [$this, 'ajax_page']);
     add_action('wp_ajax_aisb_get_unsplash_images', [$this, 'ajax_auto'], 1);
     add_action('wp_ajax_aisb_search_similar_images', [$this, 'ajax_search'], 1);
     add_action('admin_init', [$this, 'register'], 20);
@@ -143,6 +144,69 @@ class AISB_Archer_Stock {
     }
     update_post_meta($pid, 'archer_image_keyword', $kw);
     return $kw;
+  }
+
+  /** Zoekwoord voor één pagina (Engels, 1–4 woorden), uit de beschrijving en het onderwerp van de pagina. */
+  private static function page_keyword(int $pid, string $slug, string $title, string $sections): string {
+    // Eén metasleutel per pagina: de pagina's worden tegelijk gevraagd.
+    $mk = 'archer_image_kw_' . substr(md5($slug . '|' . $title . '|' . $sections), 0, 12);
+    $cached = (string) get_post_meta($pid, $mk, true);
+    if ($cached !== '') return $cached;
+    $brief = mb_substr((string) get_post_meta($pid, 'aisb_project_brief', true), 0, 1500);
+    $settings = get_option('aisb_settings', []);
+    $kw = '';
+    if (!empty($settings['api_key']) && class_exists('AISB_OpenAI')) {
+      $prompt = "Business: \"{$brief}\"\nWebsite page: \"{$title}\"" . ($sections !== '' ? "\nSections on this page: {$sections}" : '')
+        . "\nGive one stock photo search phrase in English (2 to 4 words) that shows what THIS page is about for this business, concrete and visual (a place, an object, people at work). Examples: page \"Badkamerrenovatie\" of a plumber -> \"modern bathroom renovation\"; page \"Over ons\" of a bakery -> \"bakers in bakery\"; page \"Contact\" of a law firm -> \"law office reception\". Return ONLY the phrase.";
+      $r = (new AISB_OpenAI())->call_openai_chat_completions($prompt, $settings, 'You return only a short English stock photo search phrase. Never a company name, a person name or a URL.');
+      if (!is_wp_error($r)) {
+        $c = trim(str_replace(['.', ',', '"', "'", ':', ';', '{', '}'], '', strtolower(wp_strip_all_tags((string) $r))));
+        if ($c !== '' && strlen($c) < 60) $kw = $c;
+      }
+    }
+    if ($kw === '') $kw = self::keyword($pid);
+    update_post_meta($pid, $mk, $kw);
+    return $kw;
+  }
+
+  /**
+   * Stockfoto's voor één pagina (knop "Kies stockfoto's voor deze pagina"): een eigen zoekwoord per pagina,
+   * zonder de foto's die al op andere pagina's staan.
+   */
+  public function ajax_page(): void {
+    $pid = $this->guard(true);
+    @set_time_limit(60);
+    $slug = sanitize_title(wp_unslash($_POST['page_slug'] ?? ''));
+    $title = sanitize_text_field(wp_unslash($_POST['page_title'] ?? ''));
+    $sections = sanitize_text_field(wp_unslash($_POST['sections'] ?? ''));
+    $need = max(1, min(40, (int) ($_POST['need'] ?? 1)));
+    $exclude = json_decode((string) wp_unslash($_POST['exclude'] ?? '[]'), true);
+    $skip = array_flip(array_filter(array_map('strval', is_array($exclude) ? $exclude : [])));
+    $kw = self::page_keyword($pid, $slug, $title, $sections);
+    $want = $need + count($skip) + 4;
+    $u = [];
+    $x = [];
+    $ur = self::unsplash($kw, min(30, $want), 1);
+    if (!is_wp_error($ur)) $u = $ur['images'];
+    $xr = self::pexels($kw, min(80, $want), 1);
+    if (!is_wp_error($xr)) $x = $xr['images'];
+    $pool = array_values(array_filter(self::mix($u, $x, $want + 10), fn($img) => !isset($skip[$img['full']])));
+    // Te weinig voor dit zoekwoord: aanvullen met het algemene zoekwoord van het project.
+    if (count($pool) < $need) {
+      $kw2 = self::keyword($pid);
+      $u2 = self::unsplash($kw2, 30, 1);
+      $x2 = self::pexels($kw2, 40, 1);
+      $more = self::mix(is_wp_error($u2) ? [] : $u2['images'], is_wp_error($x2) ? [] : $x2['images'], 60);
+      foreach ($more as $img) {
+        if (count($pool) >= $need) break;
+        if (isset($skip[$img['full']])) continue;
+        $skip[$img['full']] = 1;
+        $pool[] = $img;
+      }
+    }
+    if (!$pool) wp_send_json_error(['message' => 'Geen stockfoto\'s gevonden voor "' . $kw . '".']);
+    // Een paar reserves: pagina's worden tegelijk gevuld, de browser slaat dubbels over.
+    wp_send_json_success(['images' => array_slice($pool, 0, $need + 8), 'keyword' => $kw, 'sources' => self::sources()]);
   }
 
   /* ───────────────────────── AJAX ───────────────────────── */

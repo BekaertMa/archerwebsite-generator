@@ -433,6 +433,14 @@ class AISB_Archer_Taste {
 
   /** CSS-huisregels voor voorbeeld en gepubliceerde site: geen schaduwen op wat stil staat. */
   public static function house_css($guide = null): string {
+    // Archer-stijl gekozen: haar ontwerpsysteem komt eerst (de @import van de letters moet vooraan staan)
+    // en vervangt de algemene knop- en titelregels van system_css.
+    $style = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::of($guide) : null;
+    return ($style ? AISB_Archer_Styles::css($style, $guide) : '') . self::house_rules($guide, (bool) $style)
+      . (class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::css() : '');
+  }
+
+  private static function house_rules($guide, bool $style): string {
     $float = '.brx-dropdown-content,.brx-submenu-toggle,.brxe-offcanvas .brx-offcanvas-inner,.bricks-mobile-menu-wrapper,.brx-popup-content,[role="dialog"],[role="menu"]';
     $accent = 'var(--bricks-color-primary, currentColor)';
     return 'body :not(' . $float . '){box-shadow:none !important;text-shadow:none !important;}'
@@ -447,7 +455,7 @@ class AISB_Archer_Taste {
       . '.archer-cover.brxe-section :is(h1,h2,h3,h4,h5,h6,.brxe-heading,p,li,.brxe-text,.brxe-text-basic,.brxe-rich-text){color:#fff !important;}'
       . '.archer-cover.brxe-section :is(.brxe-container,.brxe-block){background-color:transparent !important;}'
       . '.archer-credit a{color:inherit;text-decoration:underline;text-underline-offset:.18em;}'
-      . self::system_css($guide);
+      . ($style ? '' : self::system_css($guide));
   }
 
   public function preview_house_css(): void {
