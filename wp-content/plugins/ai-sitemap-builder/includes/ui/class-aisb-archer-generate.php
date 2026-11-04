@@ -888,7 +888,7 @@ PROMPT;
       . '{"cta":"slug or empty","items":[{"slug":"page slug, or empty for a group label without its own page","label":"menu label","children":[{"slug":"page slug","label":"menu label"}]}]}. '
       . 'Rules: at most 6 top-level items; group related pages under one item (an existing overview page, or a short group label with an empty slug) instead of listing everything at top level; '
       . 'children only one level deep, at most 8 per item; use only slugs from the list; every slug at most once; keep the order a visitor expects (offer first, about and contact last); '
-      . 'the contact page is the "cta" (a button in the header) and not also a menu item; labels 1 to 3 words in ' . $lang . ', no punctuation; '
+      . 'the contact page is the "cta" (a button in the header) and not also a menu item; labels 1 to 3 words in ' . $lang . ', spelled exactly like the page title when you reuse it (keep apostrophes, hyphens and accents: "Regio\'s", "Zorg-op-maat"), no other punctuation; '
       . 'pages that do not fit may be left out (they stay in the footer).';
     $user = wp_json_encode(['website' => (string) ($data['website_name'] ?? ''), 'goal' => (string) ($data['website_goal'] ?? ''), 'pages' => $list], JSON_UNESCAPED_UNICODE);
     $res = $this->ai_multi(['m' => ['system' => $system, 'user' => $user]], 'plan', 60)['m'] ?? null;
