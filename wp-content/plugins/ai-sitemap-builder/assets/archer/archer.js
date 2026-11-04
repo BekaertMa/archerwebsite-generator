@@ -2372,6 +2372,7 @@
         '<div data-style-advice></div>' +
         '<div class="archer-style-grid" data-style-grid><p class="archer-muted">Stijlen laden…</p></div>' +
         '<p class="archer-taste-status" data-style-status aria-live="polite"></p>' +
+        '<p class="archer-style-brand" data-style-brand hidden></p>' +
         '<p class="archer-style-md" data-style-md hidden></p>';
       box.before(sbox);
       $(".archer-taste-head h4", box).textContent = "Kleuren en letters verfijnen";
@@ -2390,6 +2391,14 @@
         const map = { Primary: "--a-accent", Secondary: "--a-dark", Dark: "--a-ink", Light: "--a-surface", Neutral: "--a-surface2" };
         let o = "";
         Object.keys(map).forEach((n) => { const h = get(n); if (/^#[0-9a-f]{6}$/i.test(h)) o += map[n] + ":" + h + ";"; });
+        // Tekst op de knoppen: wit of de tekstkleur, wat het best leesbaar is (zoals AISB_Archer_Styles::css).
+        const acc = get("Primary");
+        if (/^#[0-9a-f]{6}$/i.test(acc)) {
+          const L = (h) => { const n = parseInt(h.slice(1), 16); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255); };
+          const white = 1.05 / (L(acc) + 0.05);
+          const ink = get("Dark") || (st.colours && st.colours.ink) || "#111111";
+          o += "--a-accent-ink:" + (white >= 4.5 || !/^#[0-9a-f]{6}$/i.test(ink) ? "#FFFFFF" : ink) + ";";
+        }
         const hf = SG.guide && SG.guide.headingFont, bf = SG.guide && SG.guide.bodyFont;
         if (hf && hf !== st.headingFont) o += `--a-font-heading:'${hf}',ui-sans-serif,system-ui,sans-serif;`;
         if (bf && bf !== st.bodyFont) o += `--a-font-body:'${bf}',ui-sans-serif,system-ui,sans-serif;`;
@@ -2444,14 +2453,41 @@
         SG.guide.typography = JSON.parse(JSON.stringify(g.typography));
         if (SG.renderTypography) SG.renderTypography(SG.guide.typography);
         ["style", "radius", "sectionBg1", "sectionBg2", "darkMode", "groundsLight"].forEach((k) => (SG.guide[k] = g[k]));
+        const branded = UI.brandColours ? UI.brandColours(g.colours) : g.colours;
+        if (branded !== g.colours) setColours(branded);
         SG.guide.sectionSchemes = bandSchemes(st);
         SG.guide.tasteDirection = null;
         SG.applyOverridesToAllIframes();
         renderStyles();
         if (UI.markRadius) UI.markRadius();
-        if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's.";
+        if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's" + (branded !== g.colours ? ", met de kleuren van je logo." : ".");
+        renderBrand();
         SG.saveDraft && SG.saveDraft();
       };
+      // Bestaande projecten: de stijl verving de logokleuren. Eén klik zet ze terug, zonder de stijl te wisselen.
+      function renderBrand() {
+        const el = $("[data-style-brand]", sbox);
+        if (!el) return;
+        const b = SG.guide && !Array.isArray(SG.guide) ? SG.guide.brand : null;
+        const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+        const prim = ((cols.find((c) => c && c.name === "Primary") || {}).hex || "").toLowerCase();
+        const show = !!(b && /^#[0-9a-f]{6}$/i.test(b.primary || "") && cols.length && prim !== b.primary.toLowerCase());
+        el.hidden = !show;
+        el.innerHTML = show
+          ? `<button type="button" class="archer-style-brand-btn" data-style-brand-apply><span class="archer-style-brand-dot" style="background:${esc(b.primary)}"></span>Kleuren van je logo gebruiken</button>` +
+            '<span class="archer-muted">De stijl blijft; de knoppen en accenten krijgen de kleur van het logo.</span>'
+          : "";
+      }
+      sbox.addEventListener("click", (e) => {
+        if (!e.target.closest("[data-style-brand-apply]")) return;
+        const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+        setColours(UI.brandColours(cols));
+        SG.applyOverridesToAllIframes();
+        renderStyles();
+        renderBrand();
+        $("[data-style-status]", sbox).textContent = "Kleuren van je logo toegepast.";
+        SG.saveDraft && SG.saveDraft();
+      });
       const specimen = (st) => {
         const c = st.colours;
         return `<span class="archer-style-swatch" style="background:${esc(c.base)};color:${esc(c.ink)}">` +
@@ -2497,7 +2533,8 @@
         const b = e.target.closest("[data-style-id]");
         if (!b) return;
         userPicked = true;
-        applyStyle(styleById(b.getAttribute("data-style-id")));
+        const st = styleById(b.getAttribute("data-style-id"));
+        (UI.ensureBrand ? UI.ensureBrand() : Promise.resolve()).then(() => applyStyle(st));
       });
       // Een nieuw project (nog geen stijlgids): de eerste stijl die bij de zaak past, toepassen.
       // Pas beslissen als de opgeslagen stijlgids geladen is; een keuze van de gebruiker gaat altijd voor.
@@ -2517,7 +2554,8 @@
         renderStyles();
         (SG.allIframes || []).forEach((f) => f._loaded && injectStyle(f));
         setTimeout(() => {
-          if (!userPicked && UI.styleAuto && guideEmpty() && styles[0]) applyStyle(styles[0], true);
+          if (!userPicked && UI.styleAuto && guideEmpty() && styles[0]) (UI.ensureBrand ? UI.ensureBrand() : Promise.resolve()).then(() => applyStyle(styles[0], true));
+          else if (UI.ensureBrand) UI.ensureBrand().then(renderBrand);
         }, 1800);
       })();
       let dealt = [];
@@ -2682,6 +2720,9 @@
       ColorThief.prototype._archerRoles = true;
       ColorThief.prototype.getPalette = function () {
         const p = origPalette.apply(this, arguments);
+        // Merkkleur uit dit logo of deze foto: een stijl houdt die kleur daarna (UI.brandColours).
+        const G0 = window.AISB_StyleGuide;
+        if (Array.isArray(p) && p.length && UI.brandFrom && G0 && G0.guide && !Array.isArray(G0.guide)) G0.guide.brand = UI.brandFrom(p);
         if (!Array.isArray(p) || p.length < 6) return p;
         const info = p.map((c) => {
           const [r, g, b] = c.map((v) => v / 255);
@@ -2708,6 +2749,78 @@
         }
         return out;
       };
+    }
+
+    /* Merkkleuren. Een stijl bracht tot nu toe zijn eigen kleuren mee en verving zo de kleuren van het logo
+       (Stinro: oranje logo, blauwe Fris-knoppen). Nu: de merkkleur wordt de accentkleur, de donkere kleur van het
+       logo de donkere band; de gronden en tekstkleur van de stijl houden hun lichtheid maar krijgen de tint van het merk.
+       Grijze stijlkleuren blijven grijs (Atelier, Raster). */
+    {
+      const hx = (c) => "#" + c.slice(0, 3).map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+      const rgbOf = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+      const toHsl = (h) => {
+        const [r, g, b] = rgbOf(h).map((v) => v / 255);
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+        let s = 0, hh = 0;
+        if (mx !== mn) {
+          const d = mx - mn;
+          s = d / (1 - Math.abs(2 * l - 1));
+          hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+          hh *= 60;
+          if (hh < 0) hh += 360;
+        }
+        return { h: hh, s, l };
+      };
+      const fromHsl = ({ h, s, l }) => {
+        const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+        const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return hx([(r + m) * 255, (g + m) * 255, (b + m) * 255]);
+      };
+      /** Uit de kleuren van ColorThief: de meest verzadigde middentint (merkkleur) en de donkerste (tekst, band). */
+      UI.brandFrom = (pal) => {
+        const info = pal.filter((c) => Array.isArray(c) && c.length >= 3).map((c) => ({ hex: hx(c), ...toHsl(hx(c)) }));
+        const vivid = info.filter((x) => x.s >= 0.25 && x.l > 0.18 && x.l < 0.82).sort((a, b) => b.s * (1 - Math.abs(2 * b.l - 1)) - a.s * (1 - Math.abs(2 * a.l - 1)));
+        const darks = info.filter((x) => x.l < 0.3).sort((a, b) => a.l - b.l);
+        return { primary: vivid[0] ? vivid[0].hex : "", dark: darks[0] ? darks[0].hex : "", source: "image" };
+      };
+      /** De kleuren van een stijl met het merk erin. Zonder merkkleur: ongewijzigd. */
+      UI.brandColours = (cols) => {
+        const G = window.AISB_StyleGuide;
+        const b = G && G.guide && !Array.isArray(G.guide) ? G.guide.brand : null;
+        if (!b || !/^#[0-9a-f]{6}$/i.test(b.primary || "") || !Array.isArray(cols)) return cols;
+        const bh = toHsl(b.primary).h;
+        const dark = !!(G.guide && G.guide.darkMode);
+        return cols.map((c) => {
+          if (!c || !/^#[0-9a-f]{6}$/i.test(c.hex || "")) return c;
+          if (c.name === "Primary" || c.name === "Accent") return { name: c.name, hex: b.primary };
+          if (c.name === "Secondary" && !dark && /^#[0-9a-f]{6}$/i.test(b.dark || "")) return { name: c.name, hex: b.dark };
+          const t = toHsl(c.hex);
+          if (t.s < 0.06) return { name: c.name, hex: c.hex };
+          // Tekstkleur bijna neutraal (anders bruine of groene tekst), gronden zacht getint.
+          return { name: c.name, hex: fromHsl({ h: bh, s: Math.min(t.s, c.name === "Dark" ? 0.12 : 0.35), l: t.l }) };
+        });
+      };
+      /** Nog geen merkkleur, wel een logo in de header: de merkkleur daaruit halen. */
+      UI.ensureBrand = () => new Promise((res) => {
+        const G = window.AISB_StyleGuide;
+        const g = G && G.guide;
+        if (!g || Array.isArray(g) || g.brand || !g.logoUrl || !window.ColorThief) return res();
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        const done = () => { clearTimeout(t); res(); };
+        const t = setTimeout(done, 3000);
+        img.onload = () => { try { new ColorThief().getPalette(img, 6); } catch (e) {} done(); };
+        img.onerror = done;
+        img.src = g.logoUrl;
+      });
+      // Zelf een kleur kiezen: die kleur is vanaf nu het merk.
+      document.addEventListener("input", (e) => {
+        const G = window.AISB_StyleGuide;
+        const el = G && G.el && e.target;
+        if (!el || (el !== G.el.primaryPicker && el !== G.el.primaryHex)) return;
+        const v = String(el.value || "");
+        if (/^#[0-9a-f]{6}$/i.test(v) && G.guide && !Array.isArray(G.guide)) G.guide.brand = { primary: v, dark: "", source: "manual" };
+      }, true);
     }
 
     /* Altijd genoeg contrast: tekst t.o.v. de achtergrond (WCAG AA) en knoppen t.o.v. de sectie. */

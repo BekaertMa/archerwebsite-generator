@@ -1198,3 +1198,10 @@ body.archer-app .archer-style-md { margin: 6px 0 0; font-size: 13px; color: var(
 body.archer-app .archer-style-md a { color: var(--ar-teal); font-weight: 600; }
 body.archer-app .archer-shell .archer-checks-list li.is-auto .archer-check-mark { background: var(--ar-blue-bg); }
 body.archer-app .archer-shell .archer-checks-list li.is-auto .archer-check-mark::after { content: "A"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--ar-font); color: var(--ar-navy); }
+
+/* Stap Stijl: kleuren van het logo terugzetten */
+.archer-style-brand{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 0;}
+.archer-style-brand-btn{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:8px 14px;border:1px solid var(--archer-line,#d9dde6);border-radius:999px;background:#fff;color:inherit;font:inherit;font-weight:600;cursor:pointer;transition:border-color 150ms ease,background-color 150ms ease;}
+.archer-style-brand-btn:hover{border-color:currentColor;}
+.archer-style-brand-btn:active{transform:scale(.97);}
+.archer-style-brand-dot{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex:none;}
