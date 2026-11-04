@@ -1,1 +1,259 @@
-PD9waHAKaWYgKCFkZWZpbmVkKCdBQlNQQVRIJykpIGV4aXQ7CgovKioKICogU3RvY2tmb3RvJ3MgdWl0IFVuc3BsYXNoIMOpbiBQZXhlbHMuCiAqCiAqIE5lZW10IGRlIHR3ZWUgQUpBWC1hY3RpZXMgdmFuIGRlIHN0aWpsZ2lkcyBvdmVyIChhaXNiX2dldF91bnNwbGFzaF9pbWFnZXMgZW4KICogYWlzYl9zZWFyY2hfc2ltaWxhcl9pbWFnZXMpIHpvZHJhIGVyIGVlbiBQZXhlbHMtc2xldXRlbCBpczogZGUgZm90bydzIGtvbWVuIGRhbiBvbSBlbiBvbQogKiB1aXQgYmVpZGUgYnJvbm5lbiwgZW4gdmFsdCDDqcOpbiBicm9uIHdlZywgZGFuIHZ1bHQgZGUgYW5kZXJlIGFhbi4gWm9uZGVyIFBleGVscy1zbGV1dGVsCiAqIGJsaWpmdCBhbGxlcyB6b2FscyBoZXQgd2FzIChhbGxlZW4gVW5zcGxhc2gpLgogKgogKiBTbGV1dGVsOiBJbnN0ZWxsaW5nZW4g4oaSIEFJIFNpdGVtYXAgQnVpbGRlciDihpIgU3RvY2tmb3RvJ3MsIG9mIGRlIGNvbnN0YW50ZSBBSVNCX1BFWEVMU19LRVkgaW4gd3AtY29uZmlnLnBocC4KICogRGUgc2xldXRlbCBnYWF0IG5vb2l0IG5hYXIgZGUgYnJvd3Nlci4KICovCmNsYXNzIEFJU0JfQXJjaGVyX1N0b2NrIHsKCiAgY29uc3QgT1BUSU9OID0gJ2FyY2hlcl9wZXhlbHNfa2V5JzsKCiAgcHVibGljIGZ1bmN0aW9uIGluaXQoKTogdm9pZCB7CiAgICBhZGRfYWN0aW9uKCd3cF9hamF4X2Fpc2JfYXJjaGVyX3N0b2NrX3BhZ2UnLCBbJHRoaXMsICdhamF4X3BhZ2UnXSk7CiAgICBhZGRfYWN0aW9uKCd3cF9hamF4X2Fpc2JfZ2V0X3Vuc3BsYXNoX2ltYWdlcycsIFskdGhpcywgJ2FqYXhfYXV0byddLCAxKTsKICAgIGFkZF9hY3Rpb24oJ3dwX2FqYXhfYWlzYl9zZWFyY2hfc2ltaWxhcl9pbWFnZXMnLCBbJHRoaXMsICdhamF4X3NlYXJjaCddLCAxKTsKICAgIGFkZF9hY3Rpb24oJ2FkbWluX2luaXQnLCBbJHRoaXMsICdyZWdpc3RlciddLCAyMCk7CiAgfQoKICBwdWJsaWMgc3RhdGljIGZ1bmN0aW9uIHBleGVsc19rZXkoKTogc3RyaW5nIHsKICAgIGlmIChkZWZpbmVkKCdBSVNCX1BFWEVMU19LRVknKSAmJiBBSVNCX1BFWEVMU19LRVkpIHJldHVybiAoc3RyaW5nKSBBSVNCX1BFWEVMU19LRVk7CiAgICByZXR1cm4gKHN0cmluZykgZ2V0X29wdGlvbihzZWxmOjpPUFRJT04sICcnKTsKICB9CgogIHB1YmxpYyBzdGF0aWMgZnVuY3Rpb24gdW5zcGxhc2hfa2V5KCk6IHN0cmluZyB7CiAgICByZXR1cm4gZGVmaW5lZCgnQUlTQl9VTlNQTEFTSF9LRVknKSAmJiBBSVNCX1VOU1BMQVNIX0tFWSA/IChzdHJpbmcpIEFJU0JfVU5TUExBU0hfS0VZIDogJyc7CiAgfQoKICBwdWJsaWMgc3RhdGljIGZ1bmN0aW9uIHNvdXJjZXMoKTogYXJyYXkgewogICAgcmV0dXJuIGFycmF5X3ZhbHVlcyhhcnJheV9maWx0ZXIoW3NlbGY6OnVuc3BsYXNoX2tleSgpID8gJ1Vuc3BsYXNoJyA6ICcnLCBzZWxmOjpwZXhlbHNfa2V5KCkgPyAnUGV4ZWxzJyA6ICcnXSkpOwogIH0KCiAgLyog4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAIEluc3RlbGxpbmdlbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgKi8KCiAgLyoqCiAgICogVmVsZCBvcCBkZSBiZXN0YWFuZGUgcGFnaW5hIEluc3RlbGxpbmdlbiDihpIgQUkgU2l0ZW1hcCBCdWlsZGVyLiBIZXQgaG9vcnQgYmlqIGRlemVsZmRlCiAgICogc2V0dGluZ3MtZ3JvZXAsIHpvZGF0IGRlIGtub3AgIldpanppZ2luZ2VuIG9wc2xhYW4iIHZhbiBkaWUgcGFnaW5hIGhldCBtZWUgYmV3YWFydC4KICAgKi8KICBwdWJsaWMgZnVuY3Rpb24gcmVnaXN0ZXIoKTogdm9pZCB7CiAgICByZWdpc3Rlcl9zZXR0aW5nKCdhaXNiX3NldHRpbmdzX2dyb3VwJywgc2VsZjo6T1BUSU9OLCBbJ3R5cGUnID0+ICdzdHJpbmcnLCAnc2FuaXRpemVfY2FsbGJhY2snID0+IGZuKCR2KSA9PiBzYW5pdGl6ZV90ZXh0X2ZpZWxkKChzdHJpbmcpICR2KSwgJ3Nob3dfaW5fcmVzdCcgPT4gZmFsc2UsICdkZWZhdWx0JyA9PiAnJ10pOwogICAgYWRkX3NldHRpbmdzX3NlY3Rpb24oJ2Fpc2Jfc3RvY2snLCAiU3RvY2tmb3RvJ3MiLCBmdW5jdGlvbiAoKSB7CiAgICAgIGVjaG8gJzxwPk1ldCBlZW4gUGV4ZWxzLXNsZXV0ZWwga29tZW4gZGUgc3RvY2tmb3RvXCdzIGluIGRlIHN0YXAgRm90b1wncyB1aXQgVW5zcGxhc2ggw6luIFBleGVscy4gRWVuIGdyYXRpcyBzbGV1dGVsIHZyYWFnIGplIGFhbiBvcCA8YSBocmVmPSJodHRwczovL3d3dy5wZXhlbHMuY29tL2FwaS8iIHRhcmdldD0iX2JsYW5rIiByZWw9Im5vb3BlbmVyIj5wZXhlbHMuY29tL2FwaTwvYT4uIExlZWcgbGF0ZW4gb20gYWxsZWVuIFVuc3BsYXNoIHRlIGdlYnJ1aWtlbi48L3A+JzsKICAgIH0sICdhaS1zaXRlbWFwLWJ1aWxkZXInKTsKICAgIGFkZF9zZXR0aW5nc19maWVsZCgnYXJjaGVyX3BleGVsc19rZXknLCAnUGV4ZWxzIEFQSSBLZXknLCBbJHRoaXMsICdmaWVsZCddLCAnYWktc2l0ZW1hcC1idWlsZGVyJywgJ2Fpc2Jfc3RvY2snLCBbJ2xhYmVsX2ZvcicgPT4gJ2FyY2hlcl9wZXhlbHNfa2V5J10pOwogIH0KCiAgcHVibGljIGZ1bmN0aW9uIGZpZWxkKCk6IHZvaWQgewogICAgaWYgKGRlZmluZWQoJ0FJU0JfUEVYRUxTX0tFWScpICYmIEFJU0JfUEVYRUxTX0tFWSkgewogICAgICBlY2hvICc8cD48c3Ryb25nPkluZ2VzdGVsZCBpbiB3cC1jb25maWcucGhwIChBSVNCX1BFWEVMU19LRVkpLjwvc3Ryb25nPiBEaWUgd2FhcmRlIGdhYXQgdm9vci48L3A+JzsKICAgICAgcmV0dXJuOwogICAgfQogICAgZWNobyAnPGlucHV0IHR5cGU9InBhc3N3b3JkIiBpZD0iYXJjaGVyX3BleGVsc19rZXkiIG5hbWU9IicgLiBlc2NfYXR0cihzZWxmOjpPUFRJT04pIC4gJyIgdmFsdWU9IicgLiBlc2NfYXR0cigoc3RyaW5nKSBnZXRfb3B0aW9uKHNlbGY6Ok9QVElPTiwgJycpKSAuICciIGNsYXNzPSJyZWd1bGFyLXRleHQiIGF1dG9jb21wbGV0ZT0ib2ZmIj4nOwogICAgZWNobyAnPHAgY2xhc3M9ImRlc2NyaXB0aW9uIj4nIC4gKHNlbGY6OnVuc3BsYXNoX2tleSgpID8gJ1Vuc3BsYXNoIHN0YWF0IGFhbiAoQUlTQl9VTlNQTEFTSF9LRVkgaW4gd3AtY29uZmlnLnBocCkuJyA6ICdFciBpcyBnZWVuIFVuc3BsYXNoLXNsZXV0ZWwgaW5nZXN0ZWxkLicpIC4gJzwvcD4nOwogIH0KCiAgLyog4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAIFRvZWdhbmcg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAICovCgogIHByaXZhdGUgZnVuY3Rpb24gZ3VhcmQoYm9vbCAkcHJvamVjdCA9IHRydWUpOiBpbnQgewogICAgaWYgKCFpc191c2VyX2xvZ2dlZF9pbigpKSB3cF9zZW5kX2pzb25fZXJyb3IoWydtZXNzYWdlJyA9PiAnTm90IGxvZ2dlZCBpbiddLCA0MDEpOwogICAgJG5vbmNlID0gaXNzZXQoJF9QT1NUWydub25jZSddKSA/IHNhbml0aXplX3RleHRfZmllbGQod3BfdW5zbGFzaCgkX1BPU1RbJ25vbmNlJ10pKSA6ICcnOwogICAgJG9rID0gZmFsc2U7CiAgICBmb3JlYWNoIChbJ2Fpc2Jfc2dfbm9uY2UnLCAnYWlzYl9ub25jZV9hY3Rpb24nXSBhcyAkYSkgaWYgKCRub25jZSAmJiB3cF92ZXJpZnlfbm9uY2UoJG5vbmNlLCAkYSkpICRvayA9IHRydWU7CiAgICBpZiAoISRvaykgd3Bfc2VuZF9qc29uX2Vycm9yKFsnbWVzc2FnZScgPT4gJ09uZ2VsZGlnZSBzZXNzaWUsIGhlcmxhYWQgZGUgcGFnaW5hJ10sIDQwMyk7CiAgICBpZiAoISRwcm9qZWN0KSByZXR1cm4gMDsKICAgICRwaWQgPSBpc3NldCgkX1BPU1RbJ3Byb2plY3RfaWQnXSkgPyAoaW50KSAkX1BPU1RbJ3Byb2plY3RfaWQnXSA6IDA7CiAgICAkcCA9ICRwaWQgPyBnZXRfcG9zdCgkcGlkKSA6IG51bGw7CiAgICBpZiAoISRwIHx8ICRwLT5wb3N0X3R5cGUgIT09ICdhaXNiX3Byb2plY3QnKSB3cF9zZW5kX2pzb25fZXJyb3IoWydtZXNzYWdlJyA9PiAnUHJvamVjdCBuaWV0IGdldm9uZGVuJ10sIDQwNCk7CiAgICBpZiAoKGludCkgJHAtPnBvc3RfYXV0aG9yICE9PSBnZXRfY3VycmVudF91c2VyX2lkKCkgJiYgIWN1cnJlbnRfdXNlcl9jYW4oJ21hbmFnZV9vcHRpb25zJykpIHdwX3NlbmRfanNvbl9lcnJvcihbJ21lc3NhZ2UnID0+ICdHZWVuIHRvZWdhbmcnXSwgNDAzKTsKICAgIHJldHVybiAkcGlkOwogIH0KCiAgLyog4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAIEJyb25uZW4g4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAICovCgogIC8qKiBAcmV0dXJuIGFycmF5e2ltYWdlczogYXJyYXksIHRvdGFsX3BhZ2VzOiBpbnR9fFdQX0Vycm9yICovCiAgcHJpdmF0ZSBzdGF0aWMgZnVuY3Rpb24gdW5zcGxhc2goc3RyaW5nICRxLCBpbnQgJHBlciwgaW50ICRwYWdlKSB7CiAgICAka2V5ID0gc2VsZjo6dW5zcGxhc2hfa2V5KCk7CiAgICBpZiAoISRrZXkpIHJldHVybiBuZXcgV1BfRXJyb3IoJ25vX2tleScsICdHZWVuIFVuc3BsYXNoLXNsZXV0ZWwnKTsKICAgICRyZXMgPSB3cF9yZW1vdGVfZ2V0KGFkZF9xdWVyeV9hcmcoWydxdWVyeScgPT4gJHEsICdwZXJfcGFnZScgPT4gbWluKDMwLCAkcGVyKSwgJ3BhZ2UnID0+ICRwYWdlLCAnb3JpZW50YXRpb24nID0+ICdsYW5kc2NhcGUnXSwgJ2h0dHBzOi8vYXBpLnVuc3BsYXNoLmNvbS9zZWFyY2gvcGhvdG9zJyksIFsKICAgICAgJ2hlYWRlcnMnID0+IFsnQXV0aG9yaXphdGlvbicgPT4gJ0NsaWVudC1JRCAnIC4gJGtleSwgJ0FjY2VwdC1WZXJzaW9uJyA9PiAndjEnXSwgJ3RpbWVvdXQnID0+IDE1XSk7CiAgICBpZiAoaXNfd3BfZXJyb3IoJHJlcykgfHwgKGludCkgd3BfcmVtb3RlX3JldHJpZXZlX3Jlc3BvbnNlX2NvZGUoJHJlcykgIT09IDIwMCkgcmV0dXJuIG5ldyBXUF9FcnJvcignaHR0cCcsICdVbnNwbGFzaCBnYWYgZ2VlbiBhbnR3b29yZCcpOwogICAgJGJvZHkgPSBqc29uX2RlY29kZSgoc3RyaW5nKSB3cF9yZW1vdGVfcmV0cmlldmVfYm9keSgkcmVzKSwgdHJ1ZSk7CiAgICAkb3V0ID0gW107CiAgICBmb3JlYWNoICgoYXJyYXkpICgkYm9keVsncmVzdWx0cyddID8/IFtdKSBhcyAkcCkgewogICAgICAkb3V0W10gPSBbJ3RodW1iJyA9PiAkcFsndXJscyddWydzbWFsbCddID8/ICcnLCAnZnVsbCcgPT4gJHBbJ3VybHMnXVsncmVndWxhciddID8/ICcnLCAnYWx0JyA9PiAkcFsnYWx0X2Rlc2NyaXB0aW9uJ10gPz8gJHEsCiAgICAgICAgJ3Bob3RvZ3JhcGhlcicgPT4gJHBbJ3VzZXInXVsnbmFtZSddID8/ICcnLCAnbGluaycgPT4gJHBbJ2xpbmtzJ11bJ2h0bWwnXSA/PyAnJywgJ3NvdXJjZScgPT4gJ1Vuc3BsYXNoJ107CiAgICB9CiAgICByZXR1cm4gWydpbWFnZXMnID0+ICRvdXQsICd0b3RhbF9wYWdlcycgPT4gKGludCkgKCRib2R5Wyd0b3RhbF9wYWdlcyddID8/IDEpXTsKICB9CgogIC8qKiBAcmV0dXJuIGFycmF5e2ltYWdlczogYXJyYXksIHRvdGFsX3BhZ2VzOiBpbnR9fFdQX0Vycm9yICovCiAgcHJpdmF0ZSBzdGF0aWMgZnVuY3Rpb24gcGV4ZWxzKHN0cmluZyAkcSwgaW50ICRwZXIsIGludCAkcGFnZSkgewogICAgJGtleSA9IHNlbGY6OnBleGVsc19rZXkoKTsKICAgIGlmICghJGtleSkgcmV0dXJuIG5ldyBXUF9FcnJvcignbm9fa2V5JywgJ0dlZW4gUGV4ZWxzLXNsZXV0ZWwnKTsKICAgICRwZXIgPSBtaW4oODAsIG1heCgxLCAkcGVyKSk7CiAgICAkcmVzID0gd3BfcmVtb3RlX2dldChhZGRfcXVlcnlfYXJnKFsncXVlcnknID0+ICRxLCAncGVyX3BhZ2UnID0+ICRwZXIsICdwYWdlJyA9PiAkcGFnZSwgJ29yaWVudGF0aW9uJyA9PiAnbGFuZHNjYXBlJ10sICdodHRwczovL2FwaS5wZXhlbHMuY29tL3YxL3NlYXJjaCcpLCBbCiAgICAgICdoZWFkZXJzJyA9PiBbJ0F1dGhvcml6YXRpb24nID0+ICRrZXldLCAndGltZW91dCcgPT4gMTVdKTsKICAgIGlmIChpc193cF9lcnJvcigkcmVzKSB8fCAoaW50KSB3cF9yZW1vdGVfcmV0cmlldmVfcmVzcG9uc2VfY29kZSgkcmVzKSAhPT0gMjAwKSByZXR1cm4gbmV3IFdQX0Vycm9yKCdodHRwJywgJ1BleGVscyBnYWYgZ2VlbiBhbnR3b29yZCcpOwogICAgJGJvZHkgPSBqc29uX2RlY29kZSgoc3RyaW5nKSB3cF9yZW1vdGVfcmV0cmlldmVfYm9keSgkcmVzKSwgdHJ1ZSk7CiAgICAkb3V0ID0gW107CiAgICBmb3JlYWNoICgoYXJyYXkpICgkYm9keVsncGhvdG9zJ10gPz8gW10pIGFzICRwKSB7CiAgICAgICRvdXRbXSA9IFsndGh1bWInID0+ICRwWydzcmMnXVsnbWVkaXVtJ10gPz8gJycsICdmdWxsJyA9PiAkcFsnc3JjJ11bJ2xhcmdlMngnXSA/PyAoJHBbJ3NyYyddWydsYXJnZSddID8/ICcnKSwgJ2FsdCcgPT4gJHBbJ2FsdCddID8/ICRxLAogICAgICAgICdwaG90b2dyYXBoZXInID0+ICRwWydwaG90b2dyYXBoZXInXSA/PyAnJywgJ2xpbmsnID0+ICRwWyd1cmwnXSA/PyAnJywgJ3NvdXJjZScgPT4gJ1BleGVscyddOwogICAgfQogICAgJHRvdGFsID0gKGludCkgKCRib2R5Wyd0b3RhbF9yZXN1bHRzJ10gPz8gMCk7CiAgICByZXR1cm4gWydpbWFnZXMnID0+ICRvdXQsICd0b3RhbF9wYWdlcycgPT4gbWF4KDEsIChpbnQpIGNlaWwoJHRvdGFsIC8gJHBlcikpXTsKICB9CgogIC8qKiBPbSBlbiBvbSB1aXQgYmVpZGUgbGlqc3Rlbiwgem9uZGVyIGR1YmJlbGUgZm90bydzLiAqLwogIHByaXZhdGUgc3RhdGljIGZ1bmN0aW9uIG1peChhcnJheSAkYSwgYXJyYXkgJGIsIGludCAkbWF4KTogYXJyYXkgewogICAgJG91dCA9IFtdOwogICAgJHNlZW4gPSBbXTsKICAgIGZvciAoJGkgPSAwOyBjb3VudCgkb3V0KSA8ICRtYXggJiYgKCRpIDwgY291bnQoJGEpIHx8ICRpIDwgY291bnQoJGIpKTsgJGkrKykgewogICAgICBmb3JlYWNoIChbJGFbJGldID8/IG51bGwsICRiWyRpXSA/PyBudWxsXSBhcyAkaW1nKSB7CiAgICAgICAgaWYgKCEkaW1nIHx8IGVtcHR5KCRpbWdbJ2Z1bGwnXSkgfHwgaXNzZXQoJHNlZW5bJGltZ1snZnVsbCddXSkpIGNvbnRpbnVlOwogICAgICAgICRzZWVuWyRpbWdbJ2Z1bGwnXV0gPSAxOwogICAgICAgICRvdXRbXSA9ICRpbWc7CiAgICAgICAgaWYgKGNvdW50KCRvdXQpID49ICRtYXgpIGJyZWFrOwogICAgICB9CiAgICB9CiAgICByZXR1cm4gJG91dDsKICB9CgogIC8qKiBab2Vrd29vcmQgKEVuZ2VscywgMeKAkzMgd29vcmRlbikgdWl0IGRlIGJlc2NocmlqdmluZyB2YW4gaGV0IHByb2plY3Q7IGJld2FhcmQgcGVyIHByb2plY3QuICovCiAgcHJpdmF0ZSBzdGF0aWMgZnVuY3Rpb24ga2V5d29yZChpbnQgJHBpZCk6IHN0cmluZyB7CiAgICAka3cgPSAoc3RyaW5nKSBnZXRfcG9zdF9tZXRhKCRwaWQsICdhcmNoZXJfaW1hZ2Vfa2V5d29yZCcsIHRydWUpOwogICAgaWYgKCRrdyAhPT0gJycpIHJldHVybiAka3c7CiAgICAkYnJpZWYgPSAoc3RyaW5nKSBnZXRfcG9zdF9tZXRhKCRwaWQsICdhaXNiX3Byb2plY3RfYnJpZWYnLCB0cnVlKTsKICAgICRjb250ZXh0ID0gJGJyaWVmICE9PSAnJyA/IG1iX3N1YnN0cigkYnJpZWYsIDAsIDMwMDApIDogKHN0cmluZykgZ2V0X3RoZV90aXRsZSgkcGlkKTsKICAgICRzZXR0aW5ncyA9IGdldF9vcHRpb24oJ2Fpc2Jfc2V0dGluZ3MnLCBbXSk7CiAgICAka3cgPSAnYnVzaW5lc3MnOwogICAgaWYgKCFlbXB0eSgkc2V0dGluZ3NbJ2FwaV9rZXknXSkgJiYgY2xhc3NfZXhpc3RzKCdBSVNCX09wZW5BSScpKSB7CiAgICAgICRwcm9tcHQgPSAiV2Vic2l0ZSBicmllZjogXCJ7JGNvbnRleHR9XCJcbkdlbmVyYXRlIGEgaGlnaGx5IHJlbGV2YW50IHNlYXJjaCBwaHJhc2UgKDEgdG8gMyB3b3JkcykgZm9yIHN0b2NrIHBob3RvZ3JhcGh5IGZvciB0aGlzIHdlYnNpdGUuIEV4YW1wbGVzOiBcImhlYXJpbmcgY2xpbmljXCIgLT4gXCJoZWFyaW5nIHRlc3RcIiwgXCJjYXIgbWVjaGFuaWNcIiAtPiBcImF1dG8gcmVwYWlyXCIsIFwibGF3IGZpcm1cIiAtPiBcImxhd3llciBvZmZpY2VcIi4gUmV0dXJuIE9OTFkgdGhlIHBocmFzZSBpbiBFbmdsaXNoLiI7CiAgICAgICRyID0gKG5ldyBBSVNCX09wZW5BSSgpKS0+Y2FsbF9vcGVuYWlfY2hhdF9jb21wbGV0aW9ucygkcHJvbXB0LCAkc2V0dGluZ3MsICdZb3UgYXJlIGEgc3RvY2sgcGhvdG8ga2V5d29yZCBleHRyYWN0b3IuIFJldHVybiBPTkxZIDEgdG8gMyBFbmdsaXNoIHdvcmRzLiBOZXZlciBhIGNvbXBhbnkgbmFtZSwgcGVyc29uIG5hbWUgb3IgVVJMLicpOwogICAgICBpZiAoIWlzX3dwX2Vycm9yKCRyKSkgewogICAgICAgICRjID0gdHJpbShzdHJfcmVwbGFjZShbJy4nLCAnLCcsICciJywgIiciLCAnOicsICc7JywgJ3snLCAnfSddLCAnJywgc3RydG9sb3dlcih3cF9zdHJpcF9hbGxfdGFncygoc3RyaW5nKSAkcikpKSk7CiAgICAgICAgaWYgKCRjICE9PSAnJyAmJiBzdHJsZW4oJGMpIDwgNjApICRrdyA9ICRjOwogICAgICB9CiAgICB9CiAgICB1cGRhdGVfcG9zdF9tZXRhKCRwaWQsICdhcmNoZXJfaW1hZ2Vfa2V5d29yZCcsICRrdyk7CiAgICByZXR1cm4gJGt3OwogIH0KCiAgLyoqIFpvZWt3b29yZCB2b29yIMOpw6luIHBhZ2luYSAoRW5nZWxzLCAx4oCTNCB3b29yZGVuKSwgdWl0IGRlIGJlc2NocmlqdmluZyBlbiBoZXQgb25kZXJ3ZXJwIHZhbiBkZSBwYWdpbmEuICovCiAgcHJpdmF0ZSBzdGF0aWMgZnVuY3Rpb24gcGFnZV9rZXl3b3JkKGludCAkcGlkLCBzdHJpbmcgJHNsdWcsIHN0cmluZyAkdGl0bGUsIHN0cmluZyAkc2VjdGlvbnMpOiBzdHJpbmcgewogICAgLy8gRcOpbiBtZXRhc2xldXRlbCBwZXIgcGFnaW5hOiBkZSBwYWdpbmEncyB3b3JkZW4gdGVnZWxpamsgZ2V2cmFhZ2QuCiAgICAkbWsgPSAnYXJjaGVyX2ltYWdlX2t3XycgLiBzdWJzdHIobWQ1KCRzbHVnIC4gJ3wnIC4gJHRpdGxlIC4gJ3wnIC4gJHNlY3Rpb25zKSwgMCwgMTIpOwogICAgJGNhY2hlZCA9IChzdHJpbmcpIGdldF9wb3N0X21ldGEoJHBpZCwgJG1rLCB0cnVlKTsKICAgIGlmICgkY2FjaGVkICE9PSAnJykgcmV0dXJuICRjYWNoZWQ7CiAgICAkYnJpZWYgPSBtYl9zdWJzdHIoKHN0cmluZykgZ2V0X3Bvc3RfbWV0YSgkcGlkLCAnYWlzYl9wcm9qZWN0X2JyaWVmJywgdHJ1ZSksIDAsIDE1MDApOwogICAgJHNldHRpbmdzID0gZ2V0X29wdGlvbignYWlzYl9zZXR0aW5ncycsIFtdKTsKICAgICRrdyA9ICcnOwogICAgaWYgKCFlbXB0eSgkc2V0dGluZ3NbJ2FwaV9rZXknXSkgJiYgY2xhc3NfZXhpc3RzKCdBSVNCX09wZW5BSScpKSB7CiAgICAgICRwcm9tcHQgPSAiQnVzaW5lc3M6IFwieyRicmllZn1cIlxuV2Vic2l0ZSBwYWdlOiBcInskdGl0bGV9XCIiIC4gKCRzZWN0aW9ucyAhPT0gJycgPyAiXG5TZWN0aW9ucyBvbiB0aGlzIHBhZ2U6IHskc2VjdGlvbnN9IiA6ICcnKQogICAgICAgIC4gKCgkbW9vZCA9IGNsYXNzX2V4aXN0cygnQUlTQl9BcmNoZXJfU3R5bGVzJykgPyBBSVNCX0FyY2hlcl9TdHlsZXM6OnByb21wdF9ub3Rlcyhqc29uX2RlY29kZSgoc3RyaW5nKSBnZXRfcG9zdF9tZXRhKCRwaWQsICdhaXNiX3N0eWxlX2d1aWRlJywgdHJ1ZSksIHRydWUpLCAncGhvdG8nKSA6ICcnKSAhPT0gJycgPyAiXG5WaXN1YWwgbW9vZCBvZiB0aGUgd2Vic2l0ZSBzdHlsZTogeyRtb29kfS4gWW91IG1heSBhZGQgb25lIG1vb2Qgd29yZCAoZm9yIGV4YW1wbGUgJ2JyaWdodCcgb3IgJ21vb2R5JykgaWYgaXQgZml0cy4iIDogJycpCiAgICAgICAgLiAiXG5HaXZlIG9uZSBzdG9jayBwaG90byBzZWFyY2ggcGhyYXNlIGluIEVuZ2xpc2ggKDIgdG8gNCB3b3JkcykgdGhhdCBzaG93cyB3aGF0IFRISVMgcGFnZSBpcyBhYm91dCBmb3IgdGhpcyBidXNpbmVzcywgY29uY3JldGUgYW5kIHZpc3VhbCAoYSBwbGFjZSwgYW4gb2JqZWN0LCBwZW9wbGUgYXQgd29yaykuIEV4YW1wbGVzOiBwYWdlIFwiQmFka2FtZXJyZW5vdmF0aWVcIiBvZiBhIHBsdW1iZXIgLT4gXCJtb2Rlcm4gYmF0aHJvb20gcmVub3ZhdGlvblwiOyBwYWdlIFwiT3ZlciBvbnNcIiBvZiBhIGJha2VyeSAtPiBcImJha2VycyBpbiBiYWtlcnlcIjsgcGFnZSBcIkNvbnRhY3RcIiBvZiBhIGxhdyBmaXJtIC0+IFwibGF3IG9mZmljZSByZWNlcHRpb25cIi4gUmV0dXJuIE9OTFkgdGhlIHBocmFzZS4iOwogICAgICAkciA9IChuZXcgQUlTQl9PcGVuQUkoKSktPmNhbGxfb3BlbmFpX2NoYXRfY29tcGxldGlvbnMoJHByb21wdCwgJHNldHRpbmdzLCAnWW91IHJldHVybiBvbmx5IGEgc2hvcnQgRW5nbGlzaCBzdG9jayBwaG90byBzZWFyY2ggcGhyYXNlLiBOZXZlciBhIGNvbXBhbnkgbmFtZSwgYSBwZXJzb24gbmFtZSBvciBhIFVSTC4nKTsKICAgICAgaWYgKCFpc193cF9lcnJvcigkcikpIHsKICAgICAgICAkYyA9IHRyaW0oc3RyX3JlcGxhY2UoWycuJywgJywnLCAnIicsICInIiwgJzonLCAnOycsICd7JywgJ30nXSwgJycsIHN0cnRvbG93ZXIod3Bfc3RyaXBfYWxsX3RhZ3MoKHN0cmluZykgJHIpKSkpOwogICAgICAgIGlmICgkYyAhPT0gJycgJiYgc3RybGVuKCRjKSA8IDYwKSAka3cgPSAkYzsKICAgICAgfQogICAgfQogICAgaWYgKCRrdyA9PT0gJycpICRrdyA9IHNlbGY6OmtleXdvcmQoJHBpZCk7CiAgICB1cGRhdGVfcG9zdF9tZXRhKCRwaWQsICRtaywgJGt3KTsKICAgIHJldHVybiAka3c7CiAgfQoKICAvKioKICAgKiBTdG9ja2ZvdG8ncyB2b29yIMOpw6luIHBhZ2luYSAoa25vcCAiS2llcyBzdG9ja2ZvdG8ncyB2b29yIGRlemUgcGFnaW5hIik6IGVlbiBlaWdlbiB6b2Vrd29vcmQgcGVyIHBhZ2luYSwKICAgKiB6b25kZXIgZGUgZm90bydzIGRpZSBhbCBvcCBhbmRlcmUgcGFnaW5hJ3Mgc3RhYW4uCiAgICovCiAgcHVibGljIGZ1bmN0aW9uIGFqYXhfcGFnZSgpOiB2b2lkIHsKICAgICRwaWQgPSAkdGhpcy0+Z3VhcmQodHJ1ZSk7CiAgICBAc2V0X3RpbWVfbGltaXQoNjApOwogICAgJHNsdWcgPSBzYW5pdGl6ZV90aXRsZSh3cF91bnNsYXNoKCRfUE9TVFsncGFnZV9zbHVnJ10gPz8gJycpKTsKICAgICR0aXRsZSA9IHNhbml0aXplX3RleHRfZmllbGQod3BfdW5zbGFzaCgkX1BPU1RbJ3BhZ2VfdGl0bGUnXSA/PyAnJykpOwogICAgJHNlY3Rpb25zID0gc2FuaXRpemVfdGV4dF9maWVsZCh3cF91bnNsYXNoKCRfUE9TVFsnc2VjdGlvbnMnXSA/PyAnJykpOwogICAgJG5lZWQgPSBtYXgoMSwgbWluKDQwLCAoaW50KSAoJF9QT1NUWyduZWVkJ10gPz8gMSkpKTsKICAgICRleGNsdWRlID0ganNvbl9kZWNvZGUoKHN0cmluZykgd3BfdW5zbGFzaCgkX1BPU1RbJ2V4Y2x1ZGUnXSA/PyAnW10nKSwgdHJ1ZSk7CiAgICAkc2tpcCA9IGFycmF5X2ZsaXAoYXJyYXlfZmlsdGVyKGFycmF5X21hcCgnc3RydmFsJywgaXNfYXJyYXkoJGV4Y2x1ZGUpID8gJGV4Y2x1ZGUgOiBbXSkpKTsKICAgICRrdyA9IHNlbGY6OnBhZ2Vfa2V5d29yZCgkcGlkLCAkc2x1ZywgJHRpdGxlLCAkc2VjdGlvbnMpOwogICAgJHdhbnQgPSAkbmVlZCArIGNvdW50KCRza2lwKSArIDQ7CiAgICAkdSA9IFtdOwogICAgJHggPSBbXTsKICAgICR1ciA9IHNlbGY6OnVuc3BsYXNoKCRrdywgbWluKDMwLCAkd2FudCksIDEpOwogICAgaWYgKCFpc193cF9lcnJvcigkdXIpKSAkdSA9ICR1clsnaW1hZ2VzJ107CiAgICAkeHIgPSBzZWxmOjpwZXhlbHMoJGt3LCBtaW4oODAsICR3YW50KSwgMSk7CiAgICBpZiAoIWlzX3dwX2Vycm9yKCR4cikpICR4ID0gJHhyWydpbWFnZXMnXTsKICAgICRwb29sID0gYXJyYXlfdmFsdWVzKGFycmF5X2ZpbHRlcihzZWxmOjptaXgoJHUsICR4LCAkd2FudCArIDEwKSwgZm4oJGltZykgPT4gIWlzc2V0KCRza2lwWyRpbWdbJ2Z1bGwnXV0pKSk7CiAgICAvLyBUZSB3ZWluaWcgdm9vciBkaXQgem9la3dvb3JkOiBhYW52dWxsZW4gbWV0IGhldCBhbGdlbWVuZSB6b2Vrd29vcmQgdmFuIGhldCBwcm9qZWN0LgogICAgaWYgKGNvdW50KCRwb29sKSA8ICRuZWVkKSB7CiAgICAgICRrdzIgPSBzZWxmOjprZXl3b3JkKCRwaWQpOwogICAgICAkdTIgPSBzZWxmOjp1bnNwbGFzaCgka3cyLCAzMCwgMSk7CiAgICAgICR4MiA9IHNlbGY6OnBleGVscygka3cyLCA0MCwgMSk7CiAgICAgICRtb3JlID0gc2VsZjo6bWl4KGlzX3dwX2Vycm9yKCR1MikgPyBbXSA6ICR1MlsnaW1hZ2VzJ10sIGlzX3dwX2Vycm9yKCR4MikgPyBbXSA6ICR4MlsnaW1hZ2VzJ10sIDYwKTsKICAgICAgZm9yZWFjaCAoJG1vcmUgYXMgJGltZykgewogICAgICAgIGlmIChjb3VudCgkcG9vbCkgPj0gJG5lZWQpIGJyZWFrOwogICAgICAgIGlmIChpc3NldCgkc2tpcFskaW1nWydmdWxsJ11dKSkgY29udGludWU7CiAgICAgICAgJHNraXBbJGltZ1snZnVsbCddXSA9IDE7CiAgICAgICAgJHBvb2xbXSA9ICRpbWc7CiAgICAgIH0KICAgIH0KICAgIGlmICghJHBvb2wpIHdwX3NlbmRfanNvbl9lcnJvcihbJ21lc3NhZ2UnID0+ICdHZWVuIHN0b2NrZm90b1wncyBnZXZvbmRlbiB2b29yICInIC4gJGt3IC4gJyIuJ10pOwogICAgLy8gRWVuIHBhYXIgcmVzZXJ2ZXM6IHBhZ2luYSdzIHdvcmRlbiB0ZWdlbGlqayBnZXZ1bGQsIGRlIGJyb3dzZXIgc2xhYXQgZHViYmVscyBvdmVyLgogICAgd3Bfc2VuZF9qc29uX3N1Y2Nlc3MoWydpbWFnZXMnID0+IGFycmF5X3NsaWNlKCRwb29sLCAwLCAkbmVlZCArIDgpLCAna2V5d29yZCcgPT4gJGt3LCAnc291cmNlcycgPT4gc2VsZjo6c291cmNlcygpXSk7CiAgfQoKICAvKiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgQUpBWCDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgKi8KCiAgLyoqIEFsbGUgZm90bydzIHZvb3IgZGUgd2lyZWZyYW1lcyBpbiDDqcOpbiBrZWVyIChzdGFwIEZvdG8ncykuICovCiAgcHVibGljIGZ1bmN0aW9uIGFqYXhfYXV0bygpOiB2b2lkIHsKICAgIGlmICghc2VsZjo6cGV4ZWxzX2tleSgpKSByZXR1cm47IC8vIGdlZW4gUGV4ZWxzOiBkZSBzdGlqbGdpZHMgZG9ldCBoZXQgemVsZgogICAgJHBpZCA9ICR0aGlzLT5ndWFyZCh0cnVlKTsKICAgIEBzZXRfdGltZV9saW1pdCg2MCk7CiAgICAkbmVlZCA9IGlzc2V0KCRfUE9TVFsndG90YWxfbmVlZGVkJ10pID8gbWF4KDEsIG1pbigxNTAsIChpbnQpICRfUE9TVFsndG90YWxfbmVlZGVkJ10pKSA6IDMwOwogICAgJGt3ID0gc2VsZjo6a2V5d29yZCgkcGlkKTsKICAgICRoYWxmID0gKGludCkgY2VpbCgkbmVlZCAvIDIpICsgNDsKICAgICR1ID0gW107CiAgICBmb3IgKCRwID0gMTsgY291bnQoJHUpIDwgJGhhbGYgJiYgJHAgPD0gNTsgJHArKykgewogICAgICAkciA9IHNlbGY6OnVuc3BsYXNoKCRrdywgMzAsICRwKTsKICAgICAgaWYgKGlzX3dwX2Vycm9yKCRyKSB8fCAhJHJbJ2ltYWdlcyddKSBicmVhazsKICAgICAgJHUgPSBhcnJheV9tZXJnZSgkdSwgJHJbJ2ltYWdlcyddKTsKICAgIH0KICAgICR4ID0gW107CiAgICBmb3IgKCRwID0gMTsgY291bnQoJHgpIDwgJG5lZWQgJiYgJHAgPD0gMjsgJHArKykgewogICAgICAkciA9IHNlbGY6OnBleGVscygka3csIDgwLCAkcCk7CiAgICAgIGlmIChpc193cF9lcnJvcigkcikgfHwgISRyWydpbWFnZXMnXSkgYnJlYWs7CiAgICAgICR4ID0gYXJyYXlfbWVyZ2UoJHgsICRyWydpbWFnZXMnXSk7CiAgICB9CiAgICAkaW1hZ2VzID0gc2VsZjo6bWl4KCR1LCAkeCwgJG5lZWQpOwogICAgaWYgKCEkaW1hZ2VzKSB3cF9zZW5kX2pzb25fZXJyb3IoWydtZXNzYWdlJyA9PiAnR2VlbiBzdG9ja2ZvdG9cJ3MgZ2V2b25kZW4gdm9vciAiJyAuICRrdyAuICciLiddKTsKICAgIHdwX3NlbmRfanNvbl9zdWNjZXNzKFsnaW1hZ2VzJyA9PiAkaW1hZ2VzLCAna2V5d29yZCcgPT4gJGt3LCAnc291cmNlcycgPT4gc2VsZjo6c291cmNlcygpXSk7CiAgfQoKICAvKiogQW5kZXJlIGZvdG8gem9la2VuICh2ZW5zdGVyIGJpaiBoZXQgd2lzc2VsZW4gdmFuIGVlbiBmb3RvKS4gKi8KICBwdWJsaWMgZnVuY3Rpb24gYWpheF9zZWFyY2goKTogdm9pZCB7CiAgICBpZiAoIXNlbGY6OnBleGVsc19rZXkoKSkgcmV0dXJuOwogICAgJHRoaXMtPmd1YXJkKGZhbHNlKTsKICAgICRxID0gaXNzZXQoJF9QT1NUWydrZXl3b3JkJ10pID8gc2FuaXRpemVfdGV4dF9maWVsZCh3cF91bnNsYXNoKCRfUE9TVFsna2V5d29yZCddKSkgOiAnJzsKICAgIGlmICgkcSA9PT0gJycpIHdwX3NlbmRfanNvbl9lcnJvcihbJ21lc3NhZ2UnID0+ICdHZWVuIHpvZWt3b29yZC4nXSwgNDAwKTsKICAgICRwYWdlID0gaXNzZXQoJF9QT1NUWydwYWdlJ10pID8gbWF4KDEsIChpbnQpICRfUE9TVFsncGFnZSddKSA6IDE7CiAgICAkcGVyID0gaXNzZXQoJF9QT1NUWydwZXJfcGFnZSddKSA/IG1heCgyLCBtaW4oMzAsIChpbnQpICRfUE9TVFsncGVyX3BhZ2UnXSkpIDogMTI7CiAgICAkaGFsZiA9IChpbnQpIGNlaWwoJHBlciAvIDIpOwogICAgJHUgPSBzZWxmOjp1bnNwbGFzaCgkcSwgJGhhbGYsICRwYWdlKTsKICAgICR4ID0gc2VsZjo6cGV4ZWxzKCRxLCAkaGFsZiwgJHBhZ2UpOwogICAgJHVpID0gaXNfd3BfZXJyb3IoJHUpID8gW10gOiAkdVsnaW1hZ2VzJ107CiAgICAkeGkgPSBpc193cF9lcnJvcigkeCkgPyBbXSA6ICR4WydpbWFnZXMnXTsKICAgIC8vIFZhbHQgw6nDqW4gYnJvbiB3ZWcsIGRhbiB2dWx0IGRlIGFuZGVyZSBkZSBoZWxlIHBhZ2luYS4KICAgIGlmICghJHVpICYmICFpc193cF9lcnJvcigkeCkpIHsgJHIgPSBzZWxmOjpwZXhlbHMoJHEsICRwZXIsICRwYWdlKTsgJHhpID0gaXNfd3BfZXJyb3IoJHIpID8gJHhpIDogJHJbJ2ltYWdlcyddOyB9CiAgICBpZiAoISR4aSAmJiAhaXNfd3BfZXJyb3IoJHUpKSB7ICRyID0gc2VsZjo6dW5zcGxhc2goJHEsICRwZXIsICRwYWdlKTsgJHVpID0gaXNfd3BfZXJyb3IoJHIpID8gJHVpIDogJHJbJ2ltYWdlcyddOyB9CiAgICAkcGFnZXMgPSBtYXgoaXNfd3BfZXJyb3IoJHUpID8gMSA6ICR1Wyd0b3RhbF9wYWdlcyddLCBpc193cF9lcnJvcigkeCkgPyAxIDogJHhbJ3RvdGFsX3BhZ2VzJ10pOwogICAgd3Bfc2VuZF9qc29uX3N1Y2Nlc3MoWydpbWFnZXMnID0+IHNlbGY6Om1peCgkdWksICR4aSwgJHBlciksICdwYWdlJyA9PiAkcGFnZSwgJ3RvdGFsX3BhZ2VzJyA9PiBtaW4oJHBhZ2VzLCA1MCldKTsKICB9Cn0K
+<?php
+if (!defined('ABSPATH')) exit;
+
+/**
+ * Stockfoto's uit Unsplash én Pexels.
+ *
+ * Neemt de twee AJAX-acties van de stijlgids over (aisb_get_unsplash_images en
+ * aisb_search_similar_images) zodra er een Pexels-sleutel is: de foto's komen dan om en om
+ * uit beide bronnen, en valt één bron weg, dan vult de andere aan. Zonder Pexels-sleutel
+ * blijft alles zoals het was (alleen Unsplash).
+ *
+ * Sleutel: Instellingen → AI Sitemap Builder → Stockfoto's, of de constante AISB_PEXELS_KEY in wp-config.php.
+ * De sleutel gaat nooit naar de browser.
+ */
+class AISB_Archer_Stock {
+
+  const OPTION = 'archer_pexels_key';
+
+  public function init(): void {
+    add_action('wp_ajax_aisb_archer_stock_page', [$this, 'ajax_page']);
+    add_action('wp_ajax_aisb_get_unsplash_images', [$this, 'ajax_auto'], 1);
+    add_action('wp_ajax_aisb_search_similar_images', [$this, 'ajax_search'], 1);
+    add_action('admin_init', [$this, 'register'], 20);
+  }
+
+  public static function pexels_key(): string {
+    if (defined('AISB_PEXELS_KEY') && AISB_PEXELS_KEY) return (string) AISB_PEXELS_KEY;
+    return (string) get_option(self::OPTION, '');
+  }
+
+  public static function unsplash_key(): string {
+    return defined('AISB_UNSPLASH_KEY') && AISB_UNSPLASH_KEY ? (string) AISB_UNSPLASH_KEY : '';
+  }
+
+  public static function sources(): array {
+    return array_values(array_filter([self::unsplash_key() ? 'Unsplash' : '', self::pexels_key() ? 'Pexels' : '']));
+  }
+
+  /* ───────────────────────── Instellingen ───────────────────────── */
+
+  /**
+   * Veld op de bestaande pagina Instellingen → AI Sitemap Builder. Het hoort bij dezelfde
+   * settings-groep, zodat de knop "Wijzigingen opslaan" van die pagina het mee bewaart.
+   */
+  public function register(): void {
+    register_setting('aisb_settings_group', self::OPTION, ['type' => 'string', 'sanitize_callback' => fn($v) => sanitize_text_field((string) $v), 'show_in_rest' => false, 'default' => '']);
+    add_settings_section('aisb_stock', "Stockfoto's", function () {
+      echo '<p>Met een Pexels-sleutel komen de stockfoto\'s in de stap Foto\'s uit Unsplash én Pexels. Een gratis sleutel vraag je aan op <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>. Leeg laten om alleen Unsplash te gebruiken.</p>';
+    }, 'ai-sitemap-builder');
+    add_settings_field('archer_pexels_key', 'Pexels API Key', [$this, 'field'], 'ai-sitemap-builder', 'aisb_stock', ['label_for' => 'archer_pexels_key']);
+  }
+
+  public function field(): void {
+    if (defined('AISB_PEXELS_KEY') && AISB_PEXELS_KEY) {
+      echo '<p><strong>Ingesteld in wp-config.php (AISB_PEXELS_KEY).</strong> Die waarde gaat voor.</p>';
+      return;
+    }
+    echo '<input type="password" id="archer_pexels_key" name="' . esc_attr(self::OPTION) . '" value="' . esc_attr((string) get_option(self::OPTION, '')) . '" class="regular-text" autocomplete="off">';
+    echo '<p class="description">' . (self::unsplash_key() ? 'Unsplash staat aan (AISB_UNSPLASH_KEY in wp-config.php).' : 'Er is geen Unsplash-sleutel ingesteld.') . '</p>';
+  }
+
+  /* ───────────────────────── Toegang ───────────────────────── */
+
+  private function guard(bool $project = true): int {
+    if (!is_user_logged_in()) wp_send_json_error(['message' => 'Not logged in'], 401);
+    $nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+    $ok = false;
+    foreach (['aisb_sg_nonce', 'aisb_nonce_action'] as $a) if ($nonce && wp_verify_nonce($nonce, $a)) $ok = true;
+    if (!$ok) wp_send_json_error(['message' => 'Ongeldige sessie, herlaad de pagina'], 403);
+    if (!$project) return 0;
+    $pid = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
+    $p = $pid ? get_post($pid) : null;
+    if (!$p || $p->post_type !== 'aisb_project') wp_send_json_error(['message' => 'Project niet gevonden'], 404);
+    if ((int) $p->post_author !== get_current_user_id() && !current_user_can('manage_options')) wp_send_json_error(['message' => 'Geen toegang'], 403);
+    return $pid;
+  }
+
+  /* ───────────────────────── Bronnen ───────────────────────── */
+
+  /** @return array{images: array, total_pages: int}|WP_Error */
+  private static function unsplash(string $q, int $per, int $page) {
+    $key = self::unsplash_key();
+    if (!$key) return new WP_Error('no_key', 'Geen Unsplash-sleutel');
+    $res = wp_remote_get(add_query_arg(['query' => $q, 'per_page' => min(30, $per), 'page' => $page, 'orientation' => 'landscape'], 'https://api.unsplash.com/search/photos'), [
+      'headers' => ['Authorization' => 'Client-ID ' . $key, 'Accept-Version' => 'v1'], 'timeout' => 15]);
+    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', 'Unsplash gaf geen antwoord');
+    $body = json_decode((string) wp_remote_retrieve_body($res), true);
+    $out = [];
+    foreach ((array) ($body['results'] ?? []) as $p) {
+      $out[] = ['thumb' => $p['urls']['small'] ?? '', 'full' => $p['urls']['regular'] ?? '', 'alt' => $p['alt_description'] ?? $q,
+        'photographer' => $p['user']['name'] ?? '', 'link' => $p['links']['html'] ?? '', 'source' => 'Unsplash'];
+    }
+    return ['images' => $out, 'total_pages' => (int) ($body['total_pages'] ?? 1)];
+  }
+
+  /** @return array{images: array, total_pages: int}|WP_Error */
+  private static function pexels(string $q, int $per, int $page) {
+    $key = self::pexels_key();
+    if (!$key) return new WP_Error('no_key', 'Geen Pexels-sleutel');
+    $per = min(80, max(1, $per));
+    $res = wp_remote_get(add_query_arg(['query' => $q, 'per_page' => $per, 'page' => $page, 'orientation' => 'landscape'], 'https://api.pexels.com/v1/search'), [
+      'headers' => ['Authorization' => $key], 'timeout' => 15]);
+    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', 'Pexels gaf geen antwoord');
+    $body = json_decode((string) wp_remote_retrieve_body($res), true);
+    $out = [];
+    foreach ((array) ($body['photos'] ?? []) as $p) {
+      $out[] = ['thumb' => $p['src']['medium'] ?? '', 'full' => $p['src']['large2x'] ?? ($p['src']['large'] ?? ''), 'alt' => $p['alt'] ?? $q,
+        'photographer' => $p['photographer'] ?? '', 'link' => $p['url'] ?? '', 'source' => 'Pexels'];
+    }
+    $total = (int) ($body['total_results'] ?? 0);
+    return ['images' => $out, 'total_pages' => max(1, (int) ceil($total / $per))];
+  }
+
+  /** Om en om uit beide lijsten, zonder dubbele foto's. */
+  private static function mix(array $a, array $b, int $max): array {
+    $out = [];
+    $seen = [];
+    for ($i = 0; count($out) < $max && ($i < count($a) || $i < count($b)); $i++) {
+      foreach ([$a[$i] ?? null, $b[$i] ?? null] as $img) {
+        if (!$img || empty($img['full']) || isset($seen[$img['full']])) continue;
+        $seen[$img['full']] = 1;
+        $out[] = $img;
+        if (count($out) >= $max) break;
+      }
+    }
+    return $out;
+  }
+
+  /** Zoekwoord (Engels, 1–3 woorden) uit de beschrijving van het project; bewaard per project. */
+  private static function keyword(int $pid): string {
+    $kw = (string) get_post_meta($pid, 'archer_image_keyword', true);
+    if ($kw !== '') return $kw;
+    $brief = (string) get_post_meta($pid, 'aisb_project_brief', true);
+    $context = $brief !== '' ? mb_substr($brief, 0, 3000) : (string) get_the_title($pid);
+    $settings = get_option('aisb_settings', []);
+    $kw = 'business';
+    if (!empty($settings['api_key']) && class_exists('AISB_OpenAI')) {
+      $prompt = "Website brief: \"{$context}\"\nGenerate a highly relevant search phrase (1 to 3 words) for stock photography for this website. Examples: \"hearing clinic\" -> \"hearing test\", \"car mechanic\" -> \"auto repair\", \"law firm\" -> \"lawyer office\". Return ONLY the phrase in English.";
+      $r = (new AISB_OpenAI())->call_openai_chat_completions($prompt, $settings, 'You are a stock photo keyword extractor. Return ONLY 1 to 3 English words. Never a company name, person name or URL.');
+      if (!is_wp_error($r)) {
+        $c = trim(str_replace(['.', ',', '"', "'", ':', ';', '{', '}'], '', strtolower(wp_strip_all_tags((string) $r))));
+        if ($c !== '' && strlen($c) < 60) $kw = $c;
+      }
+    }
+    update_post_meta($pid, 'archer_image_keyword', $kw);
+    return $kw;
+  }
+
+  /** Zoekwoord voor één pagina (Engels, 1–4 woorden), uit de beschrijving en het onderwerp van de pagina. */
+  private static function page_keyword(int $pid, string $slug, string $title, string $sections): string {
+    // Eén metasleutel per pagina: de pagina's worden tegelijk gevraagd.
+    $mk = 'archer_image_kw_' . substr(md5($slug . '|' . $title . '|' . $sections), 0, 12);
+    $cached = (string) get_post_meta($pid, $mk, true);
+    if ($cached !== '') return $cached;
+    $brief = mb_substr((string) get_post_meta($pid, 'aisb_project_brief', true), 0, 1500);
+    $settings = get_option('aisb_settings', []);
+    $kw = '';
+    if (!empty($settings['api_key']) && class_exists('AISB_OpenAI')) {
+      $prompt = "Business: \"{$brief}\"\nWebsite page: \"{$title}\"" . ($sections !== '' ? "\nSections on this page: {$sections}" : '')
+        . (($mood = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true), 'photo') : '') !== '' ? "\nVisual mood of the website style: {$mood}. You may add one mood word (for example 'bright' or 'moody') if it fits." : '')
+        . "\nGive one stock photo search phrase in English (2 to 4 words) that shows what THIS page is about for this business, concrete and visual (a place, an object, people at work). Examples: page \"Badkamerrenovatie\" of a plumber -> \"modern bathroom renovation\"; page \"Over ons\" of a bakery -> \"bakers in bakery\"; page \"Contact\" of a law firm -> \"law office reception\". Return ONLY the phrase.";
+      $r = (new AISB_OpenAI())->call_openai_chat_completions($prompt, $settings, 'You return only a short English stock photo search phrase. Never a company name, a person name or a URL.');
+      if (!is_wp_error($r)) {
+        $c = trim(str_replace(['.', ',', '"', "'", ':', ';', '{', '}'], '', strtolower(wp_strip_all_tags((string) $r))));
+        if ($c !== '' && strlen($c) < 60) $kw = $c;
+      }
+    }
+    if ($kw === '') $kw = self::keyword($pid);
+    update_post_meta($pid, $mk, $kw);
+    return $kw;
+  }
+
+  /**
+   * Stockfoto's voor één pagina (knop "Kies stockfoto's voor deze pagina"): een eigen zoekwoord per pagina,
+   * zonder de foto's die al op andere pagina's staan.
+   */
+  public function ajax_page(): void {
+    $pid = $this->guard(true);
+    @set_time_limit(60);
+    $slug = sanitize_title(wp_unslash($_POST['page_slug'] ?? ''));
+    $title = sanitize_text_field(wp_unslash($_POST['page_title'] ?? ''));
+    $sections = sanitize_text_field(wp_unslash($_POST['sections'] ?? ''));
+    $need = max(1, min(40, (int) ($_POST['need'] ?? 1)));
+    $exclude = json_decode((string) wp_unslash($_POST['exclude'] ?? '[]'), true);
+    $skip = array_flip(array_filter(array_map('strval', is_array($exclude) ? $exclude : [])));
+    $kw = self::page_keyword($pid, $slug, $title, $sections);
+    $want = $need + count($skip) + 4;
+    $u = [];
+    $x = [];
+    $ur = self::unsplash($kw, min(30, $want), 1);
+    if (!is_wp_error($ur)) $u = $ur['images'];
+    $xr = self::pexels($kw, min(80, $want), 1);
+    if (!is_wp_error($xr)) $x = $xr['images'];
+    $pool = array_values(array_filter(self::mix($u, $x, $want + 10), fn($img) => !isset($skip[$img['full']])));
+    // Te weinig voor dit zoekwoord: aanvullen met het algemene zoekwoord van het project.
+    if (count($pool) < $need) {
+      $kw2 = self::keyword($pid);
+      $u2 = self::unsplash($kw2, 30, 1);
+      $x2 = self::pexels($kw2, 40, 1);
+      $more = self::mix(is_wp_error($u2) ? [] : $u2['images'], is_wp_error($x2) ? [] : $x2['images'], 60);
+      foreach ($more as $img) {
+        if (count($pool) >= $need) break;
+        if (isset($skip[$img['full']])) continue;
+        $skip[$img['full']] = 1;
+        $pool[] = $img;
+      }
+    }
+    if (!$pool) wp_send_json_error(['message' => 'Geen stockfoto\'s gevonden voor "' . $kw . '".']);
+    // Een paar reserves: pagina's worden tegelijk gevuld, de browser slaat dubbels over.
+    wp_send_json_success(['images' => array_slice($pool, 0, $need + 8), 'keyword' => $kw, 'sources' => self::sources()]);
+  }
+
+  /* ───────────────────────── AJAX ───────────────────────── */
+
+  /** Alle foto's voor de wireframes in één keer (stap Foto's). */
+  public function ajax_auto(): void {
+    if (!self::pexels_key()) return; // geen Pexels: de stijlgids doet het zelf
+    $pid = $this->guard(true);
+    @set_time_limit(60);
+    $need = isset($_POST['total_needed']) ? max(1, min(150, (int) $_POST['total_needed'])) : 30;
+    $kw = self::keyword($pid);
+    $half = (int) ceil($need / 2) + 4;
+    $u = [];
+    for ($p = 1; count($u) < $half && $p <= 5; $p++) {
+      $r = self::unsplash($kw, 30, $p);
+      if (is_wp_error($r) || !$r['images']) break;
+      $u = array_merge($u, $r['images']);
+    }
+    $x = [];
+    for ($p = 1; count($x) < $need && $p <= 2; $p++) {
+      $r = self::pexels($kw, 80, $p);
+      if (is_wp_error($r) || !$r['images']) break;
+      $x = array_merge($x, $r['images']);
+    }
+    $images = self::mix($u, $x, $need);
+    if (!$images) wp_send_json_error(['message' => 'Geen stockfoto\'s gevonden voor "' . $kw . '".']);
+    wp_send_json_success(['images' => $images, 'keyword' => $kw, 'sources' => self::sources()]);
+  }
+
+  /** Andere foto zoeken (venster bij het wisselen van een foto). */
+  public function ajax_search(): void {
+    if (!self::pexels_key()) return;
+    $this->guard(false);
+    $q = isset($_POST['keyword']) ? sanitize_text_field(wp_unslash($_POST['keyword'])) : '';
+    if ($q === '') wp_send_json_error(['message' => 'Geen zoekwoord.'], 400);
+    $page = isset($_POST['page']) ? max(1, (int) $_POST['page']) : 1;
+    $per = isset($_POST['per_page']) ? max(2, min(30, (int) $_POST['per_page'])) : 12;
+    $half = (int) ceil($per / 2);
+    $u = self::unsplash($q, $half, $page);
+    $x = self::pexels($q, $half, $page);
+    $ui = is_wp_error($u) ? [] : $u['images'];
+    $xi = is_wp_error($x) ? [] : $x['images'];
+    // Valt één bron weg, dan vult de andere de hele pagina.
+    if (!$ui && !is_wp_error($x)) { $r = self::pexels($q, $per, $page); $xi = is_wp_error($r) ? $xi : $r['images']; }
+    if (!$xi && !is_wp_error($u)) { $r = self::unsplash($q, $per, $page); $ui = is_wp_error($r) ? $ui : $r['images']; }
+    $pages = max(is_wp_error($u) ? 1 : $u['total_pages'], is_wp_error($x) ? 1 : $x['total_pages']);
+    wp_send_json_success(['images' => self::mix($ui, $xi, $per), 'page' => $page, 'total_pages' => min($pages, 50)]);
+  }
+}

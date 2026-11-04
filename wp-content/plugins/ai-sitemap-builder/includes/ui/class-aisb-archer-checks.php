@@ -1,1 +1,115 @@
-PD9waHAKaWYgKCFkZWZpbmVkKCdBQlNQQVRIJykpIGV4aXQ7CgovKioKICogQ29udHJvbGUgdm9vciBwdWJsaWNlcmVuLCBuYWFyIGRlIFVYLXJlZ2VscyB2YW4gVUkvVVggUHJvIE1heCAodXgtZ3VpZGVsaW5lcy5jc3YsIGxhbmRpbmcuY3N2OiBjb250cmFzdCA0LjU6MSwKICoga2xpa3ZsYWtrZW4gdmFuIDQ0cHgsIGNvbnRhY3QgemljaHRiYWFyKSBlbiBoZXQgc2VjdG9yYWR2aWVzIChBSVNCX0FyY2hlcl9TZWN0b3IpLgogKiBEZSBzZXJ2ZXIgY29udHJvbGVlcnQgd2F0IHVpdCBkZSBnZWdldmVucyB2b2xndCAoa2xldXJlbiwgY29udGFjdCwgc2VjdG9yKTsgYXJjaGVyLmpzIHZvZWd0IHRvZSB3YXQgYWxsZWVuCiAqIGluIGRlIHZvb3JiZWVsZGVuIHRlIHppZW4gaXMgKGFsdC10ZWtzdGVuLCBsZWdlIGZvdG9rYWRlcnMsIMOpw6luIEgxIHBlciBwYWdpbmEsIGFmc3ByYWFra25vcCkuCiAqLwpjbGFzcyBBSVNCX0FyY2hlcl9DaGVja3MgewoKICAvKiogU2VjdG9yZW4gd2FhciBlZW4gdGVsZWZvb25udW1tZXIgb3AgZGUgd2Vic2l0ZSBob29ydCAobm9vZCwgZHJpbmdlbmQsIHRlciBwbGFhdHNlKS4gKi8KICBjb25zdCBORUVEU19QSE9ORSA9IFsnaG9tZS1zZXJ2aWNlcycsICdnYXJkZW4nLCAndmV0JywgJ2F1dG9tb3RpdmUnLCAnY29uc3RydWN0aW9uJ107CiAgLyoqIFNlY3RvcmVuIHdhYXIgZGUgc3RhcnRwYWdpbmEgZWVuIGFmc3ByYWFrLSwgcmVzZXJ2ZWVyLSBvZiBib2Vra25vcCBub2RpZyBoZWVmdC4gKi8KICBjb25zdCBORUVEU19CT09LSU5HID0gWydiZWF1dHknLCAnZGVudGFsJywgJ21lZGljYWwnLCAndmV0JywgJ3Jlc3RhdXJhbnQnLCAnaG90ZWwnLCAnZml0bmVzcycsICdwaG90b2dyYXBoeSddOwoKICAvKiogQHJldHVybiBhcnJheTxpbnQsYXJyYXl7aWQ6c3RyaW5nLHN0YXR1czpzdHJpbmcsbGFiZWw6c3RyaW5nLGRldGFpbDpzdHJpbmd9PiAqLwogIHB1YmxpYyBzdGF0aWMgZnVuY3Rpb24gc2VydmVyKGludCAkcGlkKTogYXJyYXkgewogICAgJG91dCA9IFtdOwogICAgJGd1aWRlID0ganNvbl9kZWNvZGUoKHN0cmluZykgZ2V0X3Bvc3RfbWV0YSgkcGlkLCAnYWlzYl9zdHlsZV9ndWlkZScsIHRydWUpLCB0cnVlKTsKICAgICRzdHlsZSA9IGNsYXNzX2V4aXN0cygnQUlTQl9BcmNoZXJfU3R5bGVzJykgPyBBSVNCX0FyY2hlcl9TdHlsZXM6Om9mKCRndWlkZSkgOiBudWxsOwogICAgJHNlY3RvciA9IGNsYXNzX2V4aXN0cygnQUlTQl9BcmNoZXJfU2VjdG9yJykgPyBBSVNCX0FyY2hlcl9TZWN0b3I6OmdldChBSVNCX0FyY2hlcl9TZWN0b3I6OmZvcl9wcm9qZWN0KCRwaWQpKSA6IG51bGw7CgogICAgaWYgKCRzdHlsZSkgewogICAgICAkYyA9IEFJU0JfQXJjaGVyX1N0eWxlczo6ZWZmZWN0aXZlX2NvbG91cnMoJHN0eWxlLCAkZ3VpZGUpOwogICAgICAkcGFpcnMgPSBbCiAgICAgICAgWydjb250cmFzdC10ZXh0JywgJ1Rla3N0IG9wIGRlIGFjaHRlcmdyb25kJywgJGNbJ2luayddLCAkY1snYmFzZSddXSwKICAgICAgICBbJ2NvbnRyYXN0LW11dGVkJywgJ0xpY2h0ZXJlIHRla3N0IG9wIGRlIGFjaHRlcmdyb25kJywgJGNbJ211dGVkJ10sICRjWydiYXNlJ11dLAogICAgICAgIFsnY29udHJhc3QtYnV0dG9uJywgJ1Rla3N0IG9wIGRlIGtub3BwZW4nLCAkY1snYWNjZW50SW5rJ10sICRjWydhY2NlbnQnXV0sCiAgICAgIF07CiAgICAgIGZvcmVhY2ggKCRwYWlycyBhcyBbJGlkLCAkbGFiZWwsICRmZywgJGJnXSkgewogICAgICAgICRyID0gQUlTQl9BcmNoZXJfU3R5bGVzOjpjb250cmFzdCgkZmcsICRiZyk7CiAgICAgICAgJG91dFtdID0gWwogICAgICAgICAgJ2lkJyA9PiAkaWQsCiAgICAgICAgICAnc3RhdHVzJyA9PiAkciA+PSA0LjUgPyAnb2snIDogJ3dhcm4nLAogICAgICAgICAgJ2xhYmVsJyA9PiAkbGFiZWwgLiAnOiBjb250cmFzdCAnIC4gbnVtYmVyX2Zvcm1hdCgkciwgMSwgJywnLCAnJykgLiAnOjEnLAogICAgICAgICAgJ2RldGFpbCcgPT4gJHIgPj0gNC41ID8gJ0xlZXNiYWFyIChtaW5zdGVucyA0LDU6MSkuJyA6ICdPbmRlciA0LDU6MToga2llcyBpbiBkZSBzdGFwIFN0aWpsIGVlbiBkb25rZXJkZXJlIHRla3N0a2xldXIgb2YgZWVuIGFuZGVyIGFjY2VudC4nLAogICAgICAgIF07CiAgICAgIH0KICAgICAgJHNpemUgPSAoaW50KSAoJHN0eWxlWydidXR0b24nXVsnc2l6ZSddID8/IDE2KTsKICAgICAgJGggPSBtYXgoNDQsIChpbnQpIHJvdW5kKCRzaXplICogMS4xICsgMiAqICRzaXplKSk7IC8vIGRlIHN0aWpsIHpldCBtaW4taGVpZ2h0OjQ0cHggb3Aga25vcHBlbgogICAgICAkb3V0W10gPSBbCiAgICAgICAgJ2lkJyA9PiAndG91Y2gtdGFyZ2V0JywgJ3N0YXR1cycgPT4gJGggPj0gNDQgPyAnb2snIDogJ3dhcm4nLAogICAgICAgICdsYWJlbCcgPT4gJ0tub3BwZW4gZ3Jvb3QgZ2Vub2VnIG9tIGFhbiB0ZSB0aWtrZW4gKCcgLiAkaCAuICdweCBob29nKScsCiAgICAgICAgJ2RldGFpbCcgPT4gJGggPj0gNDQgPyAnTWluc3RlbnMgNDRweCwgb29rIG9wIGVlbiBnc20uJyA6ICdLbGVpbmVyIGRhbiA0NHB4OiBtb2VpbGlqayBhYW4gdGUgdGlra2VuIG9wIGVlbiBnc20uJywKICAgICAgXTsKICAgICAgaWYgKCRzZWN0b3IgJiYgIWVtcHR5KCRzZWN0b3JbJ2F2b2lkX2RhcmsnXSkgJiYgIWVtcHR5KCRzdHlsZVsnZGFyayddKSkgewogICAgICAgICRvdXRbXSA9IFsnaWQnID0+ICdzZWN0b3ItZGFyaycsICdzdGF0dXMnID0+ICd3YXJuJywgJ2xhYmVsJyA9PiAnRG9ua2VyZSBzdGlqbCB2b29yICcgLiBtYl9zdHJ0b2xvd2VyKCRzZWN0b3JbJ2xhYmVsJ10pLCAnZGV0YWlsJyA9PiAnVm9vciBkZXplIHNlY3RvciByYWFkdCBVSS9VWCBQcm8gTWF4IGVlbiBsaWNodGUgc3RpamwgYWFuLiddOwogICAgICB9CiAgICB9IGVsc2UgewogICAgICAkb3V0W10gPSBbJ2lkJyA9PiAnc3R5bGUnLCAnc3RhdHVzJyA9PiAnd2FybicsICdsYWJlbCcgPT4gJ05vZyBnZWVuIHN0aWpsIGdla296ZW4nLCAnZGV0YWlsJyA9PiAnS2llcyBlZW4gc3RpamwgaW4gZGUgc3RhcCBTdGlqbC4nXTsKICAgIH0KCiAgICAvLyBMZWdlIGZvdG9rYWRlcnMgKHN0YXAgRm90bydzKTogZGllIGJsaWp2ZW4gb3AgZGUgc2l0ZSBlZW4gZ3JpanMgdmxhay4KICAgICRpbWdzID0gaXNfYXJyYXkoJGd1aWRlWydpbWFnZXMnXSA/PyBudWxsKSA/ICRndWlkZVsnaW1hZ2VzJ10gOiBbXTsKICAgICRlbXB0eSA9IGNvdW50KGFycmF5X2ZpbHRlcigkaW1ncywgZm4oJGkpID0+ICFpc19hcnJheSgkaSkgfHwgIWVtcHR5KCRpWydhcmNoZXJFbXB0eSddKSB8fCBlbXB0eSgkaVsnZnVsbCddID8/ICRpWyd0aHVtYiddID8/ICcnKSkpOwogICAgaWYgKCRpbWdzKSB7CiAgICAgICRvdXRbXSA9ICRlbXB0eQogICAgICAgID8gWydpZCcgPT4gJ3Bob3RvcycsICdzdGF0dXMnID0+ICd3YXJuJywgJ2xhYmVsJyA9PiAkZW1wdHkgLiAnIGxlZ2UgZm90b2thZGVycycsICdkZXRhaWwnID0+ICdLaWVzIGluIGRlIHN0YXAgRm90b1wncyBlaWdlbiBvZiBzdG9ja2ZvdG9cJ3Mgdm9vciBkZXplIGthZGVycy4nXQogICAgICAgIDogWydpZCcgPT4gJ3Bob3RvcycsICdzdGF0dXMnID0+ICdvaycsICdsYWJlbCcgPT4gJ0FsbGUgZm90b2thZGVycyBnZXZ1bGQnLCAnZGV0YWlsJyA9PiBjb3VudCgkaW1ncykgLiAnIGZvdG9cJ3MuJ107CiAgICB9CgogICAgJGNvbnRhY3QgPSBjbGFzc19leGlzdHMoJ0FJU0JfQXJjaGVyX1NpdGUnKSA/IEFJU0JfQXJjaGVyX1NpdGU6OmNvbnRhY3QoJHBpZCkgOiBbJ3Bob25lJyA9PiAnJywgJ2VtYWlsJyA9PiAnJywgJ2FkZHJlc3MnID0+ICcnXTsKICAgICRuZWVkX3Bob25lID0gJHNlY3RvciAmJiBpbl9hcnJheSgkc2VjdG9yWydrZXknXSwgc2VsZjo6TkVFRFNfUEhPTkUsIHRydWUpOwogICAgaWYgKCRjb250YWN0WydwaG9uZSddID09PSAnJyAmJiAkY29udGFjdFsnZW1haWwnXSA9PT0gJycpIHsKICAgICAgJG91dFtdID0gWydpZCcgPT4gJ2NvbnRhY3QnLCAnc3RhdHVzJyA9PiAnd2FybicsICdsYWJlbCcgPT4gJ0dlZW4gdGVsZWZvb24gb2YgZS1tYWlsJywgJ2RldGFpbCcgPT4gJ0Jlem9la2VycyBrdW5uZW4gamUgbmlldCBiZXJlaWtlbjsgdnVsIGRlIGNvbnRhY3RnZWdldmVucyBpbi4nXTsKICAgIH0gZWxzZWlmICgkbmVlZF9waG9uZSAmJiAkY29udGFjdFsncGhvbmUnXSA9PT0gJycpIHsKICAgICAgJG91dFtdID0gWydpZCcgPT4gJ2NvbnRhY3QnLCAnc3RhdHVzJyA9PiAnd2FybicsICdsYWJlbCcgPT4gJ0dlZW4gdGVsZWZvb25udW1tZXInLCAnZGV0YWlsJyA9PiAnVm9vciAnIC4gbWJfc3RydG9sb3dlcigkc2VjdG9yWydsYWJlbCddKSAuICcgYmVsbGVuIGtsYW50ZW4gbGllZnN0IG1ldGVlbi4nXTsKICAgIH0gZWxzZSB7CiAgICAgICRvdXRbXSA9IFsnaWQnID0+ICdjb250YWN0JywgJ3N0YXR1cycgPT4gJ29rJywgJ2xhYmVsJyA9PiAnQ29udGFjdGdlZ2V2ZW5zIGluZ2V2dWxkJywgJ2RldGFpbCcgPT4gJ0tvbWVuIGluIGRlIGZvb3Rlciwgb3AgZGUgY29udGFjdHBhZ2luYSBlbiBhY2h0ZXIgZGUga25vcHBlbi4nXTsKICAgIH0KICAgIGlmICgkY29udGFjdFsnYWRkcmVzcyddID09PSAnJyAmJiAkc2VjdG9yICYmIGluX2FycmF5KCRzZWN0b3JbJ2tleSddLCBbJ3Jlc3RhdXJhbnQnLCAnYmFrZXJ5JywgJ2hvdGVsJywgJ21lZGljYWwnLCAnZGVudGFsJywgJ3ZldCcsICdiZWF1dHknXSwgdHJ1ZSkpIHsKICAgICAgJG91dFtdID0gWydpZCcgPT4gJ2FkZHJlc3MnLCAnc3RhdHVzJyA9PiAnd2FybicsICdsYWJlbCcgPT4gJ0dlZW4gYWRyZXMnLCAnZGV0YWlsJyA9PiAnVm9vciBlZW4gemFhayB3YWFyIGtsYW50ZW4gbGFuZ3Nrb21lbiBob29ydCBoZXQgYWRyZXMgKGVuIGVlbiBrYWFydCkgb3AgZGUgc2l0ZS4nXTsKICAgIH0KICAgIHJldHVybiAkb3V0OwogIH0KCiAgLyoqIFdhdCBkZSBicm93c2VyIG5ha2lqa3QgaW4gZGUgdm9vcmJlZWxkZW4gdmFuIHN0YXAgNS4gKi8KICBwdWJsaWMgc3RhdGljIGZ1bmN0aW9uIGNsaWVudF9jb25maWcoaW50ICRwaWQpOiBhcnJheSB7CiAgICAka2V5ID0gY2xhc3NfZXhpc3RzKCdBSVNCX0FyY2hlcl9TZWN0b3InKSA/IEFJU0JfQXJjaGVyX1NlY3Rvcjo6Zm9yX3Byb2plY3QoJHBpZCkgOiAnJzsKICAgICRzID0gJGtleSAhPT0gJycgJiYgY2xhc3NfZXhpc3RzKCdBSVNCX0FyY2hlcl9TZWN0b3InKSA/IEFJU0JfQXJjaGVyX1NlY3Rvcjo6Z2V0KCRrZXkpIDogbnVsbDsKICAgIHJldHVybiBbCiAgICAgICdib29raW5nJyA9PiBpbl9hcnJheSgka2V5LCBzZWxmOjpORUVEU19CT09LSU5HLCB0cnVlKSwKICAgICAgJ3NlY3RvcicgPT4gJHMgPyAkc1snbGFiZWwnXSA6ICcnLAogICAgICAnbW9ldCcgPT4gJHMgPyAkc1snYWR2aWNlJ11bJ21vZXQnXSA6IFtdLAogICAgXTsKICB9CgogIHB1YmxpYyBzdGF0aWMgZnVuY3Rpb24gcmVuZGVyKGludCAkcGlkKTogc3RyaW5nIHsKICAgICRpdGVtcyA9IHNlbGY6OnNlcnZlcigkcGlkKTsKICAgICRjZmcgPSBzZWxmOjpjbGllbnRfY29uZmlnKCRwaWQpOwogICAgJHdhcm4gPSBjb3VudChhcnJheV9maWx0ZXIoJGl0ZW1zLCBmbigkaSkgPT4gJGlbJ3N0YXR1cyddID09PSAnd2FybicpKTsKICAgIG9iX3N0YXJ0KCk7ID8+CiAgICA8c2VjdGlvbiBjbGFzcz0iYXJjaGVyLWNoZWNrcyIgZGF0YS1hcmNoZXItY2hlY2tzIGRhdGEtY29uZmlnPSI8P3BocCBlY2hvIGVzY19hdHRyKHdwX2pzb25fZW5jb2RlKCRjZmcpKTsgPz4iIGFyaWEtbGFiZWxsZWRieT0iYXJjaGVyLWNoZWNrcy10aXRsZSI+CiAgICAgIDxkaXYgY2xhc3M9ImFyY2hlci1jaGVja3MtaGVhZCI+CiAgICAgICAgPGgzIGlkPSJhcmNoZXItY2hlY2tzLXRpdGxlIj5Db250cm9sZSB2b29yIHB1YmxpY2VyZW48L2gzPgogICAgICAgIDxzcGFuIGNsYXNzPSJhcmNoZXItY2hlY2tzLWNvdW50IiBkYXRhLWFyY2hlci1jaGVja3MtY291bnQ+PD9waHAgZWNobyAkd2FybiA/IChpbnQpICR3YXJuIC4gJyBvbSBuYSB0ZSBraWprZW4nIDogJ0FsbGVzIGluIG9yZGUnOyA/Pjwvc3Bhbj4KICAgICAgPC9kaXY+CiAgICAgIDx1bCBjbGFzcz0iYXJjaGVyLWNoZWNrcy1saXN0IiBkYXRhLWFyY2hlci1jaGVja3MtbGlzdD4KICAgICAgICA8P3BocCBmb3JlYWNoICgkaXRlbXMgYXMgJGkpIDogPz4KICAgICAgICAgIDxsaSBjbGFzcz0iaXMtPD9waHAgZWNobyBlc2NfYXR0cigkaVsnc3RhdHVzJ10pOyA/PiIgZGF0YS1jaGVjaz0iPD9waHAgZWNobyBlc2NfYXR0cigkaVsnaWQnXSk7ID8+Ij48c3BhbiBjbGFzcz0iYXJjaGVyLWNoZWNrLW1hcmsiIGFyaWEtaGlkZGVuPSJ0cnVlIj48L3NwYW4+PHNwYW4+PHN0cm9uZz48P3BocCBlY2hvIGVzY19odG1sKCRpWydsYWJlbCddKTsgPz48L3N0cm9uZz4gPHNwYW4gY2xhc3M9ImFyY2hlci1tdXRlZCI+PD9waHAgZWNobyBlc2NfaHRtbCgkaVsnZGV0YWlsJ10pOyA/Pjwvc3Bhbj48L3NwYW4+PC9saT4KICAgICAgICA8P3BocCBlbmRmb3JlYWNoOyA/PgogICAgICAgIDxsaSBjbGFzcz0iaXMtcGVuZGluZyIgZGF0YS1jaGVjaz0icHJldmlldyI+PHNwYW4gY2xhc3M9ImFyY2hlci1jaGVjay1tYXJrIiBhcmlhLWhpZGRlbj0idHJ1ZSI+PC9zcGFuPjxzcGFuPjxzdHJvbmc+UGFnaW5hJ3MgbmFraWprZW7igKY8L3N0cm9uZz4gPHNwYW4gY2xhc3M9ImFyY2hlci1tdXRlZCI+QWx0LXRla3N0ZW4sIHRpdGVscyBlbiBrbm9wcGVuIGluIGhldCB2b29yYmVlbGQuPC9zcGFuPjwvc3Bhbj48L2xpPgogICAgICA8L3VsPgogICAgICA8P3BocCBpZiAoJGNmZ1snbW9ldCddKSA6ID8+CiAgICAgICAgPGRldGFpbHMgY2xhc3M9ImFyY2hlci1jaGVja3Mtc2VjdG9yIj48c3VtbWFyeT5aZWxmIG5ha2lqa2VuIHZvb3IgPD9waHAgZWNobyBlc2NfaHRtbChtYl9zdHJ0b2xvd2VyKCRjZmdbJ3NlY3RvciddKSk7ID8+PC9zdW1tYXJ5PgogICAgICAgICAgPHVsPjw/cGhwIGZvcmVhY2ggKCRjZmdbJ21vZXQnXSBhcyAkbSkgOiA/PjxsaT48P3BocCBlY2hvIGVzY19odG1sKCRtKTsgPz48L2xpPjw/cGhwIGVuZGZvcmVhY2g7ID8+PC91bD4KICAgICAgICAgIDxwIGNsYXNzPSJhcmNoZXItbXV0ZWQiPlVpdCBoZXQgc2VjdG9yYWR2aWVzIHZhbiBVSS9VWCBQcm8gTWF4LjwvcD4KICAgICAgICA8L2RldGFpbHM+CiAgICAgIDw/cGhwIGVuZGlmOyA/PgogICAgPC9zZWN0aW9uPgogICAgPD9waHAKICAgIHJldHVybiAoc3RyaW5nKSBvYl9nZXRfY2xlYW4oKTsKICB9Cn0K
+<?php
+if (!defined('ABSPATH')) exit;
+
+/**
+ * Controle voor publiceren, naar de UX-regels van UI/UX Pro Max (ux-guidelines.csv, landing.csv: contrast 4.5:1,
+ * klikvlakken van 44px, contact zichtbaar) en het sectoradvies (AISB_Archer_Sector).
+ * De server controleert wat uit de gegevens volgt (kleuren, contact, sector); archer.js voegt toe wat alleen
+ * in de voorbeelden te zien is (alt-teksten, lege fotokaders, één H1 per pagina, afspraakknop).
+ */
+class AISB_Archer_Checks {
+
+  /** Sectoren waar een telefoonnummer op de website hoort (nood, dringend, ter plaatse). */
+  const NEEDS_PHONE = ['home-services', 'garden', 'vet', 'automotive', 'construction'];
+  /** Sectoren waar de startpagina een afspraak-, reserveer- of boekknop nodig heeft. */
+  const NEEDS_BOOKING = ['beauty', 'dental', 'medical', 'vet', 'restaurant', 'hotel', 'fitness', 'photography'];
+
+  /** @return array<int,array{id:string,status:string,label:string,detail:string}> */
+  public static function server(int $pid): array {
+    $out = [];
+    $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
+    $style = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::of($guide) : null;
+    $sector = class_exists('AISB_Archer_Sector') ? AISB_Archer_Sector::get(AISB_Archer_Sector::for_project($pid)) : null;
+
+    if ($style) {
+      $c = AISB_Archer_Styles::effective_colours($style, $guide);
+      $pairs = [
+        ['contrast-text', 'Tekst op de achtergrond', $c['ink'], $c['base']],
+        ['contrast-muted', 'Lichtere tekst op de achtergrond', $c['muted'], $c['base']],
+        ['contrast-button', 'Tekst op de knoppen', $c['accentInk'], $c['accent']],
+      ];
+      foreach ($pairs as [$id, $label, $fg, $bg]) {
+        $r = AISB_Archer_Styles::contrast($fg, $bg);
+        $out[] = [
+          'id' => $id,
+          'status' => $r >= 4.5 ? 'ok' : 'warn',
+          'label' => $label . ': contrast ' . number_format($r, 1, ',', '') . ':1',
+          'detail' => $r >= 4.5 ? 'Leesbaar (minstens 4,5:1).' : 'Onder 4,5:1: kies in de stap Stijl een donkerdere tekstkleur of een ander accent.',
+        ];
+      }
+      $size = (int) ($style['button']['size'] ?? 16);
+      $h = max(44, (int) round($size * 1.1 + 2 * $size)); // de stijl zet min-height:44px op knoppen
+      $out[] = [
+        'id' => 'touch-target', 'status' => $h >= 44 ? 'ok' : 'warn',
+        'label' => 'Knoppen groot genoeg om aan te tikken (' . $h . 'px hoog)',
+        'detail' => $h >= 44 ? 'Minstens 44px, ook op een gsm.' : 'Kleiner dan 44px: moeilijk aan te tikken op een gsm.',
+      ];
+      if ($sector && !empty($sector['avoid_dark']) && !empty($style['dark'])) {
+        $out[] = ['id' => 'sector-dark', 'status' => 'warn', 'label' => 'Donkere stijl voor ' . mb_strtolower($sector['label']), 'detail' => 'Voor deze sector raadt UI/UX Pro Max een lichte stijl aan.'];
+      }
+    } else {
+      $out[] = ['id' => 'style', 'status' => 'warn', 'label' => 'Nog geen stijl gekozen', 'detail' => 'Kies een stijl in de stap Stijl.'];
+    }
+
+    // Lege fotokaders (stap Foto's): die blijven op de site een grijs vlak.
+    $imgs = is_array($guide['images'] ?? null) ? $guide['images'] : [];
+    $empty = count(array_filter($imgs, fn($i) => !is_array($i) || !empty($i['archerEmpty']) || empty($i['full'] ?? $i['thumb'] ?? '')));
+    if ($imgs) {
+      $out[] = $empty
+        ? ['id' => 'photos', 'status' => 'warn', 'label' => $empty . ' lege fotokaders', 'detail' => 'Kies in de stap Foto\'s eigen of stockfoto\'s voor deze kaders.']
+        : ['id' => 'photos', 'status' => 'ok', 'label' => 'Alle fotokaders gevuld', 'detail' => count($imgs) . ' foto\'s.'];
+    }
+
+    $contact = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::contact($pid) : ['phone' => '', 'email' => '', 'address' => ''];
+    $need_phone = $sector && in_array($sector['key'], self::NEEDS_PHONE, true);
+    if ($contact['phone'] === '' && $contact['email'] === '') {
+      $out[] = ['id' => 'contact', 'status' => 'warn', 'label' => 'Geen telefoon of e-mail', 'detail' => 'Bezoekers kunnen je niet bereiken; vul de contactgegevens in.'];
+    } elseif ($need_phone && $contact['phone'] === '') {
+      $out[] = ['id' => 'contact', 'status' => 'warn', 'label' => 'Geen telefoonnummer', 'detail' => 'Voor ' . mb_strtolower($sector['label']) . ' bellen klanten liefst meteen.'];
+    } else {
+      $out[] = ['id' => 'contact', 'status' => 'ok', 'label' => 'Contactgegevens ingevuld', 'detail' => 'Komen in de footer, op de contactpagina en achter de knoppen.'];
+    }
+    if ($contact['address'] === '' && $sector && in_array($sector['key'], ['restaurant', 'bakery', 'hotel', 'medical', 'dental', 'vet', 'beauty'], true)) {
+      $out[] = ['id' => 'address', 'status' => 'warn', 'label' => 'Geen adres', 'detail' => 'Voor een zaak waar klanten langskomen hoort het adres (en een kaart) op de site.'];
+    }
+    return $out;
+  }
+
+  /** Wat de browser nakijkt in de voorbeelden van stap 5. */
+  public static function client_config(int $pid): array {
+    $key = class_exists('AISB_Archer_Sector') ? AISB_Archer_Sector::for_project($pid) : '';
+    $s = $key !== '' && class_exists('AISB_Archer_Sector') ? AISB_Archer_Sector::get($key) : null;
+    return [
+      'booking' => in_array($key, self::NEEDS_BOOKING, true),
+      'sector' => $s ? $s['label'] : '',
+      'moet' => $s ? $s['advice']['moet'] : [],
+    ];
+  }
+
+  public static function render(int $pid): string {
+    $items = self::server($pid);
+    $cfg = self::client_config($pid);
+    $warn = count(array_filter($items, fn($i) => $i['status'] === 'warn'));
+    ob_start(); ?>
+    <section class="archer-checks" data-archer-checks data-config="<?php echo esc_attr(wp_json_encode($cfg)); ?>" aria-labelledby="archer-checks-title">
+      <div class="archer-checks-head">
+        <h3 id="archer-checks-title">Controle voor publiceren</h3>
+        <span class="archer-checks-count" data-archer-checks-count><?php echo $warn ? (int) $warn . ' om na te kijken' : 'Alles in orde'; ?></span>
+      </div>
+      <ul class="archer-checks-list" data-archer-checks-list>
+        <?php foreach ($items as $i) : ?>
+          <li class="is-<?php echo esc_attr($i['status']); ?>" data-check="<?php echo esc_attr($i['id']); ?>"><span class="archer-check-mark" aria-hidden="true"></span><span><strong><?php echo esc_html($i['label']); ?></strong> <span class="archer-muted"><?php echo esc_html($i['detail']); ?></span></span></li>
+        <?php endforeach; ?>
+        <li class="is-pending" data-check="preview"><span class="archer-check-mark" aria-hidden="true"></span><span><strong>Pagina's nakijken…</strong> <span class="archer-muted">Alt-teksten, titels en knoppen in het voorbeeld.</span></span></li>
+      </ul>
+      <?php if ($cfg['moet']) : ?>
+        <details class="archer-checks-sector"><summary>Zelf nakijken voor <?php echo esc_html(mb_strtolower($cfg['sector'])); ?></summary>
+          <ul><?php foreach ($cfg['moet'] as $m) : ?><li><?php echo esc_html($m); ?></li><?php endforeach; ?></ul>
+          <p class="archer-muted">Uit het sectoradvies van UI/UX Pro Max.</p>
+        </details>
+      <?php endif; ?>
+    </section>
+    <?php
+    return (string) ob_get_clean();
+  }
+}
