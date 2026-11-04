@@ -90,6 +90,10 @@
     } catch (e) {
       throw new Error("De server gaf geen geldig antwoord.");
     }
+    // WordPress antwoordt "0" (niet aangemeld) of "-1" (verlopen beveiligingscode) zonder uitleg.
+    if (json === 0 || json === -1) {
+      throw new Error("Je bent niet meer aangemeld of de pagina staat te lang open. Vernieuw de pagina (en meld je opnieuw aan) en probeer opnieuw.");
+    }
     if (!res.ok || !json || json.success !== true) {
       throw new Error((json && json.data && json.data.message) || "Er ging iets mis.");
     }
@@ -2478,6 +2482,32 @@
             '<span class="archer-muted">De stijl blijft; de knoppen en accenten krijgen de kleur van het logo.</span>'
           : "";
       }
+      // Nieuw logo in de header: de merkkleur komt daaruit. Staan de kleuren nog zoals de stijl ze meebracht,
+      // dan meteen toepassen (dat verwacht wie een logo oplaadt); anders de knop tonen.
+      let lastLogo = (SG.guide && !Array.isArray(SG.guide) && SG.guide.logoUrl) || "";
+      setInterval(() => {
+        const g = SG.guide && !Array.isArray(SG.guide) ? SG.guide : null;
+        const now = (g && g.logoUrl) || "";
+        if (!g || now === lastLogo) return;
+        lastLogo = now;
+        if (!now || (g.brand && g.brand.source !== "logo")) return renderBrand();
+        g.brand = null;
+        UI.ensureBrand().then(() => {
+          if (g.brand) g.brand.source = "logo";
+          const st = styleById(styleNow());
+          const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : g.colours) || [];
+          const prim = ((cols.find((c) => c && c.name === "Primary") || {}).hex || "").toLowerCase();
+          const def = st && st.guide ? ((st.guide.colours || []).find((c) => c.name === "Primary") || {}).hex || "" : "";
+          if (g.brand && g.brand.primary && st && prim === def.toLowerCase()) {
+            setColours(UI.brandColours(st.guide.colours));
+            SG.applyOverridesToAllIframes();
+            renderStyles();
+            $("[data-style-status]", sbox).textContent = "Kleuren uit je logo toegepast op stijl " + st.name + ".";
+            SG.saveDraft && SG.saveDraft();
+          }
+          renderBrand();
+        });
+      }, 1000);
       sbox.addEventListener("click", (e) => {
         if (!e.target.closest("[data-style-brand-apply]")) return;
         const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
@@ -2797,7 +2827,7 @@
           const t = toHsl(c.hex);
           if (t.s < 0.06) return { name: c.name, hex: c.hex };
           // Tekstkleur bijna neutraal (anders bruine of groene tekst), gronden zacht getint.
-          return { name: c.name, hex: fromHsl({ h: bh, s: Math.min(t.s, c.name === "Dark" ? 0.12 : 0.35), l: t.l }) };
+          return { name: c.name, hex: fromHsl({ h: bh, s: Math.min(t.s, c.name === "Dark" ? 0.12 : 0.22), l: t.l }) };
         });
       };
       /** Nog geen merkkleur, wel een logo in de header: de merkkleur daaruit halen. */
@@ -2809,7 +2839,7 @@
         img.crossOrigin = "anonymous";
         const done = () => { clearTimeout(t); res(); };
         const t = setTimeout(done, 3000);
-        img.onload = () => { try { new ColorThief().getPalette(img, 6); } catch (e) {} done(); };
+        img.onload = () => { try { new ColorThief().getPalette(img, 6); if (g.brand) g.brand.source = "logo"; } catch (e) {} done(); };
         img.onerror = done;
         img.src = g.logoUrl;
       });
