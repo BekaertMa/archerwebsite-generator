@@ -268,7 +268,7 @@ class AISB_InstaWP {
     }
 
     $project = get_post($project_id);
-    if (!$project || $project->post_type !== 'aisb_project' || (int) $project->post_author !== (int) get_current_user_id()) {
+    if (!$project || $project->post_type !== 'aisb_project' || (int) $project->post_author !== (int) get_current_user_id() && !current_user_can('manage_options')) {
       wp_send_json_error(['message' => 'Forbidden'], 403);
     }
 
@@ -404,7 +404,7 @@ class AISB_InstaWP {
 
     $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
     $project = $project_id ? get_post($project_id) : null;
-    if (!$project || $project->post_type !== 'aisb_project' || (int) $project->post_author !== (int) get_current_user_id()) {
+    if (!$project || $project->post_type !== 'aisb_project' || (int) $project->post_author !== (int) get_current_user_id() && !current_user_can('manage_options')) {
       wp_send_json_error(['message' => 'Forbidden'], 403);
     }
 
@@ -872,6 +872,8 @@ class AISB_InstaWP {
       'images' => $images,
       // Archer: huisregels van tasteskill (geen schaduwen op wat stil staat), ook op de gepubliceerde site.
       'houseCss' => class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::house_css($guide) : '',
+      // Archer: beweging op de gepubliceerde site (AISB_Archer_Motion), een keer uitgevoerd door het runtime-script.
+      'houseJs' => class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::js() : '',
     ];
   }
 
@@ -4664,6 +4666,16 @@ class AISB_InstaWP {
     applyLogo();
     applyNavMenus();
     applySections();
+    applyMotion();
+  }
+
+  // Archer: beweging (hero-binnenkomst, beelden onthullen) een keer, na de stijl.
+  function applyMotion() {
+    var js = getGuide().houseJs;
+    if (!js || window.__archerMotion || !document.body) return;
+    var el = document.createElement("script");
+    el.textContent = String(js);
+    document.body.appendChild(el);
   }
 
   if (document.readyState === "loading") {
