@@ -100,6 +100,32 @@
     return json.data;
   };
 
+  /**
+   * Foutmeldingen van de server (WordPress, InstaWP) in het Nederlands. Bekende meldingen krijgen een
+   * eigen uitleg; een andere Engelse melding wordt een algemene zin. De oorspronkelijke tekst gaat naar de console.
+   */
+  UI.nlError = function (msg) {
+    const m = String(msg || "").trim();
+    if (!m) return "Er ging iets mis. Probeer het opnieuw.";
+    const rules = [
+      [/still provisioning|clone_timeout|did not finish the clone|timed out|cURL error 28|Operation timed out/i, "InstaWP is de website nog aan het klaarzetten en antwoordde niet op tijd. Je wijzigingen zijn bewaard: probeer het over een minuut opnieuw."],
+      [/already running/i, "Er loopt al een publicatie voor deze website. Wacht tot die klaar is en probeer dan opnieuw."],
+      [/Not logged in|Invalid nonce|^0$|^-1$/i, "Je bent niet meer aangemeld of de pagina staat te lang open. Vernieuw de pagina (en meld je opnieuw aan) en probeer opnieuw."],
+      [/Forbidden/i, "Je hebt geen toegang tot dit project."],
+      [/resolve the InstaWP host|DNS|could not be parsed|host is empty|site URL is missing/i, "Het webadres van de website is (nog) niet bereikbaar. Probeer het over een minuut opnieuw."],
+      [/login did not return|login failed|credentials/i, "Aanmelden op de website lukte niet. Probeer het opnieuw; lukt het niet, neem dan contact op met Archer."],
+      [/Failed to create page|save failed|XML-RPC/i, "Een pagina kon niet op de website gezet worden. Probeer het opnieuw."],
+      [/does not contain any|did not contain any pages|no page body|payload is empty|Missing page_slug|Missing sitemap/i, "Er is nog niets om te publiceren: controleer of de pagina's secties hebben."],
+      [/API key|template slug|template is a legacy|No InstaWP template/i, "Publiceren is nog niet ingesteld (InstaWP-sleutel of -sjabloon ontbreekt). Neem contact op met Archer."],
+      [/invalid JSON|invalid site details|request failed|rejected/i, "InstaWP gaf een onverwacht antwoord. Probeer het over een minuut opnieuw."],
+      [/compile|wireframe/i, "Een pagina kon niet omgezet worden voor de website. Probeer het opnieuw of laat die pagina opnieuw maken."],
+    ];
+    for (const [re, nl] of rules) if (re.test(m)) return nl;
+    // Al Nederlands (onze eigen meldingen): zo laten.
+    if (/\b(de|het|een|niet|je|uw|website|pagina)\b/i.test(m) && !/\b(the|could|failed|not|was|is still)\b/i.test(m)) return m;
+    return "Publiceren lukte niet door een fout op de server. Probeer het opnieuw; lukt het niet, neem dan contact op met Archer.";
+  };
+
   /** Vervangt losse Engelse tekstknopen in een blok door Nederlandse tekst. */
   UI.translate = function (root, dict) {
     if (!root) return;
@@ -2155,11 +2181,21 @@
           need: idx.length, exclude: JSON.stringify(exclude.slice(-150)),
         });
         if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Geen stockfoto's gevonden.");
-        // Foto's die intussen al op een andere pagina staan, overslaan (de pagina's lopen tegelijk).
-        const taken = new Set(imgs.filter((x) => !isEmpty(x)).map((x) => x.full));
-        const found = (out.data.images || []).filter((x) => x && x.full && !taken.has(x.full));
+        // Foto's die intussen al op een andere pagina staan, overslaan (de pagina's lopen tegelijk). Vergelijken
+        // op de foto zelf: Unsplash geeft dezelfde foto met andere parameters terug.
+        const pkey = (u) => { const m = String(u || "").match(/photo-[0-9a-f]+-[0-9a-f]+|photos\/\d+/i); return m ? m[0].toLowerCase() : String(u || ""); };
+        const taken = new Set(imgs.filter((x, j) => !isEmpty(x) && !idx.includes(j)).map((x) => pkey(x.full)));
+        const found = (out.data.images || []).filter((x) => x && x.full && !taken.has(pkey(x.full)));
         let n = 0;
-        idx.forEach((i, k) => { if (found[k]) { imgs[i] = found[k]; n++; } });
+        let f = 0;
+        idx.forEach((i) => {
+          while (found[f] && taken.has(pkey(found[f].full))) f++;
+          const pick = found[f++];
+          if (!pick) return;
+          taken.add(pkey(pick.full));
+          imgs[i] = pick;
+          n++;
+        });
         return n;
       };
       const done = () => {
@@ -3801,7 +3837,7 @@
       } catch (err) {
         clearInterval(timer);
         console.error("[Archer] publiceren", err);
-        state.error = (err && err.message) || "Er ging iets mis.";
+        state.error = UI.nlError(err && err.message);
         render(state);
         pub.textContent = "Publiceren";
       } finally {
