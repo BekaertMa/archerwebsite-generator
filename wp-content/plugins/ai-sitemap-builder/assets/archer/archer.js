@@ -2402,11 +2402,16 @@
         let el = doc.getElementById("archer-style");
         const st = styleById(styleNow());
         if (!st) { if (el) el.remove(); return; }
+        const css = styleCssFor(st);
         if (!el) { el = doc.createElement("style"); el.id = "archer-style"; }
-        el.textContent = styleCssFor(st);
-        doc.head.appendChild(el); // na de stijlgids, vóór het kleurschema per sectie
+        if (el.textContent !== css) el.textContent = css;
+        // Vaste plek: direct na de stijlgids, daarna het kleurschema per sectie. De overige
+        // voorbeeldregels (contrast, geen overgangen, hoeken) blijven erna staan.
+        const ov = doc.getElementById("aisb-sg-override") || doc.getElementById("archer-house");
+        if (ov && ov.parentNode === doc.head) ov.after(el);
+        else if (!el.parentNode) doc.head.appendChild(el);
         const sch = doc.getElementById("archer-scheme");
-        if (sch) doc.head.appendChild(sch);
+        if (sch) el.after(sch);
       };
       UI.injectStyle = injectStyle;
       // Rustige achtergronden: alle secties op de grond, hoogstens één band per pagina (oproep) en de footer.

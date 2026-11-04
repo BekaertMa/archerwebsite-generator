@@ -188,7 +188,7 @@ body.archer-app .archer-shell .aisb-card {
 body.archer-app .archer-shell .aisb-output-card,
 body.archer-app .archer-shell .archer-wf-card,
 body.archer-app .archer-shell .archer-sg-card,
-body.archer-app .archer-shell .archer-publish-card { background: transparent; border: 0; padding: 0; }
+body.archer-app .archer-shell .archer-publish-card { background: transparent; border: 0; padding: 0; width: 100% !important; max-width: none !important; }
 
 /* ── Knoppen ────────────────────────────────────────────── */
 
@@ -1061,11 +1061,11 @@ body.archer-app .archer-style-pitch { font-size: 12px; line-height: 1.4; color: 
   background: rgba(9, 9, 48, 0.55); backdrop-filter: blur(6px);
   font-family: "Poppins", system-ui, sans-serif; color: #2B2B3D;
 }
-.archer-publish-card {
+.archer-publish-overlay .archer-publish-card {
   width: min(480px, 100%); background: #fff; border-radius: 20px; padding: 36px 32px 28px;
   box-shadow: 0 24px 64px rgba(9, 9, 48, 0.25); display: flex; flex-direction: column; gap: 14px;
 }
-.archer-publish-card h2 {
+.archer-publish-overlay .archer-publish-card h2 {
   font-family: "Urbanist", "Poppins", system-ui, sans-serif; font-size: 26px; line-height: 1.15; font-weight: 700;
   color: #090930; margin: 0; letter-spacing: -0.01em;
 }
@@ -1091,13 +1091,13 @@ body.archer-app .archer-style-pitch { font-size: 12px; line-height: 1.4; color: 
 .archer-publish-steps li.is-error .archer-publish-dot { background: #B42318; }
 .archer-publish-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .archer-publish-url { margin: 0; font-size: 13px; color: #5B5F73; word-break: break-all; }
-.archer-publish-card.is-done .archer-publish-mark::after,
-.archer-publish-card.is-error .archer-publish-mark::after {
+.archer-publish-overlay .archer-publish-card.is-done .archer-publish-mark::after,
+.archer-publish-overlay .archer-publish-card.is-error .archer-publish-mark::after {
   animation: none; inset: 0; border: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center;
   font: 700 22px/1 system-ui, sans-serif; color: #1B5A5B; content: "\2713";
 }
-.archer-publish-card.is-error .archer-publish-mark { background: #FDECEA; }
-.archer-publish-card.is-error .archer-publish-mark::after { content: "!"; color: #B42318; }
+.archer-publish-overlay .archer-publish-card.is-error .archer-publish-mark { background: #FDECEA; }
+.archer-publish-overlay .archer-publish-card.is-error .archer-publish-mark::after { content: "!"; color: #B42318; }
 .archer-contact-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .archer-contact-form .archer-input { width: 100%; }
 .archer-contact-box { margin-top: 4px; }
