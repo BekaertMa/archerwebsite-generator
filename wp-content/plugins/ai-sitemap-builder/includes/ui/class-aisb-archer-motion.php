@@ -85,6 +85,39 @@ class AISB_Archer_Motion {
 (function () {
   if (window.__archerMotion) return;
   window.__archerMotion = 1;
+  // Cookiemelding in de taal van de site: de knop "Cookie settings" van archer-cookie-consent heeft een vaste
+  // Engelse tekst en de melding volgt de taal van de browser. Hier volgen ze de taal van de pagina.
+  (function () {
+    var lang = (document.documentElement.getAttribute("lang") || "").slice(0, 2).toLowerCase();
+    var labels = { nl: "Cookie-instellingen", fr: "Paramètres des cookies", de: "Cookie-Einstellungen", en: "Cookie settings" };
+    // Vaste Engelse Bricks-teksten voor schermlezers (overslaglink, "opent in nieuw tabblad", mobiel menu).
+    var bricks = {
+      nl: { skip: "Naar de inhoud", tab: "Opent in een nieuw tabblad", open: "Menu openen", close: "Menu sluiten" },
+      fr: { skip: "Aller au contenu", tab: "S'ouvre dans un nouvel onglet", open: "Ouvrir le menu", close: "Fermer le menu" },
+      de: { skip: "Zum Inhalt springen", tab: "Öffnet in einem neuen Tab", open: "Menü öffnen", close: "Menü schließen" }
+    };
+    var b = bricks[lang];
+    if (b) {
+      var sk = document.querySelector("a.skip-link"); if (sk) sk.textContent = b.skip;
+      var nt = document.getElementById("brx-new-tab-link-description"); if (nt) nt.textContent = b.tab;
+      document.querySelectorAll('[aria-label="Open mobile menu"],[aria-label="Open menu"]').forEach(function (e) { e.setAttribute("aria-label", b.open); });
+      document.querySelectorAll('[aria-label="Close mobile menu"],[aria-label="Close menu"]').forEach(function (e) { e.setAttribute("aria-label", b.close); });
+      if (window.bricksData && window.bricksData.i18n) {
+        var i = window.bricksData.i18n;
+        if (i.opensInNewTab) i.opensInNewTab = b.tab;
+        if (i.openMobileMenu) i.openMobileMenu = b.open;
+        if (i.closeMobileMenu) i.closeMobileMenu = b.close;
+      }
+    }
+    var fix = function () {
+      var t = document.querySelector(".archer-cc-floating-trigger");
+      if (t && labels[lang] && t.textContent !== labels[lang]) t.textContent = labels[lang];
+      var cc = window.CookieConsent;
+      if (cc && cc.setLanguage && lang && labels[lang]) { try { cc.setLanguage(lang); } catch (e) {} }
+    };
+    fix();
+    setTimeout(fix, 800);
+  })();
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // Alt-teksten (UI/UX Pro Max: elke foto een beschrijving): foto's zonder alt krijgen de titel van hun blok
   // of sectie, in de taal van de site. Logo's en versiering blijven zoals ze zijn.

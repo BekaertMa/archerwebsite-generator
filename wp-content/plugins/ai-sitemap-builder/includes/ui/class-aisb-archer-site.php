@@ -791,6 +791,13 @@ class AISB_Archer_Site {
       $slug = sanitize_title((string) ($p['slug'] ?? ''));
       if ($slug === '') continue;
       $title = trim(wp_strip_all_tags((string) ($p['page_title'] ?? '')));
+      // Startpagina: niet "Home | Bedrijf" in de browser en in Google, maar de SEO-titel zonder de bedrijfsnaam
+      // ("Dakwerker Oudenaarde"); de SEO-plugin zet de naam van de site er zelf achter.
+      if ($slug === 'home' || ($p['page_type'] ?? '') === 'home') {
+        $meta = trim(wp_strip_all_tags((string) ($p['seo']['meta_title'] ?? '')));
+        $meta = trim((string) preg_replace('/(\s*\|[^|]*|\s+[\x{2013}\x{2014}-]\s+(?:(?!\s[\x{2013}\x{2014}-]\s).)*)$/u', '', $meta));
+        if ($meta !== '' && mb_strlen($meta) <= 60) $title = $meta;
+      }
       $desc = trim(wp_strip_all_tags((string) ($p['seo']['meta_description'] ?? '')));
       if ($desc === '') $desc = trim(wp_strip_all_tags((string) ($p['page_purpose'] ?? '')));
       $out[$slug] = ['title' => $title, 'description' => mb_substr($desc, 0, 160)];
@@ -856,9 +863,9 @@ class AISB_Archer_Site {
   /* ───────────────────────── Favicon ───────────────────────── */
 
   /** PNG van 512×512: het logo van de klant (vierkant gemaakt), anders het icoon van Archer Websites. */
-  public static function favicon_png(int $pid): string {
-    $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
-    $logo = is_array($guide) ? trim((string) ($guide['logoUrl'] ?? '')) : '';
+  /** Bytes van het logo (data-URI, bestand in de uploads of een webadres); SVG en onbekende soorten geven ''. */
+  public static function logo_bytes(string $logo): string {
+    $logo = trim($logo);
     $bytes = '';
     if (preg_match('#^data:image/(png|jpe?g|gif|webp);base64,(.+)$#is', $logo, $m)) {
       $bytes = (string) base64_decode($m[2]);
@@ -872,6 +879,58 @@ class AISB_Archer_Site {
         if (!is_wp_error($r) && (int) wp_remote_retrieve_response_code($r) === 200) $bytes = (string) wp_remote_retrieve_body($r);
       }
     }
+    return $bytes;
+  }
+
+  /**
+   * Het logo als bestand in de mediabibliotheek van de gepubliceerde site, en het adres daarvan. Anders staat
+   * het als data-URI in elke pagina (zwaar) en maakt de SEO-plugin er een onbruikbare og:image van.
+   * Eén keer per site en per logo; bij opnieuw publiceren wordt het bestaande bestand hergebruikt.
+   */
+  public static function publish_logo(int $pid, string $logo, string $site_url, array $cookies, string $nonce, callable $request): string {
+    $logo = trim($logo);
+    $site_url = untrailingslashit($site_url);
+    $host = (string) wp_parse_url($site_url, PHP_URL_HOST);
+    if ($logo === '' || $nonce === '' || $host === '') return '';
+    if ((string) wp_parse_url($logo, PHP_URL_HOST) === $host) return $logo;
+    $bytes = self::logo_bytes($logo);
+    if ($bytes === '') return '';
+    $info = @getimagesizefromstring($bytes);
+    $ext = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? '';
+    if ($ext === '') return '';
+    $md5 = md5($bytes);
+    $cache = get_post_meta($pid, '_aisb_archer_logo_remote', true);
+    if (is_array($cache) && ($cache['host'] ?? '') === $host && ($cache['md5'] ?? '') === $md5 && !empty($cache['url'])) {
+      $head = $request((string) $cache['url'], ['method' => 'HEAD', 'timeout' => 10]);
+      if (!is_wp_error($head) && (int) ($head['code'] ?? 0) === 200) return (string) $cache['url'];
+    }
+    $name = sanitize_title((string) get_the_title($pid)) ?: 'logo';
+    $up = $request($site_url . '/wp-json/wp/v2/media', [
+      'method' => 'POST', 'timeout' => 30, 'cookies' => $cookies,
+      'headers' => ['X-WP-Nonce' => $nonce, 'Content-Type' => $info['mime'], 'Content-Disposition' => 'attachment; filename="' . $name . '-logo.' . $ext . '"'],
+      'body' => $bytes,
+    ]);
+    $media = (!is_wp_error($up) && (int) ($up['code'] ?? 0) < 300) ? json_decode((string) ($up['body'] ?? ''), true) : null;
+    $url = is_array($media) ? (string) ($media['source_url'] ?? '') : '';
+    if ($url === '') {
+      error_log('[AISB] Archer: logo opladen mislukt: ' . (is_wp_error($up) ? $up->get_error_message() : 'HTTP ' . ($up['code'] ?? 0) . ' ' . substr((string) ($up['body'] ?? ''), 0, 200)));
+      return '';
+    }
+    $mid = (int) ($media['id'] ?? 0);
+    if ($mid) {
+      $request($site_url . '/wp-json/wp/v2/media/' . $mid, [
+        'method' => 'POST', 'timeout' => 15, 'cookies' => $cookies,
+        'headers' => ['X-WP-Nonce' => $nonce, 'Content-Type' => 'application/json'],
+        'body' => wp_json_encode(['alt_text' => 'Logo ' . get_the_title($pid), 'title' => 'Logo ' . get_the_title($pid)]),
+      ]);
+    }
+    update_post_meta($pid, '_aisb_archer_logo_remote', ['host' => $host, 'md5' => $md5, 'url' => $url, 'id' => $mid]);
+    return $url;
+  }
+
+  public static function favicon_png(int $pid): string {
+    $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
+    $bytes = self::logo_bytes(is_array($guide) ? (string) ($guide['logoUrl'] ?? '') : '');
     if ($bytes !== '' && function_exists('imagecreatefromstring')) {
       $im = @imagecreatefromstring($bytes);
       if ($im) {
