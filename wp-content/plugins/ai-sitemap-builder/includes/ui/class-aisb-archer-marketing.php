@@ -22,6 +22,7 @@ class AISB_Archer_Marketing {
       . "- Every page has ONE primary action (call, quote, appointment, booking, visit). Name it in page_purpose. Secondary actions stay secondary.\n"
       . "- Home: the broadest value proposition first, then a clear path for each main visitor intent (the services, the proof, the next step). Service pages: what it is, what it means for the customer, how it works (3 or 4 steps), the questions or objections people have, then the action. About: why the business exists and what that means for the customer, still ending with the action. Contact: what happens after someone gets in touch.\n"
       . "- Put proof and objection handling (FAQ, how it works, guarantees the brief actually states) right before the final call to action, not at the top.\n"
+      . "- Plan a testimonials, reviews or client-logo section only when the brief names real customers, reviews or clients. No logo wall as decoration (awwwards-sites, Meng To).\n"
       . "- Plan sections around what the visitor needs to decide, in the visitor's words, not around the company's internal structure.\n"
       . "- SEO: primary_keyword is what a customer would type into Google or ask an AI assistant (service + town or region when the brief names one). meta_title: at most 60 characters, starts with that service, ends with the business name. meta_description: at most 155 characters, one concrete benefit and the next step; no keyword lists.\n";
   }
@@ -37,7 +38,7 @@ class AISB_Archer_Marketing {
       . "- Buttons: an action verb plus what the visitor gets ('Vraag een offerte aan', 'Plan uw afspraak', 'Bekijk de realisaties'). Next to the main button, one short line that lowers the risk may follow only when the brief supports it (free quote, no obligation, answer within a day).\n"
       . "- Answer first: the first sentence of a section states the point directly, so it still makes sense when quoted on its own by Google or an AI assistant. FAQ answers start with the answer (yes, no, the number, the step) and stay within the LIMITS.\n"
       . "- Use the service and the place the brief names in the hero and the intro text where it reads naturally. Never stack keywords.\n"
-      . "- Claims need support from the brief. Without it, write the closest true statement or a [placeholder]; never invent numbers, guarantees or results.\n";
+      . "- Claims need support from the brief. Without it, write the closest true statement or a [placeholder]; never invent numbers, guarantees or results. Never call the business award-winning, number one, the best or the leading one unless the brief proves it.\n";
   }
 
   /** De taak van één sectie, uit de copywriting-tabel "Core Sections" en de cro-checks. */

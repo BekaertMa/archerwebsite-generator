@@ -12,6 +12,8 @@ if (!defined('ABSPATH')) exit;
  *   start bij de eerste weergave. Het runtime-script draait pas na DOMContentLoaded, als de pagina al getekend is.
  * - Beelden lager op de pagina: één keer onthuld bij het binnenscrollen (clip-path, 600ms), alleen in secties met
  *   één of twee grote beelden en hoogstens drie per pagina. Geen tekst.
+ * - Sectietitels lager op de pagina: woord per woord binnen (500ms, 40ms na elkaar, hoogstens zes per pagina), uit
+ *   awwwards-sites (Meng To, MIT, via getedgehq/skills): de volledige titel blijft leesbaar voor schermlezers.
  * - Links en menu: kleurovergang 150ms; ankerlinks schuiven zacht (niet bij minder beweging).
  * - Minder beweging gevraagd: geen verplaatsing of onthulling, alleen een korte fade van de hero.
  *
@@ -35,7 +37,11 @@ class AISB_Archer_Motion {
       . '@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth;}}'
       . 'html.archer-motion .archer-reveal{clip-path:inset(0 0 100% 0);}'
       . 'html.archer-motion .archer-reveal.is-in{clip-path:inset(0 0 0 0);transition:clip-path 600ms var(--a-ease-in-out);}'
-      . '@media (prefers-reduced-motion:reduce){html.archer-motion .archer-reveal{clip-path:none;}}';
+      . '@media (prefers-reduced-motion:reduce){html.archer-motion .archer-reveal{clip-path:none;}}'
+      // Sectietitels woord per woord (js(): alleen met beweging en JavaScript; zonder blijft de titel gewoon staan).
+      . '.archer-sr{position:absolute !important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}'
+      . 'html.archer-motion .archer-words .archer-w{display:inline-block;opacity:0;transform:translateY(0.35em);}'
+      . 'html.archer-motion .archer-words.is-in .archer-w{opacity:1;transform:none;transition:opacity 500ms var(--a-ease-out),transform 500ms var(--a-ease-out);transition-delay:calc(var(--i) * 40ms);}';
   }
 
   /** CSS voor de herosectie (klasse archer-hero; %root% wordt niet overal vervangen). */
@@ -102,6 +108,48 @@ class AISB_Archer_Motion {
     return !s.closest(".archer-header,.archer-footer,header,footer") && s.offsetHeight > 0;
   });
   var hero = sections[0];
+
+  // Sectietitels woord per woord (awwwards-sites, Meng To, MIT): eenmalig bij het binnenscrollen, 40ms na elkaar.
+  // Alleen titels zonder links of opmaak, 2 tot 12 woorden, lager dan het eerste scherm, hoogstens zes per pagina.
+  // De volledige titel blijft voor schermlezers en zoekmachines; de losse woorden zijn versiering (aria-hidden).
+  var titles = [];
+  sections.forEach(function (sec) {
+    if (sec === hero || titles.length >= 6) return;
+    var h = sec.querySelector("h2.brxe-heading,h2");
+    if (!h || h.children.length || h.closest(".archer-hero,.archer-cover,[class*='logo']")) return;
+    var text = (h.textContent || "").trim().replace(/\s+/g, " ");
+    var words = text.split(" ");
+    if (words.length < 2 || words.length > 12 || inView(h)) return;
+    titles.push([h, text, words]);
+  });
+  if (titles.length) {
+    var tio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("is-in");
+        tio.unobserve(e.target);
+      });
+    }, { rootMargin: "0px 0px -80px 0px" });
+    titles.forEach(function (t) {
+      var h = t[0], sr = document.createElement("span"), vis = document.createElement("span");
+      sr.className = "archer-sr";
+      sr.textContent = t[1];
+      vis.setAttribute("aria-hidden", "true");
+      t[2].forEach(function (w, i) {
+        if (i) vis.appendChild(document.createTextNode(" "));
+        var s = document.createElement("span");
+        s.className = "archer-w";
+        s.style.setProperty("--i", i);
+        s.textContent = w;
+        vis.appendChild(s);
+      });
+      h.textContent = "";
+      h.appendChild(sr);
+      h.appendChild(vis);
+      h.classList.add("archer-words");
+      tio.observe(h);
+    });
+  }
 
   // Beelden lager op de pagina: één keer onthullen bij het binnenscrollen. Geen logo's, iconen of kleine beelden.
   // Alleen het beeld van een sectie met één of twee grote beelden (geen galerijen of kaartrasters), hoogstens drie
