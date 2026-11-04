@@ -64,6 +64,10 @@ class AISB_Archer_Styles {
     return sprintf('clamp(%spx, calc(%spx + %s * (100vw - 360px)), %spx)', self::n($min), self::n($min), self::n($slope), self::n($max));
   }
 
+  private static function scale($range, float $f) {
+    return is_array($range) ? array_map(fn($v) => (int) round($v * $f), $range) : (int) round($range * $f);
+  }
+
   private static function n(float $v): string {
     return rtrim(rtrim(number_format($v, 4, '.', ''), '0'), '.');
   }
@@ -191,9 +195,10 @@ class AISB_Archer_Styles {
       '--a-radius-button' => $px($r['button']), '--a-radius-card' => $px($r['card']), '--a-radius-image' => $px($r['image']), '--a-radius-field' => $px($r['field']),
       '--archer-radius' => $px($r['button']),
       // Brixies: ruimte en breedte
-      '--brxw-section-space-vertical' => self::fluid($sp['section']),
+      // Compacter ritme dan de bibliotheek: tussen twee secties staat anders 300 tot 400px wit.
+      '--brxw-section-space-vertical' => self::fluid(self::scale($sp['section'], 0.55)),
       '--brxw-section-space-horizontal' => self::fluid([20, 40]),
-      '--brxw-container-gap' => self::fluid($sp['heading']),
+      '--brxw-container-gap' => self::fluid(self::scale($sp['heading'], 0.75)),
       '--brxw-content-gap' => $px($sp['content']),
       '--brxw-grid-gap' => self::fluid($sp['grid']),
       '--brxw-container-width' => $px($sp['container']),
