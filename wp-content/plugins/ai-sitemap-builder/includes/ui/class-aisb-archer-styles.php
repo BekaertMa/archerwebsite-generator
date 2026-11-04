@@ -141,6 +141,13 @@ class AISB_Archer_Styles {
    * De CSS van een stijl. Begint met de @import van de letters (moet de eerste regel van de stylesheet zijn).
    * Achtergrondkleuren van secties: de grond; kaarten en bewuste banden komen uit de variabelen.
    */
+  /** Hoeken per keuze in de stap Stijl (dezelfde waarden als UI.RADII in archer.js). */
+  const RADII = [
+    'sharp' => ['button' => 0, 'card' => 0, 'image' => 0, 'field' => 0],
+    'soft' => ['button' => 8, 'card' => 14, 'image' => 14, 'field' => 8],
+    'round' => ['button' => 999, 'card' => 24, 'image' => 24, 'field' => 12],
+  ];
+
   public static function css(array $s, $guide = null): string {
     $c = $s['colours'];
     $f = $s['fonts'];
@@ -162,6 +169,9 @@ class AISB_Archer_Styles {
     $t = $s['type'];
     $sp = $s['space'];
     $r = $s['radius'];
+    // De keuze "Hoeken" in de stap Stijl gaat voor op de hoeken van de stijl.
+    $gr = is_array($guide) ? (string) ($guide['radius'] ?? '') : '';
+    if (isset(self::RADII[$gr]) && $gr !== (string) ($s['radiusBucket'] ?? '')) $r = self::RADII[$gr];
     $px = fn($v) => (int) $v . 'px';
     $link = self::contrast($c['accent'], $c['base']) >= 4.5 ? $c['accent'] : $c['ink'];
     $hf = "'" . $f['heading']['family'] . "', ui-sans-serif, system-ui, sans-serif";
