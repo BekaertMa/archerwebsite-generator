@@ -439,7 +439,15 @@ class AISB_Archer_Taste {
     // en vervangt de algemene knop- en titelregels van system_css.
     $style = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::of($guide) : null;
     return ($style ? AISB_Archer_Styles::css($style, $guide) : '') . self::house_rules($guide, (bool) $style)
-      . (class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::css() : '');
+      . (class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::css() : '')
+      // Menu-items nooit over twee regels ("Over / ons"): het label blijft op één regel, het pijltje ernaast
+      // houdt zijn grootte. Te veel items voor de breedte: dan schuift een heel item naar een volgende rij.
+      . 'html body .brxe-nav-menu .bricks-nav-menu > li > a,html body .brxe-nav-menu .bricks-nav-menu > li > .brx-submenu-toggle,html body .brxe-nav-menu .bricks-nav-menu > li > .brx-submenu-toggle > :is(a,span){white-space:nowrap !important;}'
+      . 'html body .brxe-nav-menu .bricks-nav-menu > li{flex-shrink:0;}'
+      . 'html body .brxe-nav-menu .brx-submenu-toggle{flex-wrap:nowrap !important;}'
+      . 'html body .brxe-nav-menu .brx-submenu-toggle > button{flex:none;}'
+      . 'html body .brxe-nav-menu .brx-submenu-toggle svg.menu-item-icon{max-width:1em;max-height:1em;}'
+      . 'html body .archer-header .brxe-nav-menu .bricks-nav-menu{flex-wrap:wrap;row-gap:8px;}';
   }
 
   private static function house_rules($guide, bool $style): string {
