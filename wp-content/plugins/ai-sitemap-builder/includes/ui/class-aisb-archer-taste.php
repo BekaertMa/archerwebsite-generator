@@ -328,7 +328,9 @@ class AISB_Archer_Taste {
     $t = mb_strtolower(wp_strip_all_tags($text));
     $re = '/\b(unlock|unleash|supercharge|seamless(ly)?|elevate|empower(s|ing)?|revolutioni[sz]e|game[- ]chang(er|ing)|cutting[- ]edge|next[- ]gen(eration)?|world[- ]class|best[- ]in[- ]class|all[- ]in[- ]one|effortless(ly)?|blazing(ly)?[- ]fast|lightning[- ]fast|reimagin(e|ed|ing)|delve|tapestry|leverage|synergy|streamline|robust|holistic|turbocharge|transform the way|take your .{1,30} to the next level|say goodbye to|in today\'?s|the future of|built for the modern|more than (just )?a'
       . '|ontzorg\w*|naadlo\w*|op maat van (jouw|uw) (noden|behoeften)|(jouw|uw) partner (in|voor)|kwaliteit staat centraal|met (veel )?passie|één aanspreekpunt|oplossingen op maat|de volgende stap|in een handomdraai|zorgeloos|welkom bij|ontdek (onze|ons|meer|het)|meer dan (alleen|zomaar|een)|lees meer|meer info(rmatie)?|klik hier'
-      . '|sur mesure pour vos besoins|votre partenaire|en toute sérénité|bienvenue (chez|sur)|découvrez (nos|notre)|en savoir plus)\b/u';
+      . '|sur mesure pour vos besoins|votre partenaire|en toute sérénité|bienvenue (chez|sur)|découvrez (nos|notre)|en savoir plus'
+      // AI-tics uit Marketing Skills (copywriting: contrast reveals): "niet alleen X, maar ook Y".
+      . '|not (just|only) [^.]{1,40}?,? but|niet (alleen|enkel|zomaar) [^.]{1,40}?,? maar|non seulement [^.]{1,40}? mais|pas (seulement|juste) [^.]{1,40}?,? mais)\b/u';
     return (bool) preg_match($re, $t) || strpos($t, '—') !== false;
   }
 

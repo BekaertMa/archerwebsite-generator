@@ -636,8 +636,129 @@ class AISB_Archer_Site {
       }
       if ($drop) $nodes = self::remove($nodes, $drop);
     }
-    return self::iconoir($nodes);
+    return self::iconoir(self::code_css($nodes, $region));
   }
+
+  /**
+   * CSS uit de code-elementen van een sjabloon werkend houden op de site.
+   * - De export zet klasse-instellingen ook op het element-id (#brxe-…); de regels van het sjabloon
+   *   (bv. ".offcanvas-header-4.brx-open .offcanvas-header-4__menu{opacity:1}") verliezen dan van dat id.
+   *   Daarom krijgen hun declaraties !important.
+   * - Eén niveau CSS-nesting wordt platgemaakt (oudere Safari kent geen nesting).
+   * - "header#brx-header" bestaat niet op onze sites (de header is een sectie): dat wordt .archer-header.
+   * - Header: zonder eigen positie komt de sectie boven de inhoud (position:relative, z-index 998),
+   *   anders schuift een offcanvas- of uitklapmenu achter de hero.
+   */
+  public static function code_css(array $nodes, string $region = ''): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n)) continue;
+      $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
+      if (($n['name'] ?? '') === 'code' && is_string($s['cssCode'] ?? null) && trim($s['cssCode']) !== '' && strpos($s['cssCode'], '/*archer-css*/') === false) {
+        $nodes[$i]['settings']['cssCode'] = '/*archer-css*/' . self::harden_css($s['cssCode']);
+        // Bricks voert code alleen uit met een geldige handtekening; CSS zonder JS hoeft dat niet.
+      }
+      if ($region === 'header' && empty($n['parent']) && in_array($n['name'] ?? '', ['section', 'container', 'block', 'div'], true)) {
+        if (empty($s['_position'])) $nodes[$i]['settings']['_position'] = 'relative';
+        if (!isset($s['_zIndex']) || $s['_zIndex'] === '') $nodes[$i]['settings']['_zIndex'] = '998';
+      }
+    }
+    return $nodes;
+  }
+
+  public static function harden_css(string $css): string {
+    $css = preg_replace('#/\*.*?\*/#s', '', $css);
+    $css = preg_replace('/header#brx-header|#brx-header\b/', '.archer-header', $css);
+    return trim(self::css_walk(self::css_blocks($css), ''));
+  }
+
+  /** Blokken op het hoogste niveau: [prelude, body] (body null = losse declaraties). */
+  private static function css_blocks(string $css): array {
+    $out = [];
+    $len = strlen($css);
+    $buf = '';
+    for ($i = 0; $i < $len; $i++) {
+      $c = $css[$i];
+      if ($c === '{') {
+        $depth = 1;
+        $j = $i + 1;
+        for (; $j < $len && $depth; $j++) {
+          if ($css[$j] === '{') $depth++;
+          elseif ($css[$j] === '}') $depth--;
+        }
+        $out[] = [trim($buf), substr($css, $i + 1, $j - $i - 2)];
+        $buf = '';
+        $i = $j - 1;
+      } elseif ($c === '}') {
+        $buf = '';
+      } else {
+        $buf .= $c;
+      }
+    }
+    if (trim($buf) !== '') $out[] = [trim($buf), null];
+    return $out;
+  }
+
+  /** Platgemaakte CSS met !important; $parent is de selector van de omringende regel (nesting). */
+  private static function css_walk(array $blocks, string $parent): string {
+    $out = '';
+    foreach ($blocks as [$pre, $body]) {
+      if ($body === null) continue;
+      if ($pre !== '' && $pre[0] === '@') {
+        // @keyframes, @font-face en dergelijke blijven zoals ze zijn; @media en @supports gaan erin.
+        $out .= preg_match('/^@(media|supports|container|layer)\b/i', $pre)
+          ? $pre . '{' . self::css_walk(self::css_blocks($body), $parent) . '}'
+          : ($parent === '' ? $pre . '{' . $body . '}' : '');
+        continue;
+      }
+      $sel = $parent === '' ? $pre : implode(',', array_map(function ($x) use ($parent) {
+        $x = trim($x);
+        return strpos($x, '&') !== false ? str_replace('&', $parent, $x) : $parent . ' ' . $x;
+      }, array_filter(explode(',', $pre), fn($x) => trim($x) !== '')));
+      if ($sel === '') continue;
+      // Declaraties van deze regel (alles buiten de geneste blokken) en de geneste regels apart.
+      $flat = '';
+      $nested = [];
+      $depth = 0;
+      $start = 0;
+      $blen = strlen($body);
+      $chunk = '';
+      for ($i = 0; $i < $blen; $i++) {
+        $c = $body[$i];
+        if ($c === '{') { if ($depth === 0) { $p = strrpos($chunk, ';'); $flat .= $p === false ? '' : substr($chunk, 0, $p + 1); $chunk = $p === false ? $chunk : substr($chunk, $p + 1); } $depth++; $chunk .= $c; }
+        elseif ($c === '}') { $depth--; $chunk .= $c; if ($depth === 0) { $nested[] = $chunk; $chunk = ''; } }
+        else $chunk .= $c;
+      }
+      $flat .= $chunk;
+      $decl = self::css_important($flat);
+      if ($decl !== '') $out .= $sel . '{' . $decl . '}';
+      if ($nested) $out .= self::css_walk(self::css_blocks(implode('', $nested)), $sel);
+    }
+    return $out;
+  }
+
+  /** Declaraties met !important; puntkomma's binnen haakjes (url(data:…;base64,…)) blijven heel. */
+  private static function css_important(string $decls): string {
+    $parts = [];
+    $cur = '';
+    $par = 0;
+    $len = strlen($decls);
+    for ($i = 0; $i < $len; $i++) {
+      $c = $decls[$i];
+      if ($c === '(') $par++;
+      elseif ($c === ')') $par = max(0, $par - 1);
+      if ($c === ';' && $par === 0) { $parts[] = $cur; $cur = ''; continue; }
+      $cur .= $c;
+    }
+    $parts[] = $cur;
+    $out = [];
+    foreach ($parts as $d) {
+      $d = trim($d);
+      if ($d === '' || strpos($d, ':') === false) continue;
+      $out[] = stripos($d, '!important') !== false ? $d : $d . ' !important';
+    }
+    return $out ? implode(';', $out) . ';' : '';
+  }
+
 
   /** Alle secties van de export (header en footer doet AISB_Archer_Chrome::apply). */
   public static function apply_to_export(array $pages, int $pid, callable $link): array {

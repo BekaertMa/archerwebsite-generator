@@ -179,7 +179,8 @@ class AISB_Archer_Generate {
     $base = preg_replace('/Target JSON:\n.*$/s', '', $prompt);
     $base .= "\nLENGTH: every text must fit the slot of the placeholder it replaces in the design. LIMITS gives the maximum number of words per module id. Write each text so it naturally fits within that many words: choose a shorter formulation instead of cutting a longer one. Every text is a complete phrase or sentence that stands on its own; never continue a sentence in the next module and never stop mid-sentence. Headings are short and punchy (a hero title is a few words, not a sentence about everything the company does). Short labels (stats, taglines, list items) are 1 to 4 words.\n"
       . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n"
-      . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n";
+      . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n"
+      . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::copy_rules() . "\n" : '');
     // Stijl al gekozen (teksten opnieuw maken na de stap Stijl): de stem uit de DESIGN.md van die stijl.
     $pid_now = (int) ($_POST['project_id'] ?? $_POST['aisb_project'] ?? $_GET['aisb_project'] ?? 0);
     if ($pid_now && class_exists('AISB_Archer_Styles')) {
@@ -198,6 +199,7 @@ class AISB_Archer_Generate {
       foreach ($flow as $fk => $fp) $map[] = '- ' . $fk . ($fk === (string) $key ? ' (THIS SECTION)' : '') . ': ' . ($fp !== '' ? $fp : 'section');
       $calls[(string) $key] = ['system' => $system, 'user' => $base
         . "PAGE FLOW (all sections of this page, top to bottom):\n" . implode("\n", $map) . "\n"
+        . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
         . "You write ONLY " . $key . ". The page reads as one story from top to bottom: this section covers its own purpose and nothing else. Do not repeat what another section of this page covers: no second introduction of the business, no restating the hero claim, no list of the same services or the same benefits again, no same examples or sentences. Use fresh wording; a reader who scrolls must learn something new in every section.\n"
         . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
         . "Target JSON:\n" . wp_json_encode([$key => $section])];
@@ -241,7 +243,7 @@ class AISB_Archer_Generate {
       $calls = [];
       foreach ($too_long as $key => $items) {
         $calls[$key] = ['system' => $system, 'user' =>
-          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off, some use stock marketing phrases ('ontdek', 'welkom bij', 'uw partner', 'op maat', 'naadloos', 'lees meer', em dashes): finish the thought in fewer words and say the specific thing instead. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
+          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off, some use stock marketing phrases or AI tells ('ontdek', 'welkom bij', 'uw partner', 'op maat', 'naadloos', 'lees meer', 'niet alleen ... maar ook', em dashes): finish the thought in fewer words and say the specific thing instead. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
           . "Return JSON: {\"<id>\": \"<shortened text>\"} with the same ids.\n\n" . wp_json_encode($items)];
       }
       $short = $self->ai_multi($calls, 'copy', 45);
@@ -934,6 +936,7 @@ PROMPT;
       . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
       . "- key_content: 2–4 concrete items from the brief.\n"
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
+      . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::plan_rules() : '')
       . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
     $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
