@@ -1140,9 +1140,13 @@ class AISB_InstaWP {
         $project_name
       );
 
+      // Archer: paginatitel ("Regio's") en zoekomschrijving uit de sitemap; de export kent enkel de slug.
+      // De omschrijving wordt het uittreksel, dat Bricks gebruikt voor meta description en og:description.
+      if (!isset($archer_seo)) $archer_seo = class_exists('AISB_Archer_Site') && $project instanceof WP_Post ? AISB_Archer_Site::seo_by_slug((int) $project->ID) : [];
       $content_struct = [
-        'title' => (string) ($page['title'] ?? ucfirst(str_replace('-', ' ', $slug))),
+        'title' => (string) ($archer_seo[$slug]['title'] ?? $page['title'] ?? ucfirst(str_replace('-', ' ', $slug))),
         'description' => $html,
+        'mt_excerpt' => (string) ($archer_seo[$slug]['description'] ?? ''),
         'wp_slug' => $slug,
         'page_status' => 'publish',
         'wp_page_order' => (int) $page_index,
