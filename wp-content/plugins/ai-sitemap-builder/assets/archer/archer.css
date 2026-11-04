@@ -1020,7 +1020,8 @@ body.archer-app .archer-shell .archer-btn.archer-btn-sm.is-active { background: 
 /* ── Stijl: één pagina, gewoon scrollen (geen canvas) ─── */
 body.archer-app .archer-shell .aisb-sg-canvas.archer-sg-pageview { overflow-y: auto !important; overflow-x: hidden !important; cursor: default !important; height: calc(100vh - 210px) !important; min-height: 480px; background: var(--ar-bg); }
 body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-canvas-inner { transform: none !important; position: static !important; display: block !important; width: auto !important; height: auto !important; padding: 0 !important; }
-body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-pages-grid { display: block !important; padding: 0 !important; gap: 0 !important; min-width: 0 !important; width: auto !important; }
+body.archer-app .archer-shell .archer-sg-pageview .aisb-sg-page-card { margin: 0 auto !important; width: 1200px !important; max-width: none !important; }
 
 /* ── Foto's: overzicht in 2 kolommen, 5px tussenruimte ── */
 body.archer-app .archer-shell [data-images-grid],

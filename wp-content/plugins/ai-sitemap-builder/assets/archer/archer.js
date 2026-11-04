@@ -40,6 +40,19 @@
 
   /** Hoeken van knoppen en velden (dezelfde waarden als AISB_Archer_Taste::RADIUS). */
   UI.RADIUS = { sharp: "0px", soft: "6px", round: "999px" };
+  /** Hoeken die een Archer-stijl overschrijven (zelfde waarden als AISB_Archer_Styles::RADII). */
+  UI.RADII = {
+    sharp: { button: 0, card: 0, image: 0, field: 0 },
+    soft: { button: 8, card: 14, image: 14, field: 8 },
+    round: { button: 999, card: 24, image: 24, field: 12 },
+  };
+  UI.radiusVars = (key) => {
+    const r = UI.RADII[key];
+    if (!r) return "";
+    return `--a-radius-button:${r.button}px;--a-radius-card:${r.card}px;--a-radius-image:${r.image}px;--a-radius-field:${r.field}px;` +
+      `--archer-radius:${r.button}px;--brxw-radius-xs:${Math.min(r.card, 6)}px;--brxw-radius-s:${Math.min(r.card, 10)}px;` +
+      `--brxw-radius-m:${r.card}px;--brxw-radius-l:${r.card}px;--brxw-radius-xl:${r.card}px;`;
+  };
   UI.applyRadius = (doc, key) => {
     if (!doc || !doc.head) return;
     const v = UI.RADIUS[key];
@@ -2378,6 +2391,8 @@
         const hf = SG.guide && SG.guide.headingFont, bf = SG.guide && SG.guide.bodyFont;
         if (hf && hf !== st.headingFont) o += `--a-font-heading:'${hf}',ui-sans-serif,system-ui,sans-serif;`;
         if (bf && bf !== st.bodyFont) o += `--a-font-body:'${bf}',ui-sans-serif,system-ui,sans-serif;`;
+        const rk = SG.guide && !Array.isArray(SG.guide) ? SG.guide.radius : "";
+        if (rk && rk !== ((st.guide && st.guide.radius) || "")) o += UI.radiusVars(rk);
         return st.css + (o ? ":root{" + o + "}" : "");
       };
       const injectStyle = (iframe) => {
@@ -2426,7 +2441,7 @@
         SG.guide.tasteDirection = null;
         SG.applyOverridesToAllIframes();
         renderStyles();
-        if (typeof markRadius === "function") markRadius();
+        if (UI.markRadius) UI.markRadius();
         if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's.";
         SG.saveDraft && SG.saveDraft();
       };
@@ -2600,13 +2615,17 @@
           b.setAttribute("aria-pressed", on ? "true" : "false");
         });
       markRadius();
+      UI.markRadius = markRadius;
       box.addEventListener("click", (e) => {
         const rb = e.target.closest("[data-radius]");
         if (rb) {
           if (!SG.guide || Array.isArray(SG.guide)) SG.guide = {};
           SG.guide.radius = rb.getAttribute("data-radius");
           markRadius();
-          (SG.allIframes || []).forEach((f) => { try { UI.applyRadius(f.contentDocument, SG.guide.radius); } catch (err) {} });
+          (SG.allIframes || []).forEach((f) => {
+            try { UI.applyRadius(f.contentDocument, SG.guide.radius); } catch (err) {}
+            if (UI.injectStyle && f._loaded) UI.injectStyle(f);
+          });
           SG.saveDraft && SG.saveDraft();
           return;
         }
@@ -2903,6 +2922,7 @@
       }
       doc.head.appendChild(st); // altijd na de stijl van de stijlgids
       UI.applyRadius(doc, SG.guide && !Array.isArray(SG.guide) ? SG.guide.radius : "");
+      if (UI.markRadius) UI.markRadius(); // de opgeslagen stijlgids komt pas na het opbouwen van de knoppen binnen
       renderSchemeBar(iframe);
       const id = getScheme(iframe);
       const s = id && schemeList().find((x) => x.id === id);
