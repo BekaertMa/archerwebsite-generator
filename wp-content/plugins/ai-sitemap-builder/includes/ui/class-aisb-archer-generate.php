@@ -43,7 +43,7 @@ class AISB_Archer_Generate {
     // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
     if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
     // Iconen die bij de tekst passen in plaats van de standaardkubus; geen verzonnen cijfers (tellers).
-    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes)));
+    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::iconoir(AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes))));
     return $nodes;
   }
 
@@ -179,7 +179,14 @@ class AISB_Archer_Generate {
     $base = preg_replace('/Target JSON:\n.*$/s', '', $prompt);
     $base .= "\nLENGTH: every text must fit the slot of the placeholder it replaces in the design. LIMITS gives the maximum number of words per module id. Write each text so it naturally fits within that many words: choose a shorter formulation instead of cutting a longer one. Every text is a complete phrase or sentence that stands on its own; never continue a sentence in the next module and never stop mid-sentence. Headings are short and punchy (a hero title is a few words, not a sentence about everything the company does). Short labels (stats, taglines, list items) are 1 to 4 words.\n"
       . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n"
-      . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n";
+      . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n"
+      . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::copy_rules() . "\n" : '');
+    // Stijl al gekozen (teksten opnieuw maken na de stap Stijl): de stem uit de DESIGN.md van die stijl.
+    $pid_now = (int) ($_POST['project_id'] ?? $_POST['aisb_project'] ?? $_GET['aisb_project'] ?? 0);
+    if ($pid_now && class_exists('AISB_Archer_Styles')) {
+      $notes = AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid_now, 'aisb_style_guide', true), true), 'copy');
+      if ($notes !== '') $base .= $notes . "Match this voice; the copy rules above still apply.\n";
+    }
     $system = 'Return valid JSON only. No markdown. No explanation.';
     // De hele pagina van boven naar onder: elke sectie weet wat erboven en eronder staat.
     $flow = [];
@@ -192,6 +199,7 @@ class AISB_Archer_Generate {
       foreach ($flow as $fk => $fp) $map[] = '- ' . $fk . ($fk === (string) $key ? ' (THIS SECTION)' : '') . ': ' . ($fp !== '' ? $fp : 'section');
       $calls[(string) $key] = ['system' => $system, 'user' => $base
         . "PAGE FLOW (all sections of this page, top to bottom):\n" . implode("\n", $map) . "\n"
+        . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
         . "You write ONLY " . $key . ". The page reads as one story from top to bottom: this section covers its own purpose and nothing else. Do not repeat what another section of this page covers: no second introduction of the business, no restating the hero claim, no list of the same services or the same benefits again, no same examples or sentences. Use fresh wording; a reader who scrolls must learn something new in every section.\n"
         . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
         . "Target JSON:\n" . wp_json_encode([$key => $section])];
@@ -235,7 +243,7 @@ class AISB_Archer_Generate {
       $calls = [];
       foreach ($too_long as $key => $items) {
         $calls[$key] = ['system' => $system, 'user' =>
-          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off, some use stock marketing phrases ('ontdek', 'welkom bij', 'uw partner', 'op maat', 'naadloos', 'lees meer', em dashes): finish the thought in fewer words and say the specific thing instead. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
+          "Rewrite each text as a complete, natural phrase of at most 'max' characters (count spaces). Some texts are too long, some were cut off, some use stock marketing phrases or AI tells ('ontdek', 'welkom bij', 'uw partner', 'op maat', 'naadloos', 'lees meer', 'niet alleen ... maar ook', em dashes): finish the thought in fewer words and say the specific thing instead. Keep the language, the meaning and the tone; never cut off mid-word, no ellipsis. Plain text, no HTML.\n"
           . "Return JSON: {\"<id>\": \"<shortened text>\"} with the same ids.\n\n" . wp_json_encode($items)];
       }
       $short = $self->ai_multi($calls, 'copy', 45);
@@ -782,6 +790,11 @@ class AISB_Archer_Generate {
     $lang = self::lang_name($languages);
     $system = self::plan_system_prompt();
     $user = "Language: {$lang}\nDesired number of pages: {$page_count}\n\nBrief:\n" . mb_substr($prompt, 0, 9000);
+    // Sectoradvies (UI/UX Pro Max): welke pagina's deze sector nodig heeft (bv. realisaties, werkgebied, afspraak).
+    if (class_exists('AISB_Archer_Sector')) {
+      $rules = AISB_Archer_Sector::prompt_rules_for(AISB_Archer_Sector::detect($prompt));
+      if ($rules !== '') $user .= "\n\n" . $rules . "Use this only to decide which pages the site needs (for example a projects, service area or booking page); never add pages the brief gives no content for.\n";
+    }
     $json = $this->ai_multi(['plan' => ['system' => $system, 'user' => $user]], 'plan', 60)['plan'];
     if (is_wp_error($json)) return $json;
     $pages = [];
@@ -875,7 +888,7 @@ PROMPT;
       . '{"cta":"slug or empty","items":[{"slug":"page slug, or empty for a group label without its own page","label":"menu label","children":[{"slug":"page slug","label":"menu label"}]}]}. '
       . 'Rules: at most 6 top-level items; group related pages under one item (an existing overview page, or a short group label with an empty slug) instead of listing everything at top level; '
       . 'children only one level deep, at most 8 per item; use only slugs from the list; every slug at most once; keep the order a visitor expects (offer first, about and contact last); '
-      . 'the contact page is the "cta" (a button in the header) and not also a menu item; labels 1 to 3 words in ' . $lang . ', no punctuation; '
+      . 'the contact page is the "cta" (a button in the header) and not also a menu item; labels 1 to 3 words in ' . $lang . ', spelled exactly like the page title when you reuse it (keep apostrophes, hyphens and accents: "Regio\'s", "Zorg-op-maat"), no other punctuation; '
       . 'pages that do not fit may be left out (they stay in the footer).';
     $user = wp_json_encode(['website' => (string) ($data['website_name'] ?? ''), 'goal' => (string) ($data['website_goal'] ?? ''), 'pages' => $list], JSON_UNESCAPED_UNICODE);
     $res = $this->ai_multi(['m' => ['system' => $system, 'user' => $user]], 'plan', 60)['m'] ?? null;
@@ -923,11 +936,13 @@ PROMPT;
       . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
       . "- key_content: 2–4 concrete items from the brief.\n"
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
+      . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::plan_rules() : '')
       . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
     $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
       . "\nAll pages of the site:\n" . implode("\n", array_slice($outline_lines, 0, 70))
-      . "\n\nBrief:\n" . $brief;
+      . "\n\nBrief:\n" . $brief
+      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '');
 
     $calls = [];
     foreach ($pages as $p) {

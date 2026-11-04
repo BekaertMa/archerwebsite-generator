@@ -6,37 +6,78 @@ if (!defined('ABSPATH')) exit;
  * weinig, kort en met een reden. Een website van een kmo bezoekt men af en toe, dus er is ruimte voor
  * één binnenkomst van de hero, maar niet voor een fade-in op elke sectie.
  *
- * - Knoppen: drukfeedback (scale .97, 160ms) en een kleurovergang bij hover (150ms, alleen met muis).
- * - Hero: titel, tekst, knoppen en beeld komen één keer binnen (opacity + 8px, 400ms, 60ms na elkaar),
- *   alleen als de pagina nog niet getekend is (anders zou de inhoud even verdwijnen).
- * - Beelden lager op de pagina: één keer onthuld bij het binnenscrollen (clip-path, 600ms). Geen tekst.
+ * - Knoppen: drukfeedback (scale .97, 160ms) en een kleurovergang bij hover (150ms).
+ * - Hero: titel, tekst, knoppen en beeld komen één keer binnen (opacity + 8px, 400ms, 60ms na elkaar).
+ *   CSS-keyframes in de eigen CSS van de herosectie (hero_nodes): die staat in de <head>, dus de animatie
+ *   start bij de eerste weergave. Het runtime-script draait pas na DOMContentLoaded, als de pagina al getekend is.
+ * - Beelden lager op de pagina: één keer onthuld bij het binnenscrollen (clip-path, 600ms), alleen in secties met
+ *   één of twee grote beelden en hoogstens drie per pagina. Geen tekst.
+ * - Sectietitels lager op de pagina: woord per woord binnen (500ms, 40ms na elkaar, hoogstens zes per pagina), uit
+ *   awwwards-sites (Meng To, MIT, via getedgehq/skills): de volledige titel blijft leesbaar voor schermlezers.
+ * - Links en menu: kleurovergang 150ms; ankerlinks schuiven zacht (niet bij minder beweging).
  * - Minder beweging gevraagd: geen verplaatsing of onthulling, alleen een korte fade van de hero.
  *
- * css() gaat mee in de huisregels (voorbeeld en site), js() alleen naar de gepubliceerde site.
+ * css() gaat mee in de huisregels (voorbeeld en site), js() en hero_nodes() alleen naar de gepubliceerde site.
  */
 class AISB_Archer_Motion {
 
   const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
   const EASE_IN_OUT = 'cubic-bezier(0.77, 0, 0.175, 1)';
+  const MARK = '/*archer-hero-in*/';
 
   public static function css(): string {
     $btn = 'html body :is(.brxe-button.bricks-button,.brxe-form button[type=submit].bricks-button)';
     return ':root{--a-ease-out:' . self::EASE_OUT . ';--a-ease-in-out:' . self::EASE_IN_OUT . ';}'
-      // Niet tijdens de binnenkomst van de hero: die zet zelf opacity en transform in overgang.
-      . str_replace(')', '):not(.archer-in)', $btn) . '{transition:transform 160ms var(--a-ease-out),background-color 150ms ease,color 150ms ease,border-color 150ms ease;}'
+      . $btn . '{transition:transform 160ms var(--a-ease-out),background-color 150ms ease,color 150ms ease,border-color 150ms ease;}'
       . $btn . ':active{transform:scale(0.97);}'
       . '@media (prefers-reduced-motion:reduce){' . $btn . ':active{transform:none;}}'
-      // Onthullen en binnenkomen: de begintoestand zet het script, de eindtoestand en de overgang staan hier.
-      // Begintoestand zonder overgang: sommige sjablonen (knoppen) hebben een eigen transition op opacity.
-      . 'html.archer-motion .archer-in{opacity:0;transform:translateY(8px);}'
-      . 'html.archer-motion .archer-in:not(.is-in){transition:none !important;}'
-      . 'html.archer-motion .archer-in.is-in{opacity:1;transform:none;transition:opacity 400ms var(--a-ease-out),transform 400ms var(--a-ease-out);transition-delay:var(--archer-delay,0ms);}'
+      // Links en menu: kleurovergang bij hover (150ms), zoals de knoppen.
+      . 'html body :is(.brxe-nav-menu a,.brxe-text-link,.brxe-text a,.brxe-text-basic a,.brxe-rich-text a){transition:color 150ms ease,opacity 150ms ease;}'
+      // Ankerlinks schuiven zacht, behalve als de bezoeker minder beweging vraagt.
+      . '@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth;}}'
       . 'html.archer-motion .archer-reveal{clip-path:inset(0 0 100% 0);}'
       . 'html.archer-motion .archer-reveal.is-in{clip-path:inset(0 0 0 0);transition:clip-path 600ms var(--a-ease-in-out);}'
-      . '@media (prefers-reduced-motion:reduce){'
-      . 'html.archer-motion .archer-in{transform:none;}'
-      . 'html.archer-motion .archer-in.is-in{transition:opacity 200ms ease;transition-delay:0ms;}'
-      . 'html.archer-motion .archer-reveal{clip-path:none;}}';
+      . '@media (prefers-reduced-motion:reduce){html.archer-motion .archer-reveal{clip-path:none;}}'
+      // Sectietitels woord per woord (js(): alleen met beweging en JavaScript; zonder blijft de titel gewoon staan).
+      . '.archer-sr{position:absolute !important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}'
+      . 'html.archer-motion .archer-words .archer-w{display:inline-block;opacity:0;transform:translateY(0.35em);}'
+      . 'html.archer-motion .archer-words.is-in .archer-w{opacity:1;transform:none;transition:opacity 500ms var(--a-ease-out),transform 500ms var(--a-ease-out);transition-delay:calc(var(--i) * 40ms);}';
+  }
+
+  /** CSS voor de herosectie (klasse archer-hero; %root% wordt niet overal vervangen). */
+  public static function hero_css(bool $cover): string {
+    $a = 'animation:archer-hero-in 400ms ' . self::EASE_OUT . ' backwards;';
+    $d = fn(int $ms) => 'animation-delay:' . $ms . 'ms;';
+    return self::MARK
+      . '@keyframes archer-hero-in{from{opacity:0;transform:translateY(8px);}}'
+      . '@keyframes archer-hero-fade{from{opacity:0;}}'
+      . '.archer-hero :is(h1,h2).brxe-heading{' . $a . $d(60) . '}'
+      . '.archer-hero :is(.brxe-text-basic,.brxe-text,.brxe-rich-text):not(.brxe-heading){' . $a . $d(0) . '}'
+      . '.archer-hero :is(h1,h2).brxe-heading ~ :is(.brxe-text-basic,.brxe-text,.brxe-rich-text){' . $d(120) . '}'
+      . '.archer-hero .brxe-button{' . $a . $d(180) . '}'
+      . '.archer-hero .brxe-button ~ .brxe-button{' . $d(240) . '}'
+      // Het beeld komt in focus (blur → scherp); tekst krijgt geen blur, die moet meteen leesbaar zijn.
+      . ($cover ? '' : '@keyframes archer-hero-img{from{opacity:0;transform:translateY(8px);filter:blur(4px);}}'
+        . '.archer-hero .brxe-image{animation:archer-hero-img 500ms ' . self::EASE_OUT . ' backwards;' . $d(240) . '}')
+      . '@media (prefers-reduced-motion:reduce){.archer-hero :is(.brxe-heading,.brxe-text-basic,.brxe-text,.brxe-rich-text,.brxe-button,.brxe-image){animation-name:archer-hero-fade;animation-duration:200ms;animation-delay:0ms;}}'
+      . self::MARK;
+  }
+
+  /** De eerste inhoudssectie van een pagina krijgt de binnenkomst (eenmalig, ook bij opnieuw publiceren). */
+  public static function hero_nodes(array $nodes): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || ($n['name'] ?? '') !== 'section' || !empty($n['parent'])) continue;
+      $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
+      $cover = strpos(' ' . (string) ($s['_cssClasses'] ?? '') . ' ', ' archer-cover ') !== false;
+      $q = preg_quote(self::MARK, '#');
+      $cur = trim((string) preg_replace('#' . $q . '.*?' . $q . '#s', '', (string) ($s['_cssCustom'] ?? '')));
+      $s['_cssCustom'] = trim($cur . "\n" . self::hero_css($cover));
+      $cls = trim((string) ($s['_cssClasses'] ?? ''));
+      if (strpos(' ' . $cls . ' ', ' archer-hero ') === false) $s['_cssClasses'] = trim($cls . ' archer-hero');
+      $nodes[$i]['settings'] = $s;
+      break;
+    }
+    return $nodes;
   }
 
   public static function js(): string {
@@ -44,59 +85,84 @@ class AISB_Archer_Motion {
 (function () {
   if (window.__archerMotion) return;
   window.__archerMotion = 1;
-  var doc = document.documentElement;
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var painted = (performance.getEntriesByType ? performance.getEntriesByType("paint") : []).some(function (p) {
-    return p.name === "first-contentful-paint";
+  // Alt-teksten (UI/UX Pro Max: elke foto een beschrijving): foto's zonder alt krijgen de titel van hun blok
+  // of sectie, in de taal van de site. Logo's en versiering blijven zoals ze zijn.
+  var heading = function (el) {
+    for (var p = el.parentElement, d = 0; p && d < 6; p = p.parentElement, d++) {
+      var h = p.querySelector("h1,h2,h3,h4,.brxe-heading");
+      if (h && (h.textContent || "").trim()) return (h.textContent || "").trim().replace(/\s+/g, " ").slice(0, 120);
+    }
+    return "";
+  };
+  Array.prototype.forEach.call(document.querySelectorAll(".brxe-section img"), function (img) {
+    if ((img.getAttribute("alt") || "").trim() || img.closest(".brxe-logo,[class*='logo'],header,footer") || img.getAttribute("role") === "presentation") return;
+    var t = heading(img);
+    if (t) img.setAttribute("alt", t);
   });
+  if (reduce || !("IntersectionObserver" in window)) return;
+  document.documentElement.classList.add("archer-motion");
   var vh = window.innerHeight || 800;
   var inView = function (el) { var r = el.getBoundingClientRect(); return r.top < vh && r.bottom > 0; };
-  doc.classList.add("archer-motion");
-
-  // Hero: één keer binnenkomen, alleen als er nog niets getekend is.
   var sections = Array.prototype.slice.call(document.querySelectorAll(".brxe-section")).filter(function (s) {
     return !s.closest(".archer-header,.archer-footer,header,footer") && s.offsetHeight > 0;
   });
   var hero = sections[0];
-  if (hero && !painted) {
-    var parts = [];
-    hero.querySelectorAll("h1,h2,.brxe-heading,p,.brxe-text-basic,.brxe-button,.brxe-image,img").forEach(function (el) {
-      if (parts.length >= 8 || !inView(el)) return;
-      if (hero.classList.contains("archer-cover") && (el.matches(".brxe-image") || el.tagName === "IMG")) return; // achtergrondfoto blijft staan
-      if (parts.some(function (p) { return p.contains(el); })) return;
-      parts.push(el);
-    });
-    parts.forEach(function (el, i) {
-      el.classList.add("archer-in");
-      el.style.setProperty("--archer-delay", (reduce ? 0 : i * 60) + "ms");
-    });
-    // Na afloop alles opruimen: geen achterblijvende vertraging op knoppen, en nooit inhoud die verborgen
-    // blijft als de animatie niet afspeelt (achtergrondtab, trage machine).
-    var cleaned = false;
-    var cleanup = function () {
-      if (cleaned) return;
-      cleaned = true;
-      parts.forEach(function (el) {
-        el.classList.remove("archer-in", "is-in");
-        el.style.removeProperty("--archer-delay");
+
+  // Sectietitels woord per woord (awwwards-sites, Meng To, MIT): eenmalig bij het binnenscrollen, 40ms na elkaar.
+  // Alleen titels zonder links of opmaak, 2 tot 12 woorden, lager dan het eerste scherm, hoogstens zes per pagina.
+  // De volledige titel blijft voor schermlezers en zoekmachines; de losse woorden zijn versiering (aria-hidden).
+  var titles = [];
+  sections.forEach(function (sec) {
+    if (sec === hero || titles.length >= 6) return;
+    var h = sec.querySelector("h2.brxe-heading,h2");
+    if (!h || h.children.length || h.closest(".archer-hero,.archer-cover,[class*='logo']")) return;
+    var text = (h.textContent || "").trim().replace(/\s+/g, " ");
+    var words = text.split(" ");
+    if (words.length < 2 || words.length > 12 || inView(h)) return;
+    titles.push([h, text, words]);
+  });
+  if (titles.length) {
+    var tio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("is-in");
+        tio.unobserve(e.target);
       });
-    };
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        parts.forEach(function (el) { el.classList.add("is-in"); });
-        setTimeout(cleanup, 1000);
+    }, { rootMargin: "0px 0px -80px 0px" });
+    titles.forEach(function (t) {
+      var h = t[0], sr = document.createElement("span"), vis = document.createElement("span");
+      sr.className = "archer-sr";
+      sr.textContent = t[1];
+      vis.setAttribute("aria-hidden", "true");
+      t[2].forEach(function (w, i) {
+        if (i) vis.appendChild(document.createTextNode(" "));
+        var s = document.createElement("span");
+        s.className = "archer-w";
+        s.style.setProperty("--i", i);
+        s.textContent = w;
+        vis.appendChild(s);
       });
+      h.textContent = "";
+      h.appendChild(sr);
+      h.appendChild(vis);
+      h.classList.add("archer-words");
+      tio.observe(h);
     });
-    setTimeout(cleanup, 1600);
   }
 
   // Beelden lager op de pagina: één keer onthullen bij het binnenscrollen. Geen logo's, iconen of kleine beelden.
-  if (reduce || !("IntersectionObserver" in window)) return;
-  var imgs = Array.prototype.slice.call(document.querySelectorAll(".brxe-section .brxe-image")).filter(function (el) {
-    if (hero && hero.contains(el)) return false;
-    if (el.closest(".archer-header,.archer-footer,.archer-cover,.brxe-logo,[class*='logo']")) return false;
-    var r = el.getBoundingClientRect();
-    return r.width >= 200 && r.height >= 120 && !inView(el);
+  // Alleen het beeld van een sectie met één of twee grote beelden (geen galerijen of kaartrasters), hoogstens drie
+  // per pagina: een onthulling per sectie wordt anders een patroon dat de inhoud ophoudt.
+  var big = function (el) { var r = el.getBoundingClientRect(); return r.width >= 200 && r.height >= 120; };
+  var imgs = [];
+  sections.forEach(function (sec) {
+    if (sec === hero || imgs.length >= 3 || sec.matches(".archer-cover,[class*='logo']")) return;
+    var list = Array.prototype.slice.call(sec.querySelectorAll(".brxe-image")).filter(function (el) {
+      return !el.closest(".brxe-logo,[class*='logo']") && big(el);
+    });
+    if (!list.length || list.length > 2) return;
+    if (!inView(list[0])) imgs.push(list[0]);
   });
   if (!imgs.length) return;
   var io = new IntersectionObserver(function (entries) {

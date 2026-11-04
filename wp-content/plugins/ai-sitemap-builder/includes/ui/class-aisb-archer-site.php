@@ -166,7 +166,7 @@ class AISB_Archer_Site {
   /* ───────────────────────── Iconen ───────────────────────── */
 
   /**
-   * Trefwoorden (nl, fr, en) → Font Awesome 6 Free Solid. De eerste die past wint; volgorde = van specifiek naar algemeen.
+   * Trefwoorden (nl, fr, en) → icoon (Font Awesome 6-naam, omgezet naar Iconoir via ICONOIR). De eerste die past wint; volgorde = van specifiek naar algemeen.
    */
   const ICONS = [
     'fire-flame-curved' => 'verwarm|ketel|cv-|condensatie|chauffage|chaudi|heating|boiler|warmte|kachel|houtkachel|pellet',
@@ -234,6 +234,105 @@ class AISB_Archer_Site {
   const FALLBACK_ICONS = ['circle-check', 'star', 'gem', 'thumbs-up', 'heart', 'compass'];
 
   const GENERIC_ICONS = ['helmet-safety', 'hammer', 'screwdriver-wrench', 'comments', 'handshake', 'calculator', 'list-check', 'award', 'clock', 'users', 'euro-sign', 'chart-line'];
+
+  /** Font Awesome-naam → Iconoir-naam (https://iconoir.com). Wat hier ontbreekt, wordt 'sparks' (merken blijven Font Awesome). */
+  const ICONOIR = [
+    'fire-flame-curved' => 'fire-flame', 'fire' => 'fire-flame', 'fan' => 'air-conditioner', 'sun' => 'sun-light', 'bolt' => 'flash',
+    'faucet' => 'droplet', 'droplet' => 'droplet', 'bath' => 'bathroom', 'kitchen-set' => 'cutlery', 'couch' => 'sofa',
+    'ruler-combined' => 'ruler', 'swatchbook' => 'palette', 'helmet-safety' => 'tools', 'hammer' => 'hammer', 'screwdriver-wrench' => 'wrench',
+    'wrench' => 'wrench', 'house' => 'home', 'home' => 'home', 'store' => 'shop', 'folder-open' => 'folder',
+    'images' => 'media-image-list', 'image' => 'media-image', 'building' => 'building', 'car' => 'car', 'truck' => 'delivery-truck',
+    'utensils' => 'cutlery', 'mug-hot' => 'coffee-cup', 'bread-slice' => 'bread-slice', 'tooth' => 'emoji', 'stethoscope' => 'healthcare',
+    'paw' => 'heart', 'scissors' => 'scissor', 'spa' => 'yoga', 'dumbbell' => 'gym', 'graduation-cap' => 'graduation-cap',
+    'scale-balanced' => 'suitcase', 'calculator' => 'calculator', 'chart-line' => 'graph-up', 'laptop-code' => 'laptop', 'laptop' => 'laptop',
+    'shield-halved' => 'shield-check', 'shield' => 'shield', 'tree' => 'tree', 'seedling' => 'leaf', 'person-digging' => 'soil',
+    'trowel' => 'tools', 'paint-roller' => 'fill-color', 'broom' => 'sparks', 'key' => 'key', 'solar-panel' => 'sun-light',
+    'snowflake' => 'snow-flake', 'leaf' => 'leaf', 'recycle' => 'refresh-double', 'camera' => 'camera', 'calendar-check' => 'calendar-check',
+    'calendar' => 'calendar', 'calendar-days' => 'calendar', 'comments' => 'chat-bubble', 'comment' => 'chat-bubble', 'handshake' => 'community',
+    'clock' => 'clock', 'euro-sign' => 'euro', 'award' => 'medal', 'trophy' => 'trophy', 'medal' => 'medal',
+    'map-location-dot' => 'map', 'map' => 'map', 'location-dot' => 'map-pin', 'location-pin' => 'map-pin', 'map-marker-alt' => 'map-pin',
+    'phone' => 'phone', 'phone-volume' => 'phone', 'envelope' => 'mail', 'envelope-open' => 'mail-open', 'users' => 'group',
+    'user' => 'user', 'user-group' => 'group', 'lightbulb' => 'light-bulb', 'list-check' => 'task-list', 'list' => 'list',
+    'circle-check' => 'check-circle', 'check-circle' => 'check-circle', 'square-check' => 'check-square', 'check' => 'check', 'star' => 'star',
+    'gem' => 'sparks', 'thumbs-up' => 'thumbs-up', 'heart' => 'heart', 'compass' => 'compass', 'arrow-right' => 'arrow-right',
+    'arrow-left' => 'arrow-left', 'arrow-up-right-from-square' => 'open-new-window', 'up-right-from-square' => 'open-new-window', 'circle-minus' => 'minus-circle', 'minus' => 'minus',
+    'plus' => 'plus', 'circle-plus' => 'plus-circle', 'xmark' => 'xmark', 'times' => 'xmark', 'bars' => 'menu',
+    'chevron-down' => 'nav-arrow-down', 'chevron-right' => 'nav-arrow-right', 'chevron-left' => 'nav-arrow-left', 'chevron-up' => 'nav-arrow-up', 'angle-down' => 'nav-arrow-down',
+    'angle-right' => 'nav-arrow-right', 'angle-left' => 'nav-arrow-left', 'angle-up' => 'nav-arrow-up', 'quote-left' => 'quote', 'quote-right' => 'quote',
+    'circle-info' => 'info-circle', 'circle-question' => 'help-circle', 'cube' => 'box-3d-point', 'cubes' => 'box-3d-point', 'play' => 'play',
+    'download' => 'download', 'magnifying-glass' => 'search', 'search' => 'search', 'globe' => 'globe', 'cart-shopping' => 'cart',
+    'tag' => 'label', 'gift' => 'gift', 'headset' => 'headset', 'gear' => 'settings', 'rocket' => 'rocket',
+    'bullseye' => 'compass', 'briefcase' => 'suitcase', 'money-bill' => 'wallet', 'temperature-high' => 'temperature-high', 'water' => 'droplet',
+    'flask' => 'flask', 'book' => 'book', 'file' => 'page', 'file-lines' => 'page', 'link' => 'link',
+    'share' => 'share-android', 'eye' => 'eye', 'lock' => 'lock', 'bed' => 'bed', 'wifi' => 'wifi',
+    'instagram' => 'instagram', 'linkedin' => 'linkedin', 'x-twitter' => 'x', 'twitter' => 'x', 'youtube' => 'youtube',
+    'tiktok' => 'tiktok', 'facebook' => 'facebook', 'pinterest' => 'pinterest', 'whatsapp' => 'whatsapp',
+  ];
+
+  const ICONOIR_BRANDS = ['instagram', 'linkedin', 'x', 'youtube', 'tiktok', 'facebook', 'pinterest', 'whatsapp'];
+
+  private static $iconoir_svg = null;
+
+  /** Iconoir-naam voor een Font Awesome-klasse ("fab fa-linkedin-in", "fas fa-circle-check"), of '' als er geen is. */
+  public static function iconoir_name(string $fa): string {
+    if (preg_match('/\biconoir-([a-z0-9-]+)/', $fa, $m)) return $m[1];
+    if (!preg_match('/\bfa-([a-z0-9-]+)/', $fa, $m)) return '';
+    $n = $m[1];
+    if (isset(self::ICONOIR[$n])) return self::ICONOIR[$n];
+    if (strpos($fa, 'fab ') === 0 || strpos($fa, 'fa-brands') !== false) {
+      $b = preg_replace('/^square-|-square$|-in$|-f$|-official$/', '', $n);
+      return isset(self::ICONOIR[$b]) ? self::ICONOIR[$b] : '';
+    }
+    return 'sparks';
+  }
+
+  /** CSS voor één icoon: masker met de SVG als data-URI, kleur volgt de tekst (currentColor). */
+  public static function iconoir_css(string $name): string {
+    if (self::$iconoir_svg === null) self::$iconoir_svg = (array) include __DIR__ . '/iconoir-icons.php';
+    $svg = self::$iconoir_svg[$name] ?? '';
+    if ($svg === '') return '';
+    $uri = 'data:image/svg+xml,' . strtr(str_replace('"', "'", $svg), ['<' => '%3C', '>' => '%3E', '#' => '%23', "\n" => ' ']);
+    $sel = '.iconoir-' . $name;
+    // min-width/min-height: een leeg <i> krijgt elders soms width:auto (dan zou het icoon 0px breed zijn).
+    return $sel . '{display:inline-block;width:1em;height:1em;min-width:1em;min-height:1em;line-height:1;vertical-align:-0.125em;flex-shrink:0;}'
+      . $sel . '::before{content:"";display:block;width:1em;height:1em;background-color:currentColor;'
+      . '-webkit-mask:url("' . $uri . '") center/contain no-repeat;mask:url("' . $uri . '") center/contain no-repeat;}';
+  }
+
+  /**
+   * Alle Font Awesome-iconen van de sjablonen naar Iconoir. Bricks tekent een lettertype-icoon als <i class="...">;
+   * de vorm komt uit CSS die bij het element zelf staat (_cssCustom), zodat voorbeeld en gepubliceerde site
+   * niets extra moeten laden.
+   */
+  public static function iconoir(array $nodes): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !is_array($n['settings'] ?? null)) continue;
+      $used = [];
+      $s = self::iconoir_walk($n['settings'], $used);
+      $cur = preg_replace('#\s*/\*archer-iconoir\*/.*?/\*/archer-iconoir\*/#s', '', (string) ($s['_cssCustom'] ?? ''));
+      if ($used) {
+        $css = '';
+        foreach (array_keys($used) as $name) $css .= self::iconoir_css($name);
+        $cur = trim($cur . "\n/*archer-iconoir*/" . $css . '/*/archer-iconoir*/');
+      }
+      if ($cur !== '') $s['_cssCustom'] = $cur; else unset($s['_cssCustom']);
+      $nodes[$i]['settings'] = $s;
+    }
+    return $nodes;
+  }
+
+  private static function iconoir_walk($v, array &$used) {
+    if (!is_array($v)) return $v;
+    if (isset($v['icon']) && is_string($v['icon']) && (isset($v['library']) || preg_match('/\b(fa[sbr]?|fa-solid|fa-brands|fa-regular)\b|iconoir-/', $v['icon']))) {
+      if (!empty($v['svg']) || ($v['library'] ?? '') === 'svg') return $v;
+      $name = self::iconoir_name($v['icon']);
+      if ($name === '') return $v; // merk zonder Iconoir-variant: Font Awesome blijft
+      $used[$name] = 1;
+      return ['library' => 'iconoir', 'icon' => 'iconoir-' . $name] + array_diff_key($v, ['library' => 1, 'icon' => 1]);
+    }
+    foreach ($v as $k => $x) if (is_array($x)) $v[$k] = self::iconoir_walk($x, $used);
+    return $v;
+  }
 
   /** Treffers [icoon, positie]: trefwoorden van 6+ tekens ook midden in een samenstelling, kortere aan het begin van een woord. */
   private static function icon_hits(string $t): array {
@@ -488,8 +587,9 @@ class AISB_Archer_Site {
 
       // Sociale media: alleen de platformen met een adres.
       $icon = (string) ($s['icon']['icon'] ?? '');
-      if (strpos($icon, 'fab ') === 0 && array_key_exists('link', $s)) {
-        $platform = '';
+      $brand = preg_match('/\biconoir-(' . implode('|', self::ICONOIR_BRANDS) . ')$/', $icon, $bm) ? $bm[1] : '';
+      if ((strpos($icon, 'fab ') === 0 || $brand !== '') && array_key_exists('link', $s)) {
+        $platform = $brand === 'whatsapp' ? '' : $brand;
         foreach (['linkedin', 'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest'] as $k) if (strpos($icon, $k) !== false) $platform = $k;
         if (strpos($icon, 'x-twitter') !== false || strpos($icon, 'fa-twitter') !== false) $platform = 'x';
         // Buiten de header en footer (teamkaarten, getuigenissen): geen sociale iconen, die horen bij personen.
@@ -536,23 +636,183 @@ class AISB_Archer_Site {
       }
       if ($drop) $nodes = self::remove($nodes, $drop);
     }
+    return self::iconoir(self::code_css($nodes, $region));
+  }
+
+  /**
+   * CSS uit de code-elementen van een sjabloon werkend houden op de site.
+   * - De export zet klasse-instellingen ook op het element-id (#brxe-…); de regels van het sjabloon
+   *   (bv. ".offcanvas-header-4.brx-open .offcanvas-header-4__menu{opacity:1}") verliezen dan van dat id.
+   *   Daarom krijgen hun declaraties !important.
+   * - Eén niveau CSS-nesting wordt platgemaakt (oudere Safari kent geen nesting).
+   * - "header#brx-header" bestaat niet op onze sites (de header is een sectie): dat wordt .archer-header.
+   * - Header: zonder eigen positie komt de sectie boven de inhoud (position:relative, z-index 998),
+   *   anders schuift een offcanvas- of uitklapmenu achter de hero.
+   */
+  public static function code_css(array $nodes, string $region = ''): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n)) continue;
+      $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
+      if (($n['name'] ?? '') === 'code' && is_string($s['cssCode'] ?? null) && trim($s['cssCode']) !== '' && strpos($s['cssCode'], '/*archer-css*/') === false) {
+        $nodes[$i]['settings']['cssCode'] = '/*archer-css*/' . self::harden_css($s['cssCode']);
+        // Bricks voert code alleen uit met een geldige handtekening; CSS zonder JS hoeft dat niet.
+      }
+      if ($region === 'header' && empty($n['parent']) && in_array($n['name'] ?? '', ['section', 'container', 'block', 'div'], true)) {
+        if (empty($s['_position'])) $nodes[$i]['settings']['_position'] = 'relative';
+        if (!isset($s['_zIndex']) || $s['_zIndex'] === '') $nodes[$i]['settings']['_zIndex'] = '998';
+      }
+    }
     return $nodes;
   }
+
+  public static function harden_css(string $css): string {
+    $css = preg_replace('#/\*.*?\*/#s', '', $css);
+    $css = preg_replace('/header#brx-header|#brx-header\b/', '.archer-header', $css);
+    return trim(self::css_walk(self::css_blocks($css), ''));
+  }
+
+  /** Blokken op het hoogste niveau: [prelude, body] (body null = losse declaraties). */
+  private static function css_blocks(string $css): array {
+    $out = [];
+    $len = strlen($css);
+    $buf = '';
+    for ($i = 0; $i < $len; $i++) {
+      $c = $css[$i];
+      if ($c === '{') {
+        $depth = 1;
+        $j = $i + 1;
+        for (; $j < $len && $depth; $j++) {
+          if ($css[$j] === '{') $depth++;
+          elseif ($css[$j] === '}') $depth--;
+        }
+        $out[] = [trim($buf), substr($css, $i + 1, $j - $i - 2)];
+        $buf = '';
+        $i = $j - 1;
+      } elseif ($c === '}') {
+        $buf = '';
+      } else {
+        $buf .= $c;
+      }
+    }
+    if (trim($buf) !== '') $out[] = [trim($buf), null];
+    return $out;
+  }
+
+  /** Platgemaakte CSS met !important; $parent is de selector van de omringende regel (nesting). */
+  private static function css_walk(array $blocks, string $parent): string {
+    $out = '';
+    foreach ($blocks as [$pre, $body]) {
+      if ($body === null) continue;
+      if ($pre !== '' && $pre[0] === '@') {
+        // @keyframes, @font-face en dergelijke blijven zoals ze zijn; @media en @supports gaan erin.
+        $out .= preg_match('/^@(media|supports|container|layer)\b/i', $pre)
+          ? $pre . '{' . self::css_walk(self::css_blocks($body), $parent) . '}'
+          : ($parent === '' ? $pre . '{' . $body . '}' : '');
+        continue;
+      }
+      $sel = $parent === '' ? $pre : implode(',', array_map(function ($x) use ($parent) {
+        $x = trim($x);
+        return strpos($x, '&') !== false ? str_replace('&', $parent, $x) : $parent . ' ' . $x;
+      }, array_filter(explode(',', $pre), fn($x) => trim($x) !== '')));
+      if ($sel === '') continue;
+      // Declaraties van deze regel (alles buiten de geneste blokken) en de geneste regels apart.
+      $flat = '';
+      $nested = [];
+      $depth = 0;
+      $start = 0;
+      $blen = strlen($body);
+      $chunk = '';
+      for ($i = 0; $i < $blen; $i++) {
+        $c = $body[$i];
+        if ($c === '{') { if ($depth === 0) { $p = strrpos($chunk, ';'); $flat .= $p === false ? '' : substr($chunk, 0, $p + 1); $chunk = $p === false ? $chunk : substr($chunk, $p + 1); } $depth++; $chunk .= $c; }
+        elseif ($c === '}') { $depth--; $chunk .= $c; if ($depth === 0) { $nested[] = $chunk; $chunk = ''; } }
+        else $chunk .= $c;
+      }
+      $flat .= $chunk;
+      $decl = self::css_important($flat);
+      if ($decl !== '') $out .= $sel . '{' . $decl . '}';
+      if ($nested) $out .= self::css_walk(self::css_blocks(implode('', $nested)), $sel);
+    }
+    return $out;
+  }
+
+  /** Declaraties met !important; puntkomma's binnen haakjes (url(data:…;base64,…)) blijven heel. */
+  private static function css_important(string $decls): string {
+    $parts = [];
+    $cur = '';
+    $par = 0;
+    $len = strlen($decls);
+    for ($i = 0; $i < $len; $i++) {
+      $c = $decls[$i];
+      if ($c === '(') $par++;
+      elseif ($c === ')') $par = max(0, $par - 1);
+      if ($c === ';' && $par === 0) { $parts[] = $cur; $cur = ''; continue; }
+      $cur .= $c;
+    }
+    $parts[] = $cur;
+    $out = [];
+    foreach ($parts as $d) {
+      $d = trim($d);
+      if ($d === '' || strpos($d, ':') === false) continue;
+      $out[] = stripos($d, '!important') !== false ? $d : $d . ' !important';
+    }
+    return $out ? implode(';', $out) . ';' : '';
+  }
+
 
   /** Alle secties van de export (header en footer doet AISB_Archer_Chrome::apply). */
   public static function apply_to_export(array $pages, int $pid, callable $link): array {
     foreach ($pages as &$page) {
+      $first = true;
       foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
         if (!is_array($sec)) continue;
         $type = strtolower((string) ($sec['type'] ?? ''));
         if (in_array($type, ['header', 'footer'], true)) continue;
         foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
-          if (!empty($sec[$key]) && is_array($sec[$key])) $page['sections'][$k][$key] = self::apply_nodes($sec[$key], $pid, $link, '');
+          if (empty($sec[$key]) || !is_array($sec[$key])) continue;
+          $nodes = self::apply_nodes($sec[$key], $pid, $link, '');
+          // Eerste inhoudssectie: de hero komt een keer binnen (AISB_Archer_Motion).
+          if ($first && class_exists('AISB_Archer_Motion')) $nodes = AISB_Archer_Motion::hero_nodes($nodes);
+          $page['sections'][$k][$key] = $nodes;
         }
+        $first = false;
       }
+      $page = self::one_h1($page);
     }
     unset($page);
     return $pages;
+  }
+
+  /**
+   * Precies één H1 per pagina (UI/UX Pro Max, ux-guidelines: één hoofdtitel voor Google en schermlezers).
+   * Geen H1: de eerste titel van de eerste inhoudssectie wordt H1. Meer dan één: de volgende worden H2.
+   */
+  public static function one_h1(array $page): array {
+    $order = [];
+    foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
+      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
+      $key = !empty($sec['bricks_elements_bricks']) ? 'bricks_elements_bricks' : (!empty($sec['bricks_elements']) ? 'bricks_elements' : '');
+      if ($key === '') continue;
+      foreach ((array) $sec[$key] as $n) {
+        if (is_array($n) && ($n['name'] ?? '') === 'heading') $order[] = [$k, (string) ($n['id'] ?? ''), strtolower((string) ($n['settings']['tag'] ?? 'h3'))];
+      }
+    }
+    if (!$order) return $page;
+    $set = [];
+    $h1 = array_values(array_filter($order, fn($o) => $o[2] === 'h1'));
+    if (!$h1) $set[$order[0][1]] = 'h1';
+    else foreach (array_slice($h1, 1) as $o) $set[$o[1]] = 'h2';
+    if (!$set) return $page;
+    foreach ($page['sections'] as $k => $sec) {
+      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
+        if (empty($sec[$key]) || !is_array($sec[$key])) continue;
+        foreach ($sec[$key] as $i => $n) {
+          $id = is_array($n) ? (string) ($n['id'] ?? '') : '';
+          if ($id !== '' && isset($set[$id]) && ($n['name'] ?? '') === 'heading') $page['sections'][$k][$key][$i]['settings']['tag'] = $set[$id];
+        }
+      }
+    }
+    return $page;
   }
 
   /* ───────────────────────── Favicon ───────────────────────── */

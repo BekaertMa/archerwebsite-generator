@@ -1,0 +1,58 @@
+{
+  "atelier": {
+    "theme": "Editorial and calm, like a well-made print magazine. Big serif headlines carry the page; the rest steps back. Lots of white space, black as the only accent, thin rules instead of boxes. Feels considered and quietly premium.",
+    "voice": "Calm, precise and understated. Short sentences, concrete nouns, no exclamation marks. Let the work speak; never oversell.",
+    "photo": "natural light, quiet interiors, materials and details, few people, muted colours",
+    "do": ["Give one big serif headline per section room to breathe", "Use thin lines (hairlines) and whitespace to separate content", "Keep body text short and set in the sans", "Show large, calm photography with generous margins"],
+    "dont": ["Do not add coloured accents next to the black", "Do not box content in filled cards", "Do not use more than one serif size per section", "Do not crowd the page with icons or badges"]
+  },
+  "nordic": {
+    "theme": "Light, clear and trustworthy. A tight sans-serif, soft green accent and quiet pale surfaces. Feels modern, competent and easy to read, without trying to impress.",
+    "voice": "Clear and friendly-professional. Explain what you do in plain words, one idea per sentence.",
+    "photo": "bright daylight, clean spaces, people at work, soft natural colours",
+    "do": ["Use the soft surface for cards and bands, the ground for everything else", "Keep one green accent for the main action", "Prefer short lists and clear headings over long paragraphs", "Align everything to the container grid"],
+    "dont": ["Do not use more than one accent colour", "Do not use dark sections except the footer", "Do not add shadows or gradients", "Do not set headings in all caps"]
+  },
+  "studio": {
+    "theme": "Big, confident and graphic. Huge headlines, hard lines and an orange accent. Feels like a design studio: bold, opinionated and fast.",
+    "voice": "Confident and direct. Strong verbs, short punchy headlines, a clear opinion. Still concrete: no hype words.",
+    "photo": "bold compositions, strong contrast, close-ups, graphic shapes, urban settings",
+    "do": ["Let one headline dominate each section", "Use hairline borders and a strict grid", "Use the orange accent sparingly, for the main action and one highlight", "Mix very large and small type for contrast"],
+    "dont": ["Do not soften with rounded cards or pastel surfaces", "Do not centre long text blocks", "Do not use the accent for body text", "Do not add decorative icons to every item"]
+  },
+  "ambacht": {
+    "theme": "Warm and honest, made for craftspeople. A sturdy grotesque, a warm ground and a deep blue accent. Feels reliable, local and hands-on.",
+    "voice": "Warm, plain-spoken and practical, like the owner explaining the job. Mention the work, the materials and the region.",
+    "photo": "craftsmen at work, hands and tools, real materials, warm light, finished projects",
+    "do": ["Show real work and real people as much as possible", "Use the warm surface for cards and the blue for actions", "Put contact details and the main call to action within easy reach", "Use rounded, friendly shapes for buttons"],
+    "dont": ["Do not use cold greys or a dark theme", "Do not use abstract stock imagery", "Do not use thin, light fonts for headings", "Do not hide the phone number"]
+  },
+  "helder": {
+    "theme": "Trusted and accessible. Rounded shapes, soft flat surfaces and a petrol accent. Feels caring and calm, easy for everyone to use.",
+    "voice": "Reassuring and simple. Short sentences, no jargon, speak to the reader directly and explain the next step.",
+    "photo": "warm caring moments, people talking, bright welcoming spaces, soft colours",
+    "do": ["Keep text large enough and contrast high", "Use soft surfaces to group related content", "Make the next step obvious on every page", "Use rounded corners consistently"],
+    "dont": ["Do not use small or light grey text", "Do not use dark or loud sections", "Do not use sharp, aggressive shapes", "Do not stack several calls to action next to each other"]
+  },
+  "noir": {
+    "theme": "Dark and exclusive. A fine serif, champagne accent and large photography on a near-black ground. Feels evening, intimate and premium.",
+    "voice": "Refined and evocative but still precise. Few words, sensory detail, an invitation rather than a sales pitch.",
+    "photo": "moody low light, evening atmosphere, rich textures, close-up details, warm highlights",
+    "do": ["Let large photography fill the space", "Use the champagne accent only for actions and fine details", "Use uppercase letter-spaced labels for buttons and small headings", "Keep generous spacing between sections"],
+    "dont": ["Do not use bright colours or white sections", "Do not use small grey text on the dark ground", "Do not use rounded, playful shapes", "Do not use bright daylight stock photos"]
+  },
+  "raster": {
+    "theme": "Swiss and technical. White, black and a single red, everything on a strict grid with hairlines. Feels precise, engineered and no-nonsense.",
+    "voice": "Factual and exact. Numbers, specifications and clear claims; no adjectives that cannot be measured.",
+    "photo": "architectural lines, technical details, clean product shots, strong geometry",
+    "do": ["Put every element on the grid, aligned to columns", "Use hairlines to divide content", "Use the red only for the main action and key numbers", "Use square corners everywhere"],
+    "dont": ["Do not round corners or use soft shadows", "Do not add a second accent colour", "Do not centre text", "Do not use decorative illustrations"]
+  },
+  "fris": {
+    "theme": "Friendly and modern for local services. A rounded sans, white ground and cobalt blue. Feels approachable, quick and easy to contact.",
+    "voice": "Friendly, direct and helpful. Say what you do, where and how to reach you; invite the reader to call or ask a quote.",
+    "photo": "bright daylight, friendly people, service at home, clean modern spaces",
+    "do": ["Make the main action (call, quote, booking) visible in the header and hero", "Use flat light cards to group services", "Keep icons simple and consistent", "Use rounded buttons with a clear label"],
+    "dont": ["Do not use dark themes or heavy imagery", "Do not use serif headlines", "Do not use long paragraphs", "Do not use more than one accent colour"]
+  }
+}

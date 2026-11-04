@@ -145,6 +145,45 @@ class AISB_Archer_Styles {
    * De CSS van een stijl. Begint met de @import van de letters (moet de eerste regel van de stylesheet zijn).
    * Achtergrondkleuren van secties: de grond; kaarten en bewuste banden komen uit de variabelen.
    */
+  /** Sfeer, stem, fotorichting en do's & don'ts van een stijl (styles/design-notes.json; ook in styles/design/<id>.md). */
+  public static function notes(string $id): array {
+    static $all = null;
+    if ($all === null) {
+      $raw = @file_get_contents(__DIR__ . '/styles/design-notes.json');
+      $all = $raw ? (array) json_decode($raw, true) : [];
+    }
+    return (array) ($all[$id] ?? []);
+  }
+
+  /** Regels voor de AI wanneer de stijl al gekozen is (teksten opnieuw schrijven, stockfoto's zoeken). */
+  public static function prompt_notes($guide, string $kind = 'copy'): string {
+    $s = self::of($guide);
+    if (!$s) return '';
+    $n = self::notes($s['id']);
+    if (!$n) return '';
+    if ($kind === 'photo') return (string) ($n['photo'] ?? '');
+    return 'STYLE "' . $s['name'] . '" (DESIGN.md): ' . ($n['theme'] ?? '') . "\nVOICE: " . ($n['voice'] ?? '') . "\n";
+  }
+
+  public static function design_md_url(string $id): string {
+    return file_exists(__DIR__ . '/styles/design/' . $id . '.md') ? plugins_url('styles/design/' . $id . '.md', __FILE__) : '';
+  }
+
+  /** De kleuren zoals ze op de site komen: de stijl, met de aanpassingen uit de stijlgids (zelfde regel als css()). */
+  public static function effective_colours(array $s, $guide = null): array {
+    $c = $s['colours'];
+    if (is_array($guide)) {
+      $map = ['Primary' => 'accent', 'Secondary' => 'dark', 'Dark' => 'ink', 'Light' => 'surface', 'Neutral' => 'surface2'];
+      foreach ((array) ($guide['colours'] ?? []) as $col) {
+        $n = is_array($col) ? (string) ($col['name'] ?? '') : '';
+        $hex = is_array($col) ? (string) ($col['hex'] ?? '') : '';
+        if (isset($map[$n]) && preg_match('/^#[0-9a-f]{6}$/i', $hex)) $c[$map[$n]] = $hex;
+      }
+      $c['accentInk'] = self::contrast('#ffffff', $c['accent']) >= 4.5 ? '#FFFFFF' : $c['ink'];
+    }
+    return $c;
+  }
+
   /** Hoeken per keuze in de stap Stijl (dezelfde waarden als UI.RADII in archer.js). */
   const RADII = [
     'sharp' => ['button' => 0, 'card' => 0, 'image' => 0, 'field' => 0],
@@ -265,7 +304,7 @@ class AISB_Archer_Styles {
       . 'html body a:not(.bricks-button):not(.brxe-button):not(.brxe-logo)' . $notChrome . '{color:var(--a-link);}'
       // Secties: de grond komt uit de variabelen (wit en --light) en uit sectionBg1/sectionBg2 (geen zebra meer).
       // Knoppen
-      . $btn . '{border-radius:var(--a-radius-button);font-family:var(--a-font-body);font-size:' . (int) $b['size'] . 'px;font-weight:' . (int) $b['weight'] . ';letter-spacing:' . $b['tracking'] . ';text-transform:' . $b['case'] . ';padding:1em 1.6em;line-height:1.1;}'
+      . $btn . '{border-radius:var(--a-radius-button);font-family:var(--a-font-body);font-size:' . (int) $b['size'] . 'px;font-weight:' . (int) $b['weight'] . ';letter-spacing:' . $b['tracking'] . ';text-transform:' . $b['case'] . ';padding:1em 1.6em;line-height:1.1;min-height:44px;}'
       . 'html body .brxe-button.bricks-button:not(.outline):not([class*="outline"]):not([class*="link"])' . $notChrome . '{background-color:var(--a-accent);color:var(--a-accent-ink);border-color:var(--a-accent);}'
       . 'html body .brxe-button.bricks-button:is(.outline,[class*="outline"]){background-color:transparent;color:var(--a-ink);border:1px solid currentColor;}'
       // Twee knoppen naast elkaar: de tweede is de rustige (omlijnde) variant.
@@ -330,15 +369,24 @@ class AISB_Archer_Styles {
   public static function for_project(int $project_id): array {
     $brief = (string) get_post_meta($project_id, 'aisb_project_brief', true) . ' ' . get_the_title($project_id);
     $sector = class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::sector_for($brief) : 'other';
+    // Sectoradvies uit UI/UX Pro Max: de volgorde komt dan uit de score, de drie besten passen bij de zaak.
+    $adv = class_exists('AISB_Archer_Sector') ? AISB_Archer_Sector::get(AISB_Archer_Sector::for_project($project_id)) : null;
+    $scores = [];
+    if ($adv) {
+      foreach (self::library() as $s) $scores[$s['id']] = AISB_Archer_Sector::score($s, $adv, $sector);
+      arsort($scores);
+      $top = array_slice(array_keys($scores), 0, 3);
+    }
     $out = [];
     foreach (self::library() as $i => $s) {
-      $fit = in_array($sector, (array) ($s['sectors'] ?? []), true);
+      $fit = $adv ? in_array($s['id'], $top, true) : in_array($sector, (array) ($s['sectors'] ?? []), true);
       $out[] = [
         'id' => $s['id'],
         'name' => $s['name'],
         'pitch' => $s['pitch'],
         'fit' => $fit,
-        'order' => ($fit ? 0 : 100) + $i,
+        'order' => $adv ? (100 - $scores[$s['id']] * 5) : (($fit ? 0 : 100) + $i),
+        'score' => $adv ? $scores[$s['id']] : null,
         'colours' => $s['colours'],
         'headingFont' => $s['fonts']['heading']['family'],
         'headingWeight' => (int) $s['fonts']['heading']['weight'],
@@ -349,10 +397,11 @@ class AISB_Archer_Styles {
         'fontUrl' => self::font_url($s),
         'css' => self::css($s),
         'guide' => self::guide_patch($s),
+        'designMd' => self::design_md_url($s['id']),
       ];
     }
     usort($out, fn($a, $b) => $a['order'] <=> $b['order']);
-    return ['sector' => $sector, 'styles' => $out];
+    return ['sector' => $sector, 'styles' => $out, 'advice' => $adv ? AISB_Archer_Sector::advice($adv) : null];
   }
 
   public function ajax_styles(): void {

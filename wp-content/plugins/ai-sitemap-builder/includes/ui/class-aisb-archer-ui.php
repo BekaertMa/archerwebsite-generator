@@ -12,6 +12,9 @@ require_once __DIR__ . '/class-aisb-archer-stock.php';
 require_once __DIR__ . '/class-aisb-archer-styles.php';
 require_once __DIR__ . '/class-aisb-archer-site.php';
 require_once __DIR__ . '/class-aisb-archer-motion.php';
+require_once __DIR__ . '/class-aisb-archer-sector.php';
+require_once __DIR__ . '/class-aisb-archer-checks.php';
+require_once __DIR__ . '/class-aisb-archer-marketing.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -597,6 +600,7 @@ class AISB_Archer_UI {
         <?php endif; ?>
       </div>
     </div>
+    <?php echo class_exists('AISB_Archer_Checks') ? AISB_Archer_Checks::render($project_id) : ''; ?>
     <?php
     return (string) ob_get_clean();
   }

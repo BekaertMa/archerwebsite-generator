@@ -2369,8 +2369,11 @@
       sbox.setAttribute("aria-label", "Stijl");
       sbox.innerHTML = '<div class="archer-taste-head"><h4>Stijl</h4></div>' +
         '<p class="archer-taste-intro">Kies een stijl voor de hele website: letters, kleuren, witruimte en vormen horen samen. Daaronder kan je kleuren en letters nog verfijnen.</p>' +
+        '<div data-style-advice></div>' +
         '<div class="archer-style-grid" data-style-grid><p class="archer-muted">Stijlen laden…</p></div>' +
-        '<p class="archer-taste-status" data-style-status aria-live="polite"></p>';
+        '<p class="archer-taste-status" data-style-status aria-live="polite"></p>' +
+        '<p class="archer-style-brand" data-style-brand hidden></p>' +
+        '<p class="archer-style-md" data-style-md hidden></p>';
       box.before(sbox);
       $(".archer-taste-head h4", box).textContent = "Kleuren en letters verfijnen";
       $(".archer-taste-intro", box).textContent = "Andere combinaties binnen de gekozen stijl: kleuren of letters apart wisselen.";
@@ -2388,6 +2391,14 @@
         const map = { Primary: "--a-accent", Secondary: "--a-dark", Dark: "--a-ink", Light: "--a-surface", Neutral: "--a-surface2" };
         let o = "";
         Object.keys(map).forEach((n) => { const h = get(n); if (/^#[0-9a-f]{6}$/i.test(h)) o += map[n] + ":" + h + ";"; });
+        // Tekst op de knoppen: wit of de tekstkleur, wat het best leesbaar is (zoals AISB_Archer_Styles::css).
+        const acc = get("Primary");
+        if (/^#[0-9a-f]{6}$/i.test(acc)) {
+          const L = (h) => { const n = parseInt(h.slice(1), 16); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255); };
+          const white = 1.05 / (L(acc) + 0.05);
+          const ink = get("Dark") || (st.colours && st.colours.ink) || "#111111";
+          o += "--a-accent-ink:" + (white >= 4.5 || !/^#[0-9a-f]{6}$/i.test(ink) ? "#FFFFFF" : ink) + ";";
+        }
         const hf = SG.guide && SG.guide.headingFont, bf = SG.guide && SG.guide.bodyFont;
         if (hf && hf !== st.headingFont) o += `--a-font-heading:'${hf}',ui-sans-serif,system-ui,sans-serif;`;
         if (bf && bf !== st.bodyFont) o += `--a-font-body:'${bf}',ui-sans-serif,system-ui,sans-serif;`;
@@ -2442,14 +2453,41 @@
         SG.guide.typography = JSON.parse(JSON.stringify(g.typography));
         if (SG.renderTypography) SG.renderTypography(SG.guide.typography);
         ["style", "radius", "sectionBg1", "sectionBg2", "darkMode", "groundsLight"].forEach((k) => (SG.guide[k] = g[k]));
+        const branded = UI.brandColours ? UI.brandColours(g.colours) : g.colours;
+        if (branded !== g.colours) setColours(branded);
         SG.guide.sectionSchemes = bandSchemes(st);
         SG.guide.tasteDirection = null;
         SG.applyOverridesToAllIframes();
         renderStyles();
         if (UI.markRadius) UI.markRadius();
-        if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's.";
+        if (!quiet) $("[data-style-status]", sbox).textContent = "Stijl " + st.name + " toegepast op alle pagina's" + (branded !== g.colours ? ", met de kleuren van je logo." : ".");
+        renderBrand();
         SG.saveDraft && SG.saveDraft();
       };
+      // Bestaande projecten: de stijl verving de logokleuren. Eén klik zet ze terug, zonder de stijl te wisselen.
+      function renderBrand() {
+        const el = $("[data-style-brand]", sbox);
+        if (!el) return;
+        const b = SG.guide && !Array.isArray(SG.guide) ? SG.guide.brand : null;
+        const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+        const prim = ((cols.find((c) => c && c.name === "Primary") || {}).hex || "").toLowerCase();
+        const show = !!(b && /^#[0-9a-f]{6}$/i.test(b.primary || "") && cols.length && prim !== b.primary.toLowerCase());
+        el.hidden = !show;
+        el.innerHTML = show
+          ? `<button type="button" class="archer-style-brand-btn" data-style-brand-apply><span class="archer-style-brand-dot" style="background:${esc(b.primary)}"></span>Kleuren van je logo gebruiken</button>` +
+            '<span class="archer-muted">De stijl blijft; de knoppen en accenten krijgen de kleur van het logo.</span>'
+          : "";
+      }
+      sbox.addEventListener("click", (e) => {
+        if (!e.target.closest("[data-style-brand-apply]")) return;
+        const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
+        setColours(UI.brandColours(cols));
+        SG.applyOverridesToAllIframes();
+        renderStyles();
+        renderBrand();
+        $("[data-style-status]", sbox).textContent = "Kleuren van je logo toegepast.";
+        SG.saveDraft && SG.saveDraft();
+      });
       const specimen = (st) => {
         const c = st.colours;
         return `<span class="archer-style-swatch" style="background:${esc(c.base)};color:${esc(c.ink)}">` +
@@ -2459,6 +2497,21 @@
           `<span class="archer-style-chips"><b style="background:${esc(c.surface)}"></b><b style="background:${esc(c.accent)}"></b><b style="background:${esc(c.dark)}"></b></span>` +
           `</span>`;
       };
+      // Sectoradvies (UI/UX Pro Max): waarom deze stijlen bovenaan staan, wat zeker op de website moet en wat niet.
+      function renderAdvice(a) {
+        const el = $("[data-style-advice]", sbox);
+        if (!el) return;
+        if (!a) { el.innerHTML = ""; return; }
+        const li = (xs) => (xs || []).map((x) => `<li>${esc(x)}</li>`).join("");
+        el.innerHTML =
+          `<details class="archer-sector-advice"><summary><span class="archer-sector-advice-label">Advies voor ${esc(a.label.toLowerCase())}</span>` +
+          `<span class="archer-sector-advice-line">${esc(a.stijl)}</span></summary>` +
+          '<dl class="archer-sector-advice-grid">' +
+          `<dt>Kleur</dt><dd>${esc(a.kleur)}</dd><dt>Letters</dt><dd>${esc(a.letters)}</dd><dt>Opbouw</dt><dd>${esc(a.opbouw)}</dd>` +
+          "</dl>" +
+          `<div class="archer-sector-advice-cols"><div><h5>Moet op de website</h5><ul>${li(a.moet)}</ul></div><div><h5>Vermijden</h5><ul>${li(a.vermijd)}</ul></div></div>` +
+          '<p class="archer-sector-advice-src">Op basis van UI/UX Pro Max. De stijlen die het best passen, staan eerst.</p></details>';
+      }
       function renderStyles() {
         const cur = styleNow();
         $("[data-style-grid]", sbox).innerHTML = styles
@@ -2467,13 +2520,21 @@
             `<span class="archer-style-name">${esc(st.name)}${st.fit && styles.indexOf(st) < 3 ? ' <em>past bij deze zaak</em>' : ""}</span>` +
             `<span class="archer-style-pitch">${esc(st.pitch)}</span></button>`)
           .join("");
+        // Het ontwerpsysteem van de gekozen stijl als DESIGN.md (voor Claude Design of een ontwikkelaar).
+        const md = $("[data-style-md]", sbox);
+        const act = styleById(cur);
+        if (md) {
+          md.hidden = !(act && act.designMd);
+          md.innerHTML = act && act.designMd ? `Ontwerpsysteem van ${esc(act.name)}: <a href="${esc(act.designMd)}" target="_blank" rel="noopener" download>DESIGN.md</a>` : "";
+        }
       }
       let userPicked = false;
       sbox.addEventListener("click", (e) => {
         const b = e.target.closest("[data-style-id]");
         if (!b) return;
         userPicked = true;
-        applyStyle(styleById(b.getAttribute("data-style-id")));
+        const st = styleById(b.getAttribute("data-style-id"));
+        (UI.ensureBrand ? UI.ensureBrand() : Promise.resolve()).then(() => applyStyle(st));
       });
       // Een nieuw project (nog geen stijlgids): de eerste stijl die bij de zaak past, toepassen.
       // Pas beslissen als de opgeslagen stijlgids geladen is; een keuze van de gebruiker gaat altijd voor.
@@ -2487,12 +2548,14 @@
           return;
         }
         styles = out.data.styles || [];
+        renderAdvice(out.data.advice);
         const fams = Array.from(new Set(styles.map((x) => x.headingFont))).map((f) => "family=" + f.replace(/ /g, "+") + ":wght@400;500;600;700");
         styleFonts.href = "https://fonts.googleapis.com/css2?" + fams.join("&") + "&display=swap";
         renderStyles();
         (SG.allIframes || []).forEach((f) => f._loaded && injectStyle(f));
         setTimeout(() => {
-          if (!userPicked && UI.styleAuto && guideEmpty() && styles[0]) applyStyle(styles[0], true);
+          if (!userPicked && UI.styleAuto && guideEmpty() && styles[0]) (UI.ensureBrand ? UI.ensureBrand() : Promise.resolve()).then(() => applyStyle(styles[0], true));
+          else if (UI.ensureBrand) UI.ensureBrand().then(renderBrand);
         }, 1800);
       })();
       let dealt = [];
@@ -2657,6 +2720,9 @@
       ColorThief.prototype._archerRoles = true;
       ColorThief.prototype.getPalette = function () {
         const p = origPalette.apply(this, arguments);
+        // Merkkleur uit dit logo of deze foto: een stijl houdt die kleur daarna (UI.brandColours).
+        const G0 = window.AISB_StyleGuide;
+        if (Array.isArray(p) && p.length && UI.brandFrom && G0 && G0.guide && !Array.isArray(G0.guide)) G0.guide.brand = UI.brandFrom(p);
         if (!Array.isArray(p) || p.length < 6) return p;
         const info = p.map((c) => {
           const [r, g, b] = c.map((v) => v / 255);
@@ -2683,6 +2749,78 @@
         }
         return out;
       };
+    }
+
+    /* Merkkleuren. Een stijl bracht tot nu toe zijn eigen kleuren mee en verving zo de kleuren van het logo
+       (Stinro: oranje logo, blauwe Fris-knoppen). Nu: de merkkleur wordt de accentkleur, de donkere kleur van het
+       logo de donkere band; de gronden en tekstkleur van de stijl houden hun lichtheid maar krijgen de tint van het merk.
+       Grijze stijlkleuren blijven grijs (Atelier, Raster). */
+    {
+      const hx = (c) => "#" + c.slice(0, 3).map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+      const rgbOf = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+      const toHsl = (h) => {
+        const [r, g, b] = rgbOf(h).map((v) => v / 255);
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+        let s = 0, hh = 0;
+        if (mx !== mn) {
+          const d = mx - mn;
+          s = d / (1 - Math.abs(2 * l - 1));
+          hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+          hh *= 60;
+          if (hh < 0) hh += 360;
+        }
+        return { h: hh, s, l };
+      };
+      const fromHsl = ({ h, s, l }) => {
+        const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+        const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+        return hx([(r + m) * 255, (g + m) * 255, (b + m) * 255]);
+      };
+      /** Uit de kleuren van ColorThief: de meest verzadigde middentint (merkkleur) en de donkerste (tekst, band). */
+      UI.brandFrom = (pal) => {
+        const info = pal.filter((c) => Array.isArray(c) && c.length >= 3).map((c) => ({ hex: hx(c), ...toHsl(hx(c)) }));
+        const vivid = info.filter((x) => x.s >= 0.25 && x.l > 0.18 && x.l < 0.82).sort((a, b) => b.s * (1 - Math.abs(2 * b.l - 1)) - a.s * (1 - Math.abs(2 * a.l - 1)));
+        const darks = info.filter((x) => x.l < 0.3).sort((a, b) => a.l - b.l);
+        return { primary: vivid[0] ? vivid[0].hex : "", dark: darks[0] ? darks[0].hex : "", source: "image" };
+      };
+      /** De kleuren van een stijl met het merk erin. Zonder merkkleur: ongewijzigd. */
+      UI.brandColours = (cols) => {
+        const G = window.AISB_StyleGuide;
+        const b = G && G.guide && !Array.isArray(G.guide) ? G.guide.brand : null;
+        if (!b || !/^#[0-9a-f]{6}$/i.test(b.primary || "") || !Array.isArray(cols)) return cols;
+        const bh = toHsl(b.primary).h;
+        const dark = !!(G.guide && G.guide.darkMode);
+        return cols.map((c) => {
+          if (!c || !/^#[0-9a-f]{6}$/i.test(c.hex || "")) return c;
+          if (c.name === "Primary" || c.name === "Accent") return { name: c.name, hex: b.primary };
+          if (c.name === "Secondary" && !dark && /^#[0-9a-f]{6}$/i.test(b.dark || "")) return { name: c.name, hex: b.dark };
+          const t = toHsl(c.hex);
+          if (t.s < 0.06) return { name: c.name, hex: c.hex };
+          // Tekstkleur bijna neutraal (anders bruine of groene tekst), gronden zacht getint.
+          return { name: c.name, hex: fromHsl({ h: bh, s: Math.min(t.s, c.name === "Dark" ? 0.12 : 0.35), l: t.l }) };
+        });
+      };
+      /** Nog geen merkkleur, wel een logo in de header: de merkkleur daaruit halen. */
+      UI.ensureBrand = () => new Promise((res) => {
+        const G = window.AISB_StyleGuide;
+        const g = G && G.guide;
+        if (!g || Array.isArray(g) || g.brand || !g.logoUrl || !window.ColorThief) return res();
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        const done = () => { clearTimeout(t); res(); };
+        const t = setTimeout(done, 3000);
+        img.onload = () => { try { new ColorThief().getPalette(img, 6); } catch (e) {} done(); };
+        img.onerror = done;
+        img.src = g.logoUrl;
+      });
+      // Zelf een kleur kiezen: die kleur is vanaf nu het merk.
+      document.addEventListener("input", (e) => {
+        const G = window.AISB_StyleGuide;
+        const el = G && G.el && e.target;
+        if (!el || (el !== G.el.primaryPicker && el !== G.el.primaryHex)) return;
+        const v = String(el.value || "");
+        if (/^#[0-9a-f]{6}$/i.test(v) && G.guide && !Array.isArray(G.guide)) G.guide.brand = { primary: v, dark: "", source: "manual" };
+      }, true);
     }
 
     /* Altijd genoeg contrast: tekst t.o.v. de achtergrond (WCAG AA) en knoppen t.o.v. de sectie. */
@@ -3411,7 +3549,82 @@
 
   /* ── Publiceren ─────────────────────────────────────────── */
 
+  /** Controle voor publiceren: wat alleen in de voorbeelden te zien is (alt-teksten, één H1 per pagina, afspraakknop). */
+  function initChecks() {
+    const box = $("[data-archer-checks]");
+    if (!box) return;
+    let cfg = {};
+    try { cfg = JSON.parse(box.getAttribute("data-config") || "{}"); } catch (e) {}
+    const list = $("[data-archer-checks-list]", box);
+    const add = (id, status, label, detail) => {
+      const li = document.createElement("li");
+      li.className = "is-" + status;
+      li.setAttribute("data-check", id);
+      li.innerHTML = `<span class="archer-check-mark" aria-hidden="true"></span><span><strong>${esc(label)}</strong> <span class="archer-muted">${esc(detail)}</span></span>`;
+      list.insertBefore(li, $('[data-check="preview"]', list));
+    };
+    const done = () => {
+      const p = $('[data-check="preview"]', list);
+      if (p) p.remove();
+      const warn = $$("li.is-warn", list).length;
+      const c = $("[data-archer-checks-count]", box);
+      if (c) c.textContent = warn ? warn + " om na te kijken" : "Alles in orde";
+    };
+    let tries = 0;
+    const run = () => {
+      const cards = $$(".aisb-design-page-card");
+      const frames = $$(".aisb-design-page-card iframe");
+      const ready = frames.filter((f) => { try { const d = f.contentDocument; return d && d.readyState === "complete" && d.body && d.body.children.length; } catch (e) { return false; } });
+      if ((!frames.length || ready.length < frames.length) && tries++ < 40) return setTimeout(run, 750);
+      if (!frames.length) { done(); return; }
+      let noAlt = 0, imgs = 0, booking = !cfg.booking;
+      // Bewijs (awwwards-sites: geen nepgetuigenissen, geen logomuur zonder echte klanten): secties met
+      // getuigenissen, reviews of logo's, en of daar nog plaatshouders in staan.
+      const proofPages = [], proofTodo = [];
+      const badH1 = [];
+      cards.forEach((card, idx) => {
+        const title = (($(".aisb-design-page-title", card) || {}).textContent || "Pagina " + (idx + 1)).trim();
+        let h1 = 0, seen = 0;
+        $$("iframe", card).forEach((f) => {
+          if (ready.indexOf(f) < 0) return;
+          seen++;
+          let d; try { d = f.contentDocument; } catch (e) { return; }
+          if (!d) return;
+          h1 += d.querySelectorAll("h1").length;
+          d.querySelectorAll("img").forEach((img) => {
+            if (img.closest(".brxe-logo") || img.classList.contains("bricks-site-logo") || img.getAttribute("role") === "presentation") return;
+            imgs++;
+            if (!(img.getAttribute("alt") || "").trim()) noAlt++;
+          });
+          d.querySelectorAll(".brxe-section").forEach((sec) => {
+            if (sec.closest(".archer-header,.archer-footer,header,footer")) return;
+            if (!/testimonial|review|getuig|logo|client|partner|brand/i.test(sec.className || "")) return;
+            if (proofPages.indexOf(title) < 0) proofPages.push(title);
+            if (/\[[^\]]{2,60}\]/.test(sec.textContent || "") && proofTodo.indexOf(title) < 0) proofTodo.push(title);
+          });
+          if (idx === 0 && cfg.booking) d.querySelectorAll(".brxe-button, .bricks-button").forEach((b) => {
+            if (/afspra|reserv|boek|book|rendez|inschrijv|proefles|bestel/i.test(b.textContent || "")) booking = true;
+          });
+        });
+        if (seen && h1 !== 1) badH1.push(title + " (" + h1 + ")");
+      });
+      // Beide worden bij publiceren rechtgezet (AISB_Archer_Site::one_h1, alt-teksten in het runtime-script).
+      add("h1", badH1.length ? "auto" : "ok", badH1.length ? "Hoofdtitel (H1) wordt bij publiceren rechtgezet" : "Eén hoofdtitel per pagina",
+        badH1.length ? "Nu zonder of met meer dan één H1: " + badH1.slice(0, 4).join(", ") + (badH1.length > 4 ? "…" : "") + ". De eerste titel van de pagina wordt de H1." : "Goed voor Google en schermlezers.");
+      if (imgs) add("alt", noAlt ? "auto" : "ok", noAlt ? noAlt + " van " + imgs + " foto's krijgen bij publiceren een beschrijving" : "Alle foto's hebben een beschrijving",
+        noAlt ? "De titel van hun blok of sectie wordt de alt-tekst, in de taal van de site." : "Alt-teksten zijn ingevuld.");
+      if (cfg.booking) add("booking", booking ? "ok" : "warn", booking ? "Afspraak- of reserveerknop op de startpagina" : "Geen afspraak- of reserveerknop op de startpagina",
+        booking ? "Belangrijk voor " + (cfg.sector || "deze sector").toLowerCase() + "." : "Voor " + (cfg.sector || "deze sector").toLowerCase() + " is dat de belangrijkste knop.");
+      if (proofPages.length) add("proof", proofTodo.length ? "warn" : "ok",
+        proofTodo.length ? "Getuigenissen of logo's met plaatshouders" : "Getuigenissen en logo's: echt?",
+        proofTodo.length ? "Op " + proofTodo.slice(0, 3).join(", ") + ": vul echte reviews of klantlogo's in, of verwijder die sectie. Verzonnen bewijs kost vertrouwen." : "Op " + proofPages.slice(0, 3).join(", ") + ". Alleen echte klanten, met foto en hun toestemming.");
+      done();
+    };
+    setTimeout(run, 1500);
+  }
+
   function initPublish() {
+    initChecks();
     const wrap = $("[data-design]");
     if (!wrap) return;
     const t = $(".aisb-design-toolbar-title", wrap);
@@ -3462,41 +3675,61 @@
     ];
     let overlay = null;
     let timer = null;
+    // Het venster wordt een keer opgebouwd en daarna ter plaatse bijgewerkt: zo loopt de draaier door
+    // en schuift de balk echt (transform), in plaats van alles elke 600ms opnieuw te tekenen.
+    const closeOverlay = () => {
+      if (!overlay) return;
+      const el = overlay;
+      overlay = null;
+      el.classList.add("is-leaving");
+      setTimeout(() => el.remove(), 160);
+    };
     const render = (state, extra) => {
       if (!overlay) {
         overlay = document.createElement("div");
         overlay.className = "archer-publish-overlay";
         overlay.setAttribute("role", "dialog");
         overlay.setAttribute("aria-modal", "true");
+        overlay.innerHTML =
+          '<div class="archer-publish-card"><div class="archer-publish-mark" aria-hidden="true"></div>' +
+          '<h2></h2><p class="archer-publish-sub"></p>' +
+          '<div class="archer-publish-bar"><span></span></div>' +
+          '<ol class="archer-publish-steps">' + STEPS.map((s) => `<li><span class="archer-publish-dot" aria-hidden="true"></span>${esc(s.label)}</li>`).join("") + "</ol>" +
+          '<div class="archer-publish-actions" hidden></div><p class="archer-publish-url" hidden></p></div>';
         document.body.appendChild(overlay);
+        overlay.addEventListener("click", (e) => {
+          if (e.target.closest("[data-archer-publish-close]")) closeOverlay();
+          else if (e.target.closest("[data-archer-publish-retry]")) run();
+        });
       }
+      const card = $(".archer-publish-card", overlay);
       const cur = STEPS.findIndex((s) => s.key === state.step);
-      const list = STEPS.map((s, i) => {
-        const st = state.error && i === cur ? "is-error" : i < cur || state.done ? "is-done" : i === cur ? "is-active" : "";
-        return `<li class="${st}"><span class="archer-publish-dot" aria-hidden="true"></span>${esc(s.label)}</li>`;
-      }).join("");
-      const pct = Math.round(state.pct || 0);
-      overlay.innerHTML =
-        `<div class="archer-publish-card${state.done ? " is-done" : state.error ? " is-error" : ""}">` +
-        '<div class="archer-publish-mark" aria-hidden="true"></div>' +
-        (state.done
-          ? '<h2>Je website staat online</h2><p class="archer-publish-sub">Alles staat klaar op het webadres. Je kan de teksten en foto\'s daar nog aanpassen.</p>'
+      card.classList.toggle("is-done", !!state.done);
+      card.classList.toggle("is-error", !state.done && !!state.error);
+      $$(".archer-publish-steps li", overlay).forEach((li, i) => {
+        li.className = state.error && i === cur ? "is-error" : i < cur || state.done ? "is-done" : i === cur ? "is-active" : "";
+      });
+      const title = state.done ? "Je website staat online" : state.error ? "Publiceren lukte niet" : "Je website wordt gepubliceerd";
+      const sub = state.done
+        ? "Alles staat klaar op het webadres. Je kan de teksten en foto's daar nog aanpassen."
+        : state.error || "Even geduld: dit duurt meestal minder dan een minuut. Je kan dit venster open laten.";
+      if ($("h2", card).textContent !== title) $("h2", card).textContent = title;
+      if ($(".archer-publish-sub", card).textContent !== sub) $(".archer-publish-sub", card).textContent = sub;
+      $(".archer-publish-bar span", card).style.transform = "scaleX(" + (state.done ? 1 : Math.max(0, Math.min(100, state.pct || 0)) / 100) + ")";
+      const actions = $(".archer-publish-actions", card);
+      const url = $(".archer-publish-url", card);
+      const want = state.done ? "done" : state.error ? "error" : "";
+      if (actions.dataset.mode !== want) {
+        actions.dataset.mode = want;
+        actions.hidden = !want;
+        actions.innerHTML = state.done
+          ? `<a class="archer-btn archer-btn-primary" href="${esc((extra && extra.url) || "#")}" target="_blank" rel="noopener">Bekijk de website</a><button type="button" class="archer-btn archer-btn-ghost" data-archer-publish-close>Sluiten</button>`
           : state.error
-            ? '<h2>Publiceren lukte niet</h2><p class="archer-publish-sub">' + esc(state.error) + "</p>"
-            : '<h2>Je website wordt gepubliceerd</h2><p class="archer-publish-sub">Even geduld: dit duurt meestal minder dan een minuut. Je kan dit venster open laten.</p>') +
-        `<div class="archer-publish-bar"><span style="width:${state.done ? 100 : pct}%"></span></div>` +
-        `<ol class="archer-publish-steps">${list}</ol>` +
-        (state.done
-          ? `<div class="archer-publish-actions"><a class="archer-btn archer-btn-primary" href="${esc(extra.url)}" target="_blank" rel="noopener">Bekijk de website</a><button type="button" class="archer-btn archer-btn-ghost" data-archer-publish-close>Sluiten</button></div>` +
-            `<p class="archer-publish-url">${esc(String(extra.base || "").replace(/^https?:\/\//, "").replace(/\/$/, ""))}</p>`
-          : state.error
-            ? '<div class="archer-publish-actions"><button type="button" class="archer-btn archer-btn-primary" data-archer-publish-retry>Opnieuw proberen</button><button type="button" class="archer-btn archer-btn-ghost" data-archer-publish-close>Sluiten</button></div>'
-            : "") +
-        "</div>";
-      const close = $("[data-archer-publish-close]", overlay);
-      if (close) close.addEventListener("click", () => { overlay.remove(); overlay = null; });
-      const retry = $("[data-archer-publish-retry]", overlay);
-      if (retry) retry.addEventListener("click", () => run());
+            ? '<button type="button" class="archer-btn archer-btn-primary" data-archer-publish-retry>Opnieuw proberen</button><button type="button" class="archer-btn archer-btn-ghost" data-archer-publish-close>Sluiten</button>'
+            : "";
+      }
+      url.hidden = !state.done;
+      if (state.done) url.textContent = String((extra && extra.base) || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
     };
     const run = async () => {
       if (pub.dataset.aisbPublishing === "1") return;
@@ -3597,7 +3830,8 @@
           const filled = [saved.phone, saved.email, saved.address].filter(Boolean);
           $("strong", card).textContent = filled.length ? filled.length + " van 3 ingevuld" : "Nog niet ingevuld";
           $("[data-archer-contact-summary]", card).textContent = filled.length ? filled.join(" · ") : "Adres, telefoon en e-mail voor de footer en de knoppen.";
-          dlg.remove();
+          dlg.classList.add("is-leaving");
+          setTimeout(() => dlg.remove(), 160);
         } catch (err) {
           $("[data-msg]", dlg).textContent = err.message || "Bewaren lukte niet.";
         }

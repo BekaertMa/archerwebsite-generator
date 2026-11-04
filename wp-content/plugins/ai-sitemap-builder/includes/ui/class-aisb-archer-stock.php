@@ -157,6 +157,7 @@ class AISB_Archer_Stock {
     $kw = '';
     if (!empty($settings['api_key']) && class_exists('AISB_OpenAI')) {
       $prompt = "Business: \"{$brief}\"\nWebsite page: \"{$title}\"" . ($sections !== '' ? "\nSections on this page: {$sections}" : '')
+        . (($mood = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true), 'photo') : '') !== '' ? "\nVisual mood of the website style: {$mood}. You may add one mood word (for example 'bright' or 'moody') if it fits." : '')
         . "\nGive one stock photo search phrase in English (2 to 4 words) that shows what THIS page is about for this business, concrete and visual (a place, an object, people at work). Examples: page \"Badkamerrenovatie\" of a plumber -> \"modern bathroom renovation\"; page \"Over ons\" of a bakery -> \"bakers in bakery\"; page \"Contact\" of a law firm -> \"law office reception\". Return ONLY the phrase.";
       $r = (new AISB_OpenAI())->call_openai_chat_completions($prompt, $settings, 'You return only a short English stock photo search phrase. Never a company name, a person name or a URL.');
       if (!is_wp_error($r)) {

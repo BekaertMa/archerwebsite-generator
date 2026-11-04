@@ -1079,7 +1079,7 @@ body.archer-app .archer-style-pitch { font-size: 12px; line-height: 1.4; color: 
 }
 @keyframes archer-spin { to { transform: rotate(360deg); } }
 .archer-publish-bar { height: 8px; border-radius: 999px; background: #EEF1F6; overflow: hidden; }
-.archer-publish-bar span { display: block; height: 100%; border-radius: 999px; background: #1B5A5B; transition: width 0.5s ease; }
+.archer-publish-bar span { display: block; width: 100%; height: 100%; border-radius: 999px; background: #1B5A5B; transform: scaleX(0); transform-origin: left center; transition: transform 500ms cubic-bezier(0.23, 1, 0.32, 1); }
 .archer-publish-steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; font-size: 14px; }
 .archer-publish-steps li { display: flex; align-items: center; gap: 10px; color: #5B5F73; }
 .archer-publish-steps li.is-active { color: #090930; font-weight: 600; }
@@ -1114,3 +1114,94 @@ body.archer-app .archer-shell .archer-scope-opt { padding: 7px 14px; border-radi
 body.archer-app .archer-shell .archer-scope-opt.is-active { background: #fff; color: var(--ar-navy); box-shadow: 0 1px 2px rgba(9, 9, 48, 0.08); }
 @media (hover: hover) and (pointer: fine) { body.archer-app .archer-shell .archer-scope-opt:not(.is-active):hover { color: var(--ar-navy); } }
 body.archer-app .archer-shell .archer-site-card-owner { margin: -4px 0 6px; color: var(--ar-teal); font-weight: 600; overflow-wrap: anywhere; }
+
+/* Publiceervenster en contactvenster staan buiten .archer-shell (rechtstreeks in body): eigen knoppen en velden. */
+body .archer-publish-overlay .archer-publish-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+body .archer-publish-overlay .archer-btn {
+  font-family: var(--ar-font); display: inline-flex; gap: 8px; align-items: center; justify-content: center;
+  min-height: 44px; padding: 10px 22px; border-radius: 999px; border: 2px solid var(--ar-navy);
+  font-size: 14px; font-weight: 600; line-height: 1.2; letter-spacing: 0; text-transform: none; text-decoration: none;
+  background: #fff; color: var(--ar-navy); box-shadow: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+body .archer-publish-overlay .archer-btn:active { transform: scale(0.97); }
+body .archer-publish-overlay .archer-btn:focus-visible { outline: 2px solid var(--ar-teal); outline-offset: 3px; }
+body .archer-publish-overlay .archer-btn-primary { background: var(--ar-navy); border-color: var(--ar-navy); color: #fff; }
+body .archer-publish-overlay .archer-btn-ghost { background: #fff; border-color: var(--ar-line-2); color: var(--ar-navy); }
+@media (hover: hover) and (pointer: fine) {
+  body .archer-publish-overlay .archer-btn-primary:hover { background: #1D2150; border-color: #1D2150; color: #fff; }
+  body .archer-publish-overlay .archer-btn-ghost:hover { background: var(--ar-bg); border-color: var(--ar-navy); }
+}
+@media (prefers-reduced-motion: reduce) { body .archer-publish-overlay .archer-btn:active { transform: none; } }
+body .archer-publish-overlay .archer-publish-url { margin: 2px 0 0; font: 400 13px/1.4 var(--ar-font); color: var(--ar-muted-2); word-break: break-all; }
+body .archer-publish-overlay .archer-input {
+  font: 400 15px/1.4 var(--ar-font); width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--ar-line-2);
+  border-radius: 12px; background: #fff; color: var(--ar-ink); box-sizing: border-box;
+}
+body .archer-publish-overlay .archer-input:focus { outline: 2px solid var(--ar-teal); outline-offset: 1px; border-color: var(--ar-teal); }
+body .archer-publish-overlay .aisb-label { font: 600 13px/1.3 var(--ar-font); color: var(--ar-navy); }
+
+/* Publiceer- en contactvenster: zachte binnenkomst (opacity + 8px + blur), subtielere uitgang (motion-audit, Jakub). */
+.archer-publish-overlay { transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+.archer-publish-overlay .archer-publish-card { transition: opacity 240ms cubic-bezier(0.23, 1, 0.32, 1), transform 240ms cubic-bezier(0.23, 1, 0.32, 1), filter 240ms cubic-bezier(0.23, 1, 0.32, 1); }
+@starting-style {
+  .archer-publish-overlay { opacity: 0; }
+  .archer-publish-overlay .archer-publish-card { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+}
+.archer-publish-overlay.is-leaving { opacity: 0; transition-duration: 150ms; pointer-events: none; }
+.archer-publish-overlay.is-leaving .archer-publish-card { opacity: 0; transform: translateY(4px); transition-duration: 150ms; }
+@media (prefers-reduced-motion: reduce) {
+  .archer-publish-overlay .archer-publish-card { transition: opacity 150ms ease; }
+  @starting-style { .archer-publish-overlay .archer-publish-card { transform: none; filter: none; } }
+  .archer-publish-overlay.is-leaving .archer-publish-card { transform: none; }
+  .archer-publish-mark::after { animation: none; border-right-color: #1B5A5B; opacity: .5; }
+  .archer-publish-bar span { transition: none; }
+}
+
+/* Sectoradvies in de stap Stijl (UI/UX Pro Max) */
+body.archer-app .archer-sector-advice { margin: 4px 0 14px; border: 1px solid var(--ar-line); border-radius: 14px; background: var(--ar-bg); }
+body.archer-app .archer-sector-advice > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 2px; padding: 12px 40px 12px 14px; position: relative; }
+body.archer-app .archer-sector-advice > summary::-webkit-details-marker { display: none; }
+body.archer-app .archer-sector-advice > summary::after { content: ""; position: absolute; right: 16px; top: 18px; width: 8px; height: 8px; border-right: 2px solid var(--ar-navy); border-bottom: 2px solid var(--ar-navy); transform: rotate(45deg); transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+body.archer-app .archer-sector-advice[open] > summary::after { transform: rotate(225deg); top: 22px; }
+body.archer-app .archer-sector-advice-label { font: 600 13px/1.3 var(--ar-font); color: var(--ar-teal); }
+body.archer-app .archer-sector-advice-line { font: 400 13px/1.45 var(--ar-font); color: var(--ar-ink); }
+body.archer-app .archer-sector-advice-grid { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; padding: 0 14px 10px; font-size: 13px; line-height: 1.45; }
+body.archer-app .archer-sector-advice-grid dt { font-weight: 600; color: var(--ar-navy); }
+body.archer-app .archer-sector-advice-grid dd { margin: 0; color: var(--ar-muted); }
+body.archer-app .archer-sector-advice-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 14px 8px; }
+@media (max-width: 520px) { body.archer-app .archer-sector-advice-cols { grid-template-columns: 1fr; } }
+body.archer-app .archer-sector-advice-cols h5 { margin: 0 0 4px; font: 600 12px/1.3 var(--ar-font); color: var(--ar-navy); }
+body.archer-app .archer-sector-advice-cols ul { margin: 0; padding-left: 16px; font-size: 13px; line-height: 1.45; color: var(--ar-muted); }
+body.archer-app .archer-sector-advice-src { margin: 0; padding: 0 14px 12px; font-size: 12px; color: var(--ar-muted-2); }
+@media (prefers-reduced-motion: reduce) { body.archer-app .archer-sector-advice > summary::after { transition: none; } }
+
+/* Controle voor publiceren (UI/UX Pro Max-regels) */
+body.archer-app .archer-shell .archer-checks { margin: 18px 0 0; padding: 18px 20px; border: 1px solid var(--ar-line); border-radius: var(--ar-radius); background: #fff; }
+body.archer-app .archer-shell .archer-checks-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+body.archer-app .archer-shell .archer-checks-head h3 { margin: 0; font: 600 18px/1.25 var(--ar-display); color: var(--ar-navy); }
+body.archer-app .archer-shell .archer-checks-count { font: 600 13px/1.2 var(--ar-font); color: var(--ar-muted); }
+body.archer-app .archer-shell .archer-checks-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+body.archer-app .archer-shell .archer-checks-list li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.45; color: var(--ar-ink); }
+body.archer-app .archer-shell .archer-checks-list strong { font-weight: 600; color: var(--ar-navy); }
+body.archer-app .archer-shell .archer-check-mark { flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; background: var(--ar-bg-2); position: relative; }
+body.archer-app .archer-shell .archer-checks-list li.is-ok .archer-check-mark { background: var(--ar-teal-bg); }
+body.archer-app .archer-shell .archer-checks-list li.is-ok .archer-check-mark::after { content: ""; position: absolute; left: 6px; top: 3px; width: 4px; height: 8px; border: solid var(--ar-teal); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+body.archer-app .archer-shell .archer-checks-list li.is-warn .archer-check-mark { background: #FFF4E5; }
+body.archer-app .archer-shell .archer-checks-list li.is-warn .archer-check-mark::after { content: "!"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 12px/1 var(--ar-font); color: #B45309; }
+body.archer-app .archer-shell .archer-checks-list li.is-pending .archer-check-mark { border: 2px solid var(--ar-line-2); border-top-color: var(--ar-teal); background: transparent; animation: archer-spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { body.archer-app .archer-shell .archer-checks-list li.is-pending .archer-check-mark { animation: none; } }
+body.archer-app .archer-shell .archer-checks-sector { margin-top: 12px; font-size: 14px; }
+body.archer-app .archer-shell .archer-checks-sector summary { cursor: pointer; font-weight: 600; color: var(--ar-navy); }
+body.archer-app .archer-shell .archer-checks-sector ul { margin: 8px 0 4px; padding-left: 18px; line-height: 1.5; }
+body.archer-app .archer-style-md { margin: 6px 0 0; font-size: 13px; color: var(--ar-muted); }
+body.archer-app .archer-style-md a { color: var(--ar-teal); font-weight: 600; }
+body.archer-app .archer-shell .archer-checks-list li.is-auto .archer-check-mark { background: var(--ar-blue-bg); }
+body.archer-app .archer-shell .archer-checks-list li.is-auto .archer-check-mark::after { content: "A"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 10px/1 var(--ar-font); color: var(--ar-navy); }
+
+/* Stap Stijl: kleuren van het logo terugzetten */
+.archer-style-brand{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:8px 0 0;}
+.archer-style-brand-btn{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:8px 14px;border:1px solid var(--archer-line,#d9dde6);border-radius:999px;background:#fff;color:inherit;font:inherit;font-weight:600;cursor:pointer;transition:border-color 150ms ease,background-color 150ms ease;}
+.archer-style-brand-btn:hover{border-color:currentColor;}
+.archer-style-brand-btn:active{transform:scale(.97);}
+.archer-style-brand-dot{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex:none;}

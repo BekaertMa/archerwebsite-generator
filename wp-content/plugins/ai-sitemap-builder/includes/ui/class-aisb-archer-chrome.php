@@ -197,6 +197,12 @@ class AISB_Archer_Chrome {
     return $out;
   }
 
+  /** Label zonder leestekens, hoofdletters en accenten, om "Regios" en "Regio’s" als hetzelfde te herkennen. */
+  public static function bare(string $t): string {
+    $t = function_exists('remove_accents') ? remove_accents($t) : $t;
+    return preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower($t));
+  }
+
   public static function label(array $p): string {
     return $p['label'] !== '' ? $p['label'] : $p['title'];
   }
@@ -242,6 +248,8 @@ class AISB_Archer_Chrome {
         if (!isset($pages[$slug]) || isset($seen[$slug])) return null;
         $seen[$slug] = 1;
         if ($label === '') $label = self::label($pages[$slug]);
+        // Zelfde woorden als het paginalabel, maar zonder leestekens ("Regios" voor "Regio's"): dat van de pagina.
+        elseif (mb_strtolower($label) !== mb_strtolower(self::label($pages[$slug])) && self::bare($label) === self::bare(self::label($pages[$slug]))) $label = self::label($pages[$slug]);
       } elseif ($label === '' || !$top) {
         return null; // een groep zonder pagina kan alleen bovenaan staan
       }
