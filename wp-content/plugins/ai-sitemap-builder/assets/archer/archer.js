@@ -3465,6 +3465,9 @@
       if ((!frames.length || ready.length < frames.length) && tries++ < 40) return setTimeout(run, 750);
       if (!frames.length) { done(); return; }
       let noAlt = 0, imgs = 0, booking = !cfg.booking;
+      // Bewijs (awwwards-sites: geen nepgetuigenissen, geen logomuur zonder echte klanten): secties met
+      // getuigenissen, reviews of logo's, en of daar nog plaatshouders in staan.
+      const proofPages = [], proofTodo = [];
       const badH1 = [];
       cards.forEach((card, idx) => {
         const title = (($(".aisb-design-page-title", card) || {}).textContent || "Pagina " + (idx + 1)).trim();
@@ -3480,6 +3483,12 @@
             imgs++;
             if (!(img.getAttribute("alt") || "").trim()) noAlt++;
           });
+          d.querySelectorAll(".brxe-section").forEach((sec) => {
+            if (sec.closest(".archer-header,.archer-footer,header,footer")) return;
+            if (!/testimonial|review|getuig|logo|client|partner|brand/i.test(sec.className || "")) return;
+            if (proofPages.indexOf(title) < 0) proofPages.push(title);
+            if (/\[[^\]]{2,60}\]/.test(sec.textContent || "") && proofTodo.indexOf(title) < 0) proofTodo.push(title);
+          });
           if (idx === 0 && cfg.booking) d.querySelectorAll(".brxe-button, .bricks-button").forEach((b) => {
             if (/afspra|reserv|boek|book|rendez|inschrijv|proefles|bestel/i.test(b.textContent || "")) booking = true;
           });
@@ -3493,6 +3502,9 @@
         noAlt ? "De titel van hun blok of sectie wordt de alt-tekst, in de taal van de site." : "Alt-teksten zijn ingevuld.");
       if (cfg.booking) add("booking", booking ? "ok" : "warn", booking ? "Afspraak- of reserveerknop op de startpagina" : "Geen afspraak- of reserveerknop op de startpagina",
         booking ? "Belangrijk voor " + (cfg.sector || "deze sector").toLowerCase() + "." : "Voor " + (cfg.sector || "deze sector").toLowerCase() + " is dat de belangrijkste knop.");
+      if (proofPages.length) add("proof", proofTodo.length ? "warn" : "ok",
+        proofTodo.length ? "Getuigenissen of logo's met plaatshouders" : "Getuigenissen en logo's: echt?",
+        proofTodo.length ? "Op " + proofTodo.slice(0, 3).join(", ") + ": vul echte reviews of klantlogo's in, of verwijder die sectie. Verzonnen bewijs kost vertrouwen." : "Op " + proofPages.slice(0, 3).join(", ") + ". Alleen echte klanten, met foto en hun toestemming.");
       done();
     };
     setTimeout(run, 1500);
