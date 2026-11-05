@@ -1337,3 +1337,64 @@ body.archer-app .archer-shell .archer-cv-shell > .aisb-wf-whiteboard { margin: 0
 .archer-ie-tb .archer-ie-link button.is-ok { background: var(--ar-navy); color: #fff; padding: 0 12px; }
 .archer-ie-tb .archer-ie-link button.is-ok:hover { background: var(--ar-teal); }
 .archer-ie-link [data-ie-unlink][hidden] { display: none; }
+.archer-ed-rte.is-title { min-height: 0; }
+
+/* ── Wireframes als werkruimte (zoals Relume): het canvas vult het scherm ── */
+body.archer-cv-mode .archer-shell { position: relative; padding-bottom: 0; }
+body.archer-cv-mode .archer-main { padding-top: 0 !important; padding-bottom: 0 !important; }
+body.archer-cv-mode .archer-main > .aisb-step-panel { max-width: none; }
+body.archer-cv-mode .archer-page-head,
+body.archer-cv-mode [data-archer-step-footer="wireframes"] { display: none !important; }
+body.archer-cv-mode .archer-wf-card > .aisb-wf-toolbar {
+  --ar-vw: calc(100vw - var(--ar-sbw, 0px));
+  width: var(--ar-vw); margin: 0 calc(50% - var(--ar-vw) / 2);
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--ar-line);
+}
+body.archer-cv-mode .archer-wf-card > .aisb-wf-toolbar .archer-wf-tabs { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+body.archer-cv-mode .archer-wf-card > .aisb-wf-toolbar .archer-wf-tab { flex: none; min-height: 32px; padding: 5px 12px; }
+body.archer-cv-mode .archer-wf-card > .aisb-wf-toolbar .archer-toolbar-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+body.archer-cv-mode .archer-wf-card > .aisb-wf-toolbar .archer-btn { min-height: 34px; padding: 6px 14px; font-size: 13px; }
+body.archer-cv-mode .archer-wf-card { margin: 0 !important; }
+body.archer-cv-mode .archer-cv-shell { height: calc(100vh - var(--ar-cv-top, 250px)); min-height: 420px; }
+.archer-cv-next[hidden] { display: none; }
+@media (min-width: 1200px) {
+  /* De stappen in de bovenbalk, in het midden (zoals Brief · Sitemap · Wireframe · Design in Relume). */
+  body.archer-cv-mode .archer-stepbar {
+    position: absolute; z-index: 51; top: 9px; left: 50%; transform: translateX(-50%);
+    margin: 0; padding: 3px; border: 1px solid var(--ar-line); background: var(--ar-bg); max-width: calc(100vw - 760px);
+  }
+  body.archer-cv-mode .archer-stepbar .archer-step { padding: 4px 10px 4px 4px; }
+}
+@media (max-width: 1199px) {
+  body.archer-cv-mode .archer-stepbar { margin: 8px 16px; padding: 4px 6px; }
+}
+
+/* Paginakop, sectielabels, werkbalk en "+ Sectie" op een vaste grootte op het scherm, los van de zoom */
+.archer-cv-col { --cv-k: calc(1 / var(--cv-scale, 1)); }
+.archer-cv-col > .archer-cv-head { zoom: var(--cv-k); padding: 8px 10px; align-items: center; border-radius: 10px 10px 0 0; }
+.archer-cv-col > .archer-cv-head .archer-cv-head-text { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+body.archer-app .archer-shell .archer-cv-col > .archer-cv-head .archer-cv-title { font-size: 14px; margin: 0; }
+.archer-cv-col > .archer-cv-head .archer-cv-crumb, .archer-cv-col > .archer-cv-head .archer-cv-meta { font-size: 11px; }
+body.archer-app .archer-shell .archer-cv-col > .archer-cv-head .archer-cv-open { padding: 4px 10px; font-size: 12px; border-width: 1.5px; }
+.archer-cv-sections { padding: 0; gap: 0; }
+.archer-cv-sec { border-radius: 0; border-left: 0; border-right: 0; border-top: 0; }
+.archer-cv-sec-label {
+  position: absolute; left: 0; top: 0; z-index: 4; display: none; zoom: var(--cv-k);
+  border: 0; border-radius: 0 0 8px 0; background: var(--ar-teal); padding: 3px 8px;
+}
+.archer-cv-sec-label strong { color: #fff; font-size: 11px; }
+.archer-cv-sec-label span { color: rgba(255, 255, 255, 0.8); font-size: 10px; }
+.archer-cv-sec:hover .archer-cv-sec-label, .archer-cv-sec.is-editing .archer-cv-sec-label { display: flex; }
+body.archer-app .archer-shell .archer-cv-body { border-radius: 0; }
+.archer-cv-tools { zoom: var(--cv-k); }
+.archer-cv-addpill { zoom: var(--cv-k); }
+.archer-cv-sec:hover { border-color: var(--ar-line); outline: 2px solid var(--ar-teal); outline-offset: -2px; }
+body.archer-cv-mode .archer-shell { min-height: calc(100vh - var(--ar-admin-bar)) !important; }
+@media (min-width: 1200px) and (max-width: 1699px) {
+  /* Smallere schermen: enkel de huidige stap met naam, de andere als nummer (met de naam als tooltip). */
+  body.archer-cv-mode .archer-stepbar .archer-step:not(.is-current) .archer-step-label { display: none; }
+  body.archer-cv-mode .archer-stepbar .archer-step:not(.is-current) { padding: 4px; }
+  body.archer-cv-mode .archer-stepbar { max-width: 420px; left: calc(50% - 60px); }
+  body.archer-cv-mode .archer-save-name { max-width: 110px; }
+}

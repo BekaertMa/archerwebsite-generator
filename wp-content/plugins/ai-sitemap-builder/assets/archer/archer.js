@@ -1042,7 +1042,11 @@
     const ZOOM_MIN = 10;
     const ZOOM_MAX = 200;
     const ZOOM_STEPS = [10, 15, 25, 33, 50, 67, 75, 100, 125, 150, 200];
-    const showZoom = () => (zoomLevel.textContent = Math.round(pctOf(wf.canvas.scale)) + "%");
+    const showZoom = () => {
+      zoomLevel.textContent = Math.round(pctOf(wf.canvas.scale)) + "%";
+      // Voor de koppen en werkbalken die op het scherm even groot blijven.
+      inner.style.setProperty("--cv-scale", String(wf.canvas.scale || 1));
+    };
     let userZoomed = false;
     const tally = {}; // tekstgrootte => aantal tekens, over de voorbeelden heen
     UI.measureCanvasText = (doc) => {
@@ -1556,7 +1560,7 @@
       }
 
       // Opmaak zoals in de server (AISB_Archer_Generate::clean_markup): geen kleuren, spans of style.
-      const ALLOWED = { basic: ["STRONG", "EM", "BR", "SUP", "SUB", "A"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A", "SUP", "SUB"] };
+      const ALLOWED = { title: ["STRONG", "EM", "SUP", "SUB", "A"], basic: ["STRONG", "EM", "BR", "SUP", "SUB", "A"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A", "SUP", "SUB"] };
       function cleanHtml(html, mode) {
         const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
         if (mode === "inline") {
@@ -1564,6 +1568,8 @@
           return doc.body.textContent.replace(/\s+/g, " ").trim();
         }
         const allowed = ALLOWED[mode] || ALLOWED.basic;
+        // Titel: één regel (regeleinden worden spaties), wel vet, cursief en links.
+        if (mode === "title") doc.body.querySelectorAll("br").forEach((b) => b.replaceWith(" "));
         const walk = (node) => {
           Array.from(node.childNodes).forEach((c) => {
             if (c.nodeType === 3) return;
@@ -1572,6 +1578,10 @@
             walk(c);
             let tag = c.tagName === "B" ? "STRONG" : c.tagName === "I" ? "EM" : c.tagName;
             if (/^(DIV|P)$/.test(tag)) {
+              if (mode === "title") {
+                if (c.previousSibling) c.before(" ");
+                return c.replaceWith(...c.childNodes);
+              }
               if (mode === "basic") {
                 if (c.previousSibling) c.before(doc.createElement("br"));
                 return c.replaceWith(...c.childNodes);
@@ -1587,6 +1597,7 @@
           });
         };
         walk(doc.body);
+        if (mode === "title") return doc.body.innerHTML.replace(/\s+/g, " ").trim();
         return doc.body.innerHTML.replace(/(<br>\s*){3,}/g, "<br><br>").replace(/^(\s|<br>)+|(\s|<br>)+$/g, "").trim();
       }
       const plainLen = (html) => {
@@ -1596,7 +1607,7 @@
       const countText = (len, max) => (max ? `${len} / ${max}` : `${len}`);
 
       function fieldHtml(n) {
-        const mode = n.mode || (n.name === "heading" || n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
+        const mode = n.mode || (n.name === "heading" ? "title" : n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
         const v = cleanHtml(n.text || "", mode);
         const len = plainLen(v);
         const lab = /tagline|eyebrow/i.test(n.label || "") ? "Tagline" : TEXT_NAMES[n.name] + (n.tag && /^h\d$/.test(n.tag) ? " (" + n.tag.toUpperCase() + ")" : "");
@@ -1964,7 +1975,7 @@
         const f = e.target.closest && e.target.closest("[data-ed-text]");
         if (!f || e.key !== "Enter") return;
         const mode = f.getAttribute("data-ed-mode");
-        if (mode === "inline") {
+        if (mode === "inline" || mode === "title") {
           e.preventDefault(); // titels en knoppen: één regel
         } else if (mode === "basic") {
           e.preventDefault();
@@ -1977,7 +1988,7 @@
         e.preventDefault();
         const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
         const f = e.target.closest("[data-ed-text]");
-        document.execCommand("insertText", false, f.getAttribute("data-ed-mode") === "inline" ? t.replace(/\s+/g, " ") : t);
+        document.execCommand("insertText", false, /^(inline|title)$/.test(f.getAttribute("data-ed-mode") || "") ? t.replace(/\s+/g, " ") : t);
       });
       panel.addEventListener("wheel", (e) => e.stopPropagation());
       document.addEventListener("keydown", (e) => {
@@ -2010,7 +2021,7 @@
       let pendingPoint = null; // klik op het canvas: daar meteen beginnen met typen
       let savedRange = null;
       let rafId = 0;
-      const modeOf = (n) => n.mode || (n.name === "heading" || n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
+      const modeOf = (n) => n.mode || (n.name === "heading" ? "title" : n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
       const frameOf = (doc) => (doc && doc.defaultView ? doc.defaultView.frameElement : null);
       const scaleOfFrame = (f) => {
         const r = f.getBoundingClientRect();
@@ -2147,7 +2158,7 @@
             if (e.key === "Escape") { e.preventDefault(); live.el.blur(); return finishInline(); }
             if (e.key !== "Enter") return;
             e.preventDefault();
-            if (live.mode === "inline") return; // titels en knoppen: één regel
+            if (live.mode === "inline" || live.mode === "title") return; // titels en knoppen: één regel
             if (live.mode === "basic") doc.execCommand("insertLineBreak");
             else doc.execCommand("insertParagraph");
           });
@@ -2155,7 +2166,7 @@
             if (!live) return;
             e.preventDefault();
             const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
-            doc.execCommand("insertText", false, live.mode === "inline" ? t.replace(/\s+/g, " ") : t);
+            doc.execCommand("insertText", false, live.mode === "inline" || live.mode === "title" ? t.replace(/\s+/g, " ") : t);
           });
           doc.addEventListener("focusout", () => {
             setTimeout(() => {
@@ -2357,6 +2368,47 @@
     const setSbw = () => document.documentElement.style.setProperty("--ar-sbw", Math.max(0, window.innerWidth - document.documentElement.clientWidth) + "px");
     setSbw();
     window.addEventListener("resize", setSbw);
+
+    // Werkruimte zoals Relume: zolang het canvas zichtbaar is, geen paginatitel en geen voettekst,
+    // en het canvas vult het scherm onder de werkbalk.
+    const nextLink = $('[data-archer-step-footer="wireframes"] [data-archer-next]');
+    const wfCard = wb.closest(".archer-wf-card") || document;
+    const actions = $(".archer-toolbar-actions", wfCard);
+    if (nextLink && actions && !$(".archer-cv-next", actions)) {
+      const a = nextLink.cloneNode(true);
+      a.classList.add("archer-cv-next");
+      actions.appendChild(a);
+    }
+    const layoutCv = () => {
+      const on = !isOpen();
+      document.body.classList.toggle("archer-cv-mode", on);
+      const nx = $(".archer-cv-next");
+      if (nx) nx.hidden = !on;
+      if (!on) return;
+      const shellEl = wb.parentNode;
+      const top = shellEl.getBoundingClientRect().top + window.scrollY;
+      document.documentElement.style.setProperty("--ar-cv-top", Math.round(top) + "px");
+    };
+    // Stapnamen als tooltip (op smalle schermen staat enkel het nummer).
+    $$(".archer-stepbar .archer-step").forEach((st) => {
+      const l = $(".archer-step-label", st);
+      if (l && !st.title) st.title = l.textContent.trim();
+    });
+    layoutCv();
+    requestAnimationFrame(() => { layoutCv(); window.scrollTo(0, 0); });
+    window.addEventListener("resize", layoutCv);
+    const origOpenCv = wf.openExpandedPage;
+    wf.openExpandedPage = function () {
+      const r = origOpenCv.apply(this, arguments);
+      setTimeout(layoutCv, 0);
+      return r;
+    };
+    const origCloseCv = wf.closeExpandedPage;
+    wf.closeExpandedPage = function () {
+      const r = origCloseCv.apply(this, arguments);
+      setTimeout(layoutCv, 0);
+      return r;
+    };
 
     /* ── Sectiebibliotheek: links toevoegen per type, rechts een ander voorbeeld kiezen (zoals Relume) ── */
 

@@ -454,9 +454,13 @@ class AISB_Archer_Generate {
 
   /* ───────────────────────── Tekstlengte en opmaak ───────────────────────── */
 
-  /** Soort tekstveld: 'inline' (titel, knop: platte tekst), 'basic' (korte tekst), 'rich' (teksteditor). */
+  /**
+   * Soort tekstveld: 'title' (titel: één regel met vet, cursief en links), 'inline' (knop: platte tekst),
+   * 'basic' (korte tekst), 'rich' (teksteditor).
+   */
   public static function mode_for(string $name): string {
-    if (in_array($name, ['heading', 'button', 'text-link', 'icon-box', 'counter'], true)) return 'inline';
+    if ($name === 'heading') return 'title';
+    if (in_array($name, ['button', 'text-link', 'icon-box', 'counter'], true)) return 'inline';
     if ($name === 'text') return 'rich';
     return 'basic';
   }
@@ -522,6 +526,12 @@ class AISB_Archer_Generate {
     if ($mode === 'inline') {
       $html = preg_replace('/<br\s*\/?>/i', ' ', $html);
       return trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags($html, false)));
+    }
+    if ($mode === 'title') {
+      // Titel: één regel; opmaak en links mogen, regeleinden en blokken niet.
+      $html = preg_replace('/<br\s*\/?>|<\s*\/?\s*(p|div)(\s[^>]*)?>/i', ' ', $html);
+      $html = wp_kses($html, ['strong' => [], 'em' => [], 'sup' => [], 'sub' => [], 'a' => ['href' => true]]);
+      return trim(preg_replace('/\s+/u', ' ', $html));
     }
     if ($mode === 'basic') {
       $html = preg_replace('/<\s*(p|div)(\s[^>]*)?>/i', '<br>', $html);
