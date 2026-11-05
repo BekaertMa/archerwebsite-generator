@@ -1,0 +1,743 @@
+# Copyright (C) 2026 Archer Websites
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Archer Cookie Consent 1.0.0\n"
+"Report-Msgid-Bugs-To: https://archerwebsites.be/\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Domain: archer-cookie-consent\n"
+
+#: includes/class-archer-cc-color.php:120
+msgid "%1$s palette: body text has a contrast ratio of %2$s:1 against the modal background. WCAG AA requires at least 4.5:1 — the banner text may be unreadable."
+msgstr ""
+
+#: includes/class-archer-cc-color.php:147
+msgid "%1$s palette: the reject label (%2$s:1) is far less legible than the accept label (%3$s:1). Making refusal harder to read than acceptance is exactly the steering the EDPB taskforce identified."
+msgstr ""
+
+#: includes/class-archer-cc-color.php:128
+msgid "%1$s palette: the “Accept all” label has a contrast ratio of %2$s:1 against its own button. Aim for 4.5:1 or higher."
+msgstr ""
+
+#: includes/class-archer-cc-color.php:136
+msgid "%1$s palette: the “Reject all” label has a contrast ratio of only %2$s:1 against its own button. A hard-to-read reject button is the single most-cited dark pattern in EU cookie-banner enforcement."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:871
+msgid "%s consent records stored."
+msgstr ""
+
+#: includes/class-archer-cc-color.php:157
+msgid "%s palette: the reject button has no visible edge against the modal background while the accept button clearly reads as a button. Give reject a border or a distinguishable fill so both options look equally clickable."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:463
+msgid "%s texts"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:433
+msgid "A CSS length such as 0.5rem, 8px or 0."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:279
+msgid "A permanently reachable control for changing or withdrawing consent. If you switch this off, place the [archer_cc_preferences] shortcode in your footer instead — withdrawal has to stay as easy as consenting."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:881
+msgid "Accepted"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:880
+msgid "Action"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:276
+msgid "Adds a full-page overlay until a choice is made. Leave this off: an overlay that makes the site unusable until the visitor accepts is treated as a cookie wall, and cookie walls do not produce freely given consent."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:535
+msgid "Advanced keeps conversion modelling available because the tag loads with all storage denied and sends cookieless pings. Basic is the stricter reading of ePrivacy Art. 5(3): nothing from Google is requested before consent, at the cost of modelling."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:532
+msgid "Advanced — load Google tags immediately in denied state"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:419
+msgid "Always dark"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:418
+msgid "Always light"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:213
+msgid "Always use the default language"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:607
+msgid "Any script listed here is rewritten to <code>type=\"text/plain\"</code> with a <code>data-category</code> attribute, so the browser cannot execute it until the matching consent is given. For hand-written tags in a template, use <code>&lt;script &lt;?php echo archer_cc_blocked_script_atts( \"marketing\" ); ?&gt;&gt;</code>."
+msgstr ""
+
+#: includes/class-archer-cc-plugin.php:114
+msgid "Archer Cookie Consent"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:589
+msgid "Article 7(1) GDPR puts the burden of demonstrating consent on you. Each action is stored with a timestamp, the categories chosen, the policy revision and a salted hash of the IP address — never the address itself."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:196
+msgid "Banner behaviour"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:323
+msgid "Banner layout"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:341
+msgid "Banner position"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:486
+msgid "Banner text"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:474
+msgid "Banner title"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:332 includes/class-archer-cc-admin.php:366
+msgid "Bar"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:333
+msgid "Bar — inline buttons"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:367
+msgid "Bar — wide"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:533
+msgid "Basic — do not load Google tags at all until consent"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:273
+msgid "Block page interaction"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:565
+msgid "Blocked script handles"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:83
+msgid "Body text"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:95
+msgid "Borders & separators"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:352
+msgid "Bottom center"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:351
+msgid "Bottom left"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:353
+msgid "Bottom right"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:327 includes/class-archer-cc-admin.php:365
+msgid "Box"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:329
+msgid "Box — inline buttons"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:328
+msgid "Box — wide"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:436
+msgid "Button corner radius"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:145
+msgid "Category block background"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:149
+msgid "Category block hover"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:788
+msgid "Checks run against the saved values — save your changes to re-run them."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:256
+msgid "Clear rejected cookies"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:330
+msgid "Cloud"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:331
+msgid "Cloud — inline buttons"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:414
+msgid "Colour scheme"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:27
+msgid "Colours"
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:116
+msgid "Consent (GDPR Art. 6(1)(a))"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:879
+msgid "Consent ID"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:598
+msgid "Consent Mode v2 is mandatory in the EEA if you use Google Ads or GA4 audience features. The default state is emitted before any Google tag with every signal denied except security_storage, and updated the moment the visitor chooses."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:241
+msgid "Consent cookie name"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:222
+msgid "Consent lifetime (days)"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:30
+msgid "Consent log"
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:179
+msgid "Consent logging is disabled."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:824
+msgid "Consent logging is off, so you have no record to demonstrate consent under Article 7(1) GDPR."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:280
+msgid "Convenient while editing, but remember that logged-in visitors also need a lawful basis for tracking."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:55 includes/class-archer-cc-admin.php:56 includes/class-archer-cc-admin.php:950
+msgid "Cookie Consent"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:843
+msgid "Cookie Consent — compliance review"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:499
+msgid "Cookie policy URL"
+msgstr ""
+
+#: includes/class-archer-cc-frontend.php:355 includes/class-archer-cc-shortcodes.php:34
+msgid "Cookie settings"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:261
+msgid "Cookies to erase"
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:371
+msgid "Could not open the output stream."
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:263
+msgid "Could not store the consent record."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:768
+msgid "Dark"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:985
+msgid "Dark palette"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:202
+msgid "Default language"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:303
+msgid "Delete all data on uninstall"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:268
+msgid "Do not show the banner to detected bots, so it never ends up in search snippets."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:303
+msgid "Drops the consent log table and removes the settings when the plugin is deleted."
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:37
+msgid "Dutch"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:523
+msgid "Enable Consent Mode v2"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:201
+msgid "Enable the banner"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:632
+msgid "Enabled"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:36
+msgid "English"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:388
+msgid "Equal-weight buttons"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:812
+msgid "Equal-weight buttons are switched off. Reject must carry the same visual weight as accept."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:256
+msgid "Erase the cookies listed below when a visitor refuses or withdraws consent for their category."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:873
+msgid "Export CSV"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:215
+msgid "Falls back to the default language when the detected one is not available."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:279
+msgid "Floating “Cookie settings” button"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:212
+msgid "Follow the <html lang> attribute"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:211
+msgid "Follow the visitor’s browser language"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:420
+msgid "Follow the visitor’s system setting"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:424
+msgid "Font stack"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:424
+msgid "For example: Readex Pro, Helvetica, Arial, sans-serif. Leave empty to inherit the library default. This plugin does not load any web font for you."
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:38
+msgid "French"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:552
+msgid "GA4 / Ads ID"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:25
+msgid "General"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:391
+msgid "Gives “Accept all” and “Reject all” the same size and layout weight. The EDPB cookie banner taskforce singles out an accept button that is more prominent than reject as a reason to consider consent invalid — keep this on."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:29
+msgid "Google & scripts"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:518
+msgid "Google Consent Mode v2"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:551
+msgid "Google Tag Manager ID"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:290
+msgid "Helps distinguish devices in a dispute. Switch it off if you prefer stricter data minimisation."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:280
+msgid "Hide for logged-in users"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:268
+msgid "Hide from crawlers"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:227
+msgid "How long a choice is remembered before the visitor is asked again. 182 days (6 months) is the conservative EU default; regulators such as the CNIL treat anything beyond 13 months as no longer informed, so the field is capped at 395."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:885
+msgid "IP hash"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:528
+msgid "Implementation"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:238
+msgid "Increase this number whenever your cookie use changes materially. Every visitor is then asked for consent again, which is what keeps old consent valid."
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:187
+msgid "Invalid or expired token."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:295
+msgid "Keep records for (days)"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:884
+msgid "Lang"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:207
+msgid "Language detection"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:26
+msgid "Layout"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:492
+msgid "Leave empty to use the built-in text. Allowed markup: a, strong, em, br."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:379
+msgid "Left"
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:104
+msgid "Legal basis"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:767
+msgid "Light"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:984
+msgid "Light palette"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:91
+msgid "Link colour"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:504
+msgid "Linked from the banner text. Required for a transparent first layer."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:289
+msgid "Log consent actions"
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:219
+msgid "Malformed consent id."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:349
+msgid "Middle center"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:348
+msgid "Middle left"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:350
+msgid "Middle right"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:79
+msgid "Modal background"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:429
+msgid "Modal corner radius"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:87
+msgid "Muted / secondary text"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:775
+msgid "No contrast or prominence problems detected in the saved palettes."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:834
+msgid "No cookie policy URL is set for “%s”, so the first layer has no link to the full information."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:580
+msgid "Non-necessary cookies are never set before the visitor makes a choice, no category is pre-selected, and “Reject all” sits on the first layer next to “Accept all”. Those three properties are not configurable on purpose."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:890
+msgid "Nothing logged yet."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:300
+msgid "Older records are deleted automatically by a daily task. Keep them at least as long as the consent they document."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:265
+msgid "One per line, in the form <code>category|cookie</code>. A value starting with <code>^</code> is treated as a pattern, so <code>analytics|^_ga</code> matches <code>_ga</code>, <code>_ga_ABC123</code> and so on. The defaults cover Google, Meta, Microsoft, TikTok, LinkedIn, Hotjar and Clarity — add your own for anything else, because a cookie that is not listed here will not be deleted."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:569
+msgid "One per line, in the form <code>handle|category</code>. Categories: functionality, analytics, marketing. Example: <code>hotjar|analytics</code>."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:442
+msgid "Overlay opacity (%)"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:161
+msgid "Page overlay"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:772
+msgid "Palette compliance check"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:550
+msgid "Passes click identifiers through URLs while storage is denied. Assess this against your own DPA’s position before enabling."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:314
+msgid "Placement"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:234
+msgid "Policy revision"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:153
+msgid "Preferences footer background"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:157
+msgid "Preferences footer text"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:361
+msgid "Preferences layout"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:375
+msgid "Preferences position"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:284
+msgid "Proof of consent"
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:102
+msgid "Purpose"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:549
+msgid "Redact ads data while denied"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:882
+msgid "Rejected"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:883
+msgid "Rev."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:380
+msgid "Right"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:246
+msgid "SameSite"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:556
+msgid "Script blocking"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:74
+msgid "Settings"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:405
+msgid "Shape & typography"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:996
+msgid "Shortcodes"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:290
+msgid "Store the user agent"
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:123
+msgid "Stores your cookie choice so we do not have to ask again on every page."
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:115
+msgid "Strictly necessary — exempt from consent (ePrivacy Art. 5(3))"
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:127
+msgid "Strictly necessary — expires after %d days"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:394
+msgid "Swap button order"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:28
+msgid "Texts"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:828
+msgid "The consent lifetime exceeds 13 months."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:820
+msgid "The floating “Cookie settings” button is off. Make sure the [archer_cc_preferences] shortcode is present on every page, or visitors cannot withdraw consent."
+msgstr ""
+
+#: includes/class-archer-cc-plugin.php:111
+msgid "This site asks for your consent before placing any cookie that is not strictly necessary. Your choice is stored in a first-party cookie on your own device. To be able to demonstrate that consent was given, we also keep a record containing the moment of your choice, which purposes you accepted or rejected, the version of our cookie policy, the language of the banner and a one-way hash of your IP address. The IP address itself is never stored, and the record is deleted automatically once the retention period ends."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:437
+msgid "Toggle corner radius"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:141
+msgid "Toggle knob"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:133
+msgid "Toggle — disabled"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:129
+msgid "Toggle — enabled"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:137
+msgid "Toggle — locked (necessary)"
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:197
+msgid "Too many consent writes for this visitor."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:346
+msgid "Top center"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:345
+msgid "Top left"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:347
+msgid "Top right"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:201
+msgid "Turn the whole front-end banner and script blocking on or off."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:550
+msgid "URL passthrough"
+msgstr ""
+
+#: includes/class-archer-cc-shortcodes.php:103
+msgid "What it is used for"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:878
+msgid "When (UTC)"
+msgstr ""
+
+#: includes/class-archer-cc-consent-log.php:354
+msgid "You are not allowed to export the consent log."
+msgstr ""
+
+#: includes/class-archer-cc-plugin.php:112
+msgid "You can change or withdraw your consent at any time through the “Cookie settings” control, with the same single click it took to give it."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:943
+msgid "You do not have permission to manage these settings."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:997
+msgid "a button or link that reopens the preferences modal. Accepts label, class and tag=\"a\"."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:998
+msgid "a purpose and legal-basis table for your cookie policy page. Accepts lang=\"nl\"."
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:542
+msgid "wait_for_update (ms)"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:105
+msgid "“Accept all” background"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:113
+msgid "“Accept all” hover background"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:109
+msgid "“Accept all” text"
+msgstr ""
+
+#: includes/class-archer-cc-admin.php:816
+msgid "“Block page interaction” is on. Making the site unusable until the visitor accepts is a cookie wall and undermines freely given consent."
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:117
+msgid "“Reject” / “Preferences” background"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:125
+msgid "“Reject” / “Preferences” hover background"
+msgstr ""
+
+#: includes/class-archer-cc-settings.php:121
+msgid "“Reject” / “Preferences” text"
+msgstr ""
+

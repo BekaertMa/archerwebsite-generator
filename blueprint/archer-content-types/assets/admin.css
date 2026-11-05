@@ -1,0 +1,30 @@
+.archer-ct-intro { max-width: 760px; font-size: 14px; }
+.archer-ct-table td { vertical-align: middle; }
+.archer-ct-table .dashicons { color: #646970; }
+.archer-ct-actions { white-space: nowrap; text-align: right; }
+.archer-ct-delete { color: #b32d2e; margin-left: 8px; }
+.archer-ct-presets .button { margin: 0 6px 6px 0; }
+.archer-ct-presets .dashicons { vertical-align: text-bottom; }
+.archer-ct-icons { display: flex; flex-wrap: wrap; gap: 6px; max-width: 640px; }
+.archer-ct-icon input { position: absolute; opacity: 0; }
+.archer-ct-icon .dashicons { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; font-size: 22px; border: 1px solid #c3c4c7; border-radius: 4px; background: #fff; cursor: pointer; }
+.archer-ct-icon input:checked + .dashicons { border-color: #2271b1; box-shadow: 0 0 0 1px #2271b1; color: #2271b1; }
+.archer-ct-icon input:focus-visible + .dashicons { outline: 2px solid #2271b1; outline-offset: 2px; }
+.archer-ct-slug { width: 16em; }
+.archer-ct-repeater { max-width: 1100px; margin-top: 8px; }
+.archer-ct-repeater td { vertical-align: top; }
+.archer-ct-repeater input[type=text], .archer-ct-repeater select, .archer-ct-repeater textarea { width: 100%; }
+.archer-ct-repeater textarea { margin-top: 6px; }
+.archer-ct-remove { color: #b32d2e; font-size: 20px; line-height: 1; text-decoration: none; }
+.archer-ct-tags code { user-select: all; }
+
+/* Edit screen */
+.archer-ct-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px 20px; }
+.archer-ct-field label { display: block; font-weight: 600; margin-bottom: 4px; }
+.archer-ct-field--checkbox label { font-weight: 400; margin-top: 22px; }
+.archer-ct-field input[type=text], .archer-ct-field input[type=number], .archer-ct-field input[type=date], .archer-ct-field input[type=url], .archer-ct-field input[type=email], .archer-ct-field input[type=tel], .archer-ct-field select, .archer-ct-field textarea { width: 100%; }
+.archer-ct-field--textarea, .archer-ct-field--gallery { grid-column: 1 / -1; }
+.archer-ct-media__list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.archer-ct-media__list li { position: relative; margin: 0; cursor: move; }
+.archer-ct-media__list img { display: block; width: 80px; height: 80px; object-fit: cover; border-radius: 4px; }
+.archer-ct-media__remove { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: #b32d2e; color: #fff; cursor: pointer; line-height: 22px; padding: 0; }
