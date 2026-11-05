@@ -64,6 +64,11 @@ class Archer_CC_Settings {
 		$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
 		$base   = strtolower( substr( (string) $locale, 0, 2 ) );
 		$lang   = array_key_exists( $base, self::languages() ) ? $base : (string) self::get( 'default_language', 'en' );
+		// A site left on the WordPress default (en_US) while the banner is set to another language:
+		// follow the banner setting, otherwise the policy table is English on a Dutch site.
+		if ( 'en_US' === (string) $locale && 'en' !== (string) self::get( 'default_language', 'en' ) ) {
+			$lang = (string) self::get( 'default_language', 'en' );
+		}
 
 		/**
 		 * Filters the banner language for the current page.

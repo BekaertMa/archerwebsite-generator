@@ -562,7 +562,7 @@ class AISB_Archer_Collections {
       ['id' => $cid, 'name' => 'container', 'parent' => $sid, 'children' => [$hid, $tid, $kid], 'settings' => ['_widthMax' => '760', '_rowGap' => '24']],
       ['id' => $hid, 'name' => 'heading', 'parent' => $cid, 'children' => [], 'settings' => ['text' => $title, 'tag' => 'h1']],
       ['id' => $tid, 'name' => 'text', 'parent' => $cid, 'children' => [], 'settings' => ['text' => $html]],
-      ['id' => $kid, 'name' => 'shortcode', 'parent' => $cid, 'children' => [], 'settings' => ['shortcode' => '[archer_cc_cookie_policy]']],
+      ['id' => $kid, 'name' => 'shortcode', 'parent' => $cid, 'children' => [], 'settings' => ['shortcode' => '[archer_cc_cookie_policy lang="' . (in_array(self::lang($pid), ['nl', 'fr', 'en'], true) ? self::lang($pid) : 'nl') . '"]']],
     ];
   }
 

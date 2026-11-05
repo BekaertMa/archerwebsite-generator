@@ -4,7 +4,7 @@ Tags: cookies, gdpr, consent, cookie banner, consent mode
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,10 @@ v3.1.0 by Orest Bida, MIT licensed, unmodified. See `vendor/cookieconsent/LICENS
 In a custom table, `{prefix}archer_cc_consent_log`. It is kept on deactivation and only dropped on uninstall if you explicitly enabled "Delete all data on uninstall".
 
 == Changelog ==
+
+= 1.1.1 =
+* The cookie policy table ([archer_cc_cookie_policy]) is translated (nl, fr, en) and follows the page language; lang="nl" forces a language.
+* A site left on the WordPress default locale (en_US) follows the banner language setting.
 
 = 1.1.0 =
 * The banner and the "Cookie settings" control follow the language of the page (WordPress locale, also per page with WPML/Polylang) instead of the visitor's browser.

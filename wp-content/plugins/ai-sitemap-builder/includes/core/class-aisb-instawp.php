@@ -4668,6 +4668,8 @@ class AISB_InstaWP {
       if (aisbOpaque(cs.backgroundColor)) el.style.setProperty("background-color", color, "important");
     });
     root.querySelectorAll(".brxe-button,.bricks-button").forEach(function (el) {
+      // Archer: een knop die al omgekeerd werd, blijft zo (een tweede ronde gaf witte tekst op een witte knop).
+      if (el.getAttribute("data-aisb-inv")) return;
       var cs = window.getComputedStyle(el);
       if (!aisbOpaque(cs.backgroundColor)) {
         // Omlijnde knop: tekst en lijn in de leeskleur van de band.
@@ -4678,6 +4680,7 @@ class AISB_InstaWP {
       if (aisbNear(cs.backgroundColor, color)) {
         // Knop in dezelfde kleur als de band: omkeren, anders verdwijnt hij.
         var inv = isDark ? "#ffffff" : paletteDark;
+        el.setAttribute("data-aisb-inv", "1");
         el.style.setProperty("background-color", inv, "important");
         el.style.setProperty("border-color", inv, "important");
         el.style.setProperty("color", color, "important");

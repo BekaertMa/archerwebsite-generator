@@ -159,7 +159,8 @@ class AISB_Archer_Motion {
         if (cs.visibility === "hidden" || cs.display === "none") continue;
         var fg = rgb(isIcon && el.tagName === "svg" ? (cs.stroke !== "none" ? cs.stroke : cs.color) : cs.color);
         if (!fg || fg[3] < 0.4) continue;
-        var bg = bgOf(el.parentElement || el);
+        // Een knop met een eigen vlak: dat vlak telt, niet de band eronder (witte tekst op een witte knop).
+        var bg = bgOf(el);
         if (!bg) continue;
         // Alleen echt slecht leesbare combinaties: een merkkleur als accent op wit (oranje: 3:1) blijft staan.
         var dark = lum(bg) < 0.2;
@@ -198,7 +199,10 @@ class AISB_Archer_Motion {
       });
     };
     if (document.readyState === "complete") run(); else window.addEventListener("load", run);
+    // De publicatie-runtime kleurt knoppen soms pas later in: nog eens nakijken.
     setTimeout(run, 1500);
+    setTimeout(run, 3500);
+    setTimeout(run, 7000);
   })();
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // Alt-teksten (UI/UX Pro Max: elke foto een beschrijving): foto's zonder alt krijgen de titel van hun blok

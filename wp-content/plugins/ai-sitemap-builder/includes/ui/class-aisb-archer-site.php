@@ -526,6 +526,115 @@ class AISB_Archer_Site {
     return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($address);
   }
 
+  /** Vestigingen: het adres, of meer adressen gescheiden door ";" of "|" ("Kerkstraat 1, Gent; Markt 2, Aalst"). */
+  public static function locations(int $pid): array {
+    $a = trim((string) self::contact($pid)['address']);
+    if ($a === '') return [];
+    return array_values(array_filter(array_map('trim', preg_split('/\s*[;|]\s*/', $a))));
+  }
+
+  /**
+   * Kaarten met een kaartje (Google Maps) in een sectie: zoveel als er vestigingen zijn, elk op het echte adres.
+   * Het sjabloon had er drie, ook voor een zaak met één adres; de kaartjes stonden op "Berlin, Germany".
+   */
+  public static function fit_maps(array $nodes, array $locs): array {
+    if (!$locs) return $nodes;
+    $ix = self::index($nodes);
+    $maps = [];
+    foreach ($nodes as $n) if (is_array($n) && in_array($n['name'] ?? '', ['map', 'map-leaflet'], true)) $maps[] = (string) $n['id'];
+    if (!$maps) return $nodes;
+    $sig = function (array $n): string {
+      $st = (array) ($n['settings'] ?? []);
+      return ($n['name'] ?? '') . '|' . implode(',', (array) ($st['_cssGlobalClasses'] ?? [])) . '|' . trim((string) ($st['_cssClasses'] ?? ''));
+    };
+    $has_map = function (string $id) use (&$has_map, $nodes, $ix): bool {
+      if (!isset($ix[$id])) return false;
+      if (in_array($nodes[$ix[$id]]['name'] ?? '', ['map', 'map-leaflet'], true)) return true;
+      foreach ((array) ($nodes[$ix[$id]]['children'] ?? []) as $c) if ($has_map((string) $c)) return true;
+      return false;
+    };
+    // De groep gelijke kaarten rond het eerste kaartje.
+    $cards = [];
+    for ($up = $maps[0]; $up !== '' && isset($ix[$up]); $up = (string) ($nodes[$ix[$up]]['parent'] ?? '')) {
+      $par = (string) ($nodes[$ix[$up]]['parent'] ?? '');
+      if ($par === '' || $par === '0' || !isset($ix[$par])) break;
+      $same = [];
+      foreach ((array) ($nodes[$ix[$par]]['children'] ?? []) as $c) {
+        $c = (string) $c;
+        if (isset($ix[$c]) && $sig($nodes[$ix[$c]]) === $sig($nodes[$ix[$up]]) && $has_map($c)) $same[] = $c;
+      }
+      if (count($same) >= 2) { $cards = $same; break; }
+    }
+    if (count($cards) > count($locs)) {
+      $keep = array_slice($cards, 0, count($locs));
+      $nodes = self::remove($nodes, array_slice($cards, count($locs)));
+      // Eén kaart: de hele breedte (vaste id, want Bricks geeft bij het publiceren nieuwe element-id's).
+      if (count($keep) === 1) {
+        $ix = self::index($nodes);
+        $i = $ix[$keep[0]];
+        $css_id = trim((string) ($nodes[$i]['settings']['_cssId'] ?? '')) ?: 'archer-vestiging';
+        $nodes[$i]['settings']['_cssId'] = $css_id;
+        $nodes[$i]['settings']['_cssCustom'] = trim((string) ($nodes[$i]['settings']['_cssCustom'] ?? '') . "\n#" . $css_id . ' {grid-column: 1 / -1; max-width: none;}');
+      }
+    }
+    // Elk kaartje op een adres van de zaak (in volgorde van de kaarten, anders het eerste adres).
+    $k = 0;
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !in_array($n['name'] ?? '', ['map', 'map-leaflet'], true)) continue;
+      $addr = $locs[$k % count($locs)];
+      $k++;
+      $nodes[$i]['settings']['address'] = $addr;
+      $nodes[$i]['settings']['addresses'] = [['id' => substr(md5($addr), 0, 6), 'address' => $addr]];
+      if (empty($nodes[$i]['settings']['zoom'])) $nodes[$i]['settings']['zoom'] = 15;
+    }
+    return $nodes;
+  }
+
+  /**
+   * Tabbladen op de contactpagina zijn vestigingen ("Herzele", "Zottegem", "Brakel"): zoveel tabs als er adressen
+   * zijn, met de gemeente als titel. Eén adres: geen tabs, enkel de inhoud van het eerste tabblad.
+   */
+  public static function fit_location_tabs(array $nodes, array $locs): array {
+    $n_loc = max(1, count($locs));
+    $ix = self::index($nodes);
+    foreach ($nodes as $t) {
+      if (!is_array($t) || ($t['name'] ?? '') !== 'tabs-nested') continue;
+      $tid = (string) $t['id'];
+      $kids = array_values(array_filter(array_map('strval', (array) ($t['children'] ?? [])), fn($c) => isset($ix[$c])));
+      if (count($kids) < 2) continue;
+      [$menu, $content] = $kids;
+      $titles = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$menu]]['children'] ?? [])), fn($c) => isset($ix[$c])));
+      $panes = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$content]]['children'] ?? [])), fn($c) => isset($ix[$c])));
+      if (count($panes) <= $n_loc) continue;
+      if ($n_loc === 1) {
+        // De inhoud van het eerste tabblad komt op de plaats van de tabs.
+        $parent = (string) ($t['parent'] ?? '');
+        $move = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$panes[0]]]['children'] ?? [])), fn($c) => isset($ix[$c])));
+        foreach ($move as $m) $nodes[$ix[$m]]['parent'] = $parent;
+        if ($parent !== '' && isset($ix[$parent])) {
+          $ch = array_map('strval', (array) ($nodes[$ix[$parent]]['children'] ?? []));
+          $pos = array_search($tid, $ch, true);
+          array_splice($ch, $pos === false ? count($ch) : $pos, 0, $move);
+          $nodes[$ix[$parent]]['children'] = $ch;
+        }
+        $nodes[$ix[$panes[0]]]['children'] = [];
+        $nodes = self::remove($nodes, [$tid]);
+      } else {
+        $nodes = self::remove($nodes, array_merge(array_slice($titles, $n_loc), array_slice($panes, $n_loc)));
+        $ix = self::index($nodes);
+        foreach (array_slice($titles, 0, $n_loc) as $k => $title) {
+          $parts = array_map('trim', explode(',', (string) $locs[$k]));
+          $town = trim((string) preg_replace('/^\d{4,5}\s*/', '', (string) end($parts)));
+          foreach ($nodes as $i => $n) {
+            if ((string) ($n['parent'] ?? '') === $title && in_array($n['name'] ?? '', ['text-basic', 'text', 'heading'], true) && $town !== '') { $nodes[$i]['settings']['text'] = $town; break; }
+          }
+        }
+      }
+      $ix = self::index($nodes);
+    }
+    return $nodes;
+  }
+
   /** Html-id van het formulier op de pagina die nu verwerkt wordt ('' als er geen is). */
   private static $anchor = '';
 
@@ -1039,6 +1148,7 @@ class AISB_Archer_Site {
     // Overzicht en detailpagina van een lijst: hun [plaatshouders] worden velden (AISB_Archer_Collections).
     $keep = [];
     if (class_exists('AISB_Archer_Collections')) foreach (AISB_Archer_Collections::pairs($pid) as $pair) { $keep[$pair['overview']] = 1; $keep[$pair['detail']] = 1; }
+    $ctx_contact = (string) (self::ctx($pid)['contact'] ?? '');
     foreach ($pages as &$page) {
       $first = true;
       self::$anchor = self::form_anchor($page);
@@ -1052,6 +1162,8 @@ class AISB_Archer_Site {
           if (empty($sec[$key]) || !is_array($sec[$key])) continue;
           $nodes = self::apply_nodes($sec[$key], $pid, $link, '', sanitize_title((string) ($page['slug'] ?? '')));
           if ($bare) $nodes = self::unbracket($nodes);
+          $nodes = self::fit_maps($nodes, self::locations($pid));
+          if (($ctx_contact ?? '') !== '' && sanitize_title((string) ($page['slug'] ?? '')) === $ctx_contact) $nodes = self::fit_location_tabs($nodes, self::locations($pid));
           // Eerste inhoudssectie: de hero komt een keer binnen (AISB_Archer_Motion).
           if ($first && class_exists('AISB_Archer_Motion')) $nodes = AISB_Archer_Motion::hero_nodes($nodes);
           $page['sections'][$k][$key] = $nodes;

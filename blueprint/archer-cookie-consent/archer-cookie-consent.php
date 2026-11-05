@@ -3,7 +3,7 @@
  * Plugin Name:       Archer Cookie Consent
  * Plugin URI:        https://archerwebsites.be/
  * Description:       EU/GDPR-compliant cookie consent banner built on CookieConsent v3, with prior blocking, Google Consent Mode v2, proof-of-consent logging and a full colour theme editor.
- * Version:           1.1.0
+ * Version:           1.1.1
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Archer Websites
@@ -22,7 +22,7 @@
 // SECURITY: block direct file access.
 defined( 'ABSPATH' ) || exit;
 
-define( 'ARCHER_CC_VERSION', '1.1.0' );
+define( 'ARCHER_CC_VERSION', '1.1.1' );
 define( 'ARCHER_CC_LIB_VERSION', '3.1.0' );
 define( 'ARCHER_CC_FILE', __FILE__ );
 define( 'ARCHER_CC_DIR', plugin_dir_path( __FILE__ ) );

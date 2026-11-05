@@ -93,15 +93,16 @@ class Archer_CC_Shortcodes {
 		}
 
 		$expiry = absint( Archer_CC_Settings::get( 'expires_days', 182 ) );
+		$t      = self::policy_strings( $lang );
 
 		ob_start();
 		?>
 		<table class="archer-cc-policy-table">
 			<thead>
 				<tr>
-					<th scope="col"><?php esc_html_e( 'Purpose', 'archer-cookie-consent' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'What it is used for', 'archer-cookie-consent' ); ?></th>
-					<th scope="col"><?php esc_html_e( 'Legal basis', 'archer-cookie-consent' ); ?></th>
+					<th scope="col"><?php echo esc_html( $t['purpose'] ); ?></th>
+					<th scope="col"><?php echo esc_html( $t['used_for'] ); ?></th>
+					<th scope="col"><?php echo esc_html( $t['basis'] ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -111,20 +112,17 @@ class Archer_CC_Shortcodes {
 					<td><?php echo esc_html( isset( $by_category[ $slug ] ) ? $by_category[ $slug ] : '' ); ?></td>
 					<td>
 						<?php
-						echo 'necessary' === $slug
-							? esc_html__( 'Strictly necessary — exempt from consent (ePrivacy Art. 5(3))', 'archer-cookie-consent' )
-							: esc_html__( 'Consent (GDPR Art. 6(1)(a))', 'archer-cookie-consent' );
+						echo esc_html( 'necessary' === $slug ? $t['necessary'] : $t['consent'] );
 						?>
 					</td>
 				</tr>
 			<?php endforeach; ?>
 				<tr>
 					<th scope="row"><?php echo esc_html( (string) Archer_CC_Settings::get( 'cookie_name', 'archer_cc_consent' ) ); ?></th>
-					<td><?php esc_html_e( 'Stores your cookie choice so we do not have to ask again on every page.', 'archer-cookie-consent' ); ?></td>
+					<td><?php echo esc_html( $t['choice'] ); ?></td>
 					<td>
 						<?php
-						/* translators: %d: number of days */
-						printf( esc_html__( 'Strictly necessary — expires after %d days', 'archer-cookie-consent' ), (int) $expiry );
+						echo esc_html( sprintf( $t['expires'], (int) $expiry ) );
 						?>
 					</td>
 				</tr>
@@ -139,5 +137,47 @@ class Archer_CC_Shortcodes {
 		<?php
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Labels of the cookie policy table in the language of the page. The banner copy is per language
+	 * already; the table followed the WordPress locale and stayed English on a Dutch page.
+	 *
+	 * @param string $lang Language code (en, nl, fr).
+	 * @return array<string,string>
+	 */
+	public static function policy_strings( $lang ) {
+		$all = array(
+			'en' => array(
+				'purpose'   => 'Purpose',
+				'used_for'  => 'What it is used for',
+				'basis'     => 'Legal basis',
+				'necessary' => 'Strictly necessary — exempt from consent (ePrivacy Art. 5(3))',
+				'consent'   => 'Consent (GDPR Art. 6(1)(a))',
+				'choice'    => 'Stores your cookie choice so we do not have to ask again on every page.',
+				/* translators: %d: number of days */
+				'expires'   => 'Strictly necessary — expires after %d days',
+			),
+			'nl' => array(
+				'purpose'   => 'Doel',
+				'used_for'  => 'Waarvoor dient het',
+				'basis'     => 'Rechtsgrond',
+				'necessary' => 'Strikt noodzakelijk — geen toestemming nodig (ePrivacy art. 5(3))',
+				'consent'   => 'Toestemming (AVG art. 6(1)(a))',
+				'choice'    => 'Bewaart uw cookiekeuze, zodat we die niet op elke pagina opnieuw moeten vragen.',
+				'expires'   => 'Strikt noodzakelijk — vervalt na %d dagen',
+			),
+			'fr' => array(
+				'purpose'   => 'Finalité',
+				'used_for'  => 'À quoi il sert',
+				'basis'     => 'Base juridique',
+				'necessary' => 'Strictement nécessaire — dispensé de consentement (ePrivacy art. 5(3))',
+				'consent'   => 'Consentement (RGPD art. 6(1)(a))',
+				'choice'    => 'Enregistre votre choix en matière de cookies pour ne pas vous le redemander sur chaque page.',
+				'expires'   => 'Strictement nécessaire — expire après %d jours',
+			),
+		);
+		$t = isset( $all[ $lang ] ) ? $all[ $lang ] : $all['en'];
+		return (array) apply_filters( 'archer_cc_policy_strings', $t, $lang );
 	}
 }
