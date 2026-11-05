@@ -2374,7 +2374,15 @@
     const nextLink = $('[data-archer-step-footer="wireframes"] [data-archer-next]');
     const wfCard = wb.closest(".archer-wf-card") || document;
     const actions = $(".archer-toolbar-actions", wfCard);
-    if (nextLink && actions && !$(".archer-cv-next", actions)) {
+    const backLink = $('[data-archer-step-footer="wireframes"] .archer-link-back');
+    if (backLink && actions && !$(".archer-cv-back", actions)) {
+      const b = backLink.cloneNode(true);
+      b.className = "archer-btn archer-btn-ghost archer-cv-next archer-cv-back archer-ws-back";
+      b.textContent = "← Terug";
+      b.title = backLink.textContent.replace(/^←\s*/, "").trim();
+      actions.appendChild(b);
+    }
+    if (nextLink && actions && !$(".archer-cv-next:not(.archer-cv-back)", actions)) {
       const a = nextLink.cloneNode(true);
       a.classList.add("archer-cv-next");
       actions.appendChild(a);
@@ -2382,8 +2390,8 @@
     const layoutCv = () => {
       const on = !isOpen();
       document.body.classList.toggle("archer-cv-mode", on);
-      const nx = $(".archer-cv-next");
-      if (nx) nx.hidden = !on;
+      document.body.classList.toggle("archer-ws-mode", on);
+      $$(".archer-cv-next").forEach((nx) => { nx.hidden = !on; });
       if (!on) return;
       const shellEl = wb.parentNode;
       const top = shellEl.getBoundingClientRect().top + window.scrollY;
@@ -4731,11 +4739,115 @@
 
   /* ── Start ──────────────────────────────────────────────── */
 
+  /**
+   * Werkruimte zoals Relume voor sitemap, stijl, foto's en publiceren (de wireframes hebben hun eigen):
+   * geen paginatitel en voettekst, een compacte balk met titel, acties en terug/verder,
+   * en daaronder een werkvlak dat het scherm vult.
+   */
+  function initWorkspace() {
+    const st = Number(CFG.step);
+    const key = st === 1 ? "sitemap" : st === 3 ? (CFG.view === "photos" ? "photos" : "style") : st === 4 ? "publish" : "";
+    if (!key) return;
+    const visible = (el) => !!(el && el.getClientRects().length);
+    const footer = $(`[data-archer-step-footer="${key}"]`);
+    const panel = (footer && footer.closest(".aisb-step-panel")) || $$(".archer-main > .aisb-step-panel").find(visible);
+    if (!panel) return;
+    const sel = { sitemap: ".archer-smap-viewport", style: ".aisb-sg-split", photos: ".aisb-sg-split", publish: ".aisb-design-wrap" }[key];
+    let area = $(sel, panel);
+    // Het sitemapcanvas wordt pas na deze stap opgebouwd (archer-sitemap.js): even wachten.
+    if (!area || !visible(area)) {
+      const tries = (initWorkspace.tries = (initWorkspace.tries || 0) + 1);
+      if (tries < 40) setTimeout(initWorkspace, 150);
+      return;
+    }
+    if (initWorkspace.done) return;
+    initWorkspace.done = true;
+    const head = $(".archer-page-head", panel);
+
+    const bar = document.createElement("div");
+    bar.className = "archer-ws-bar";
+    const h1 = head && $(".archer-h1", head);
+    bar.innerHTML =
+      `<div class="archer-ws-bar-title"><strong>${esc(h1 ? h1.textContent.trim() : "")}</strong></div>` +
+      `<div class="archer-ws-bar-tools"></div><div class="archer-ws-bar-nav"></div>`;
+    const tools = $(".archer-ws-bar-tools", bar);
+    const nav = $(".archer-ws-bar-nav", bar);
+    const aside = head && $("[data-archer-head-aside]", head);
+    if (aside) $(".archer-ws-bar-title", bar).appendChild(aside);
+    if (footer) {
+      const back = $(".archer-link-back", footer);
+      if (back) {
+        const b = back.cloneNode(true);
+        b.className = "archer-btn archer-btn-ghost archer-ws-back";
+        b.textContent = "← Terug";
+        b.title = back.textContent.replace(/^←\s*/, "").trim();
+        nav.appendChild(b);
+      }
+      const next = $("[data-archer-next]", footer);
+      if (next) {
+        const n = next.cloneNode(true);
+        n.classList.add("archer-ws-next");
+        nav.appendChild(n);
+      }
+    }
+
+    if (key === "sitemap") {
+      const card = area.closest(".archer-sitemap-card") || panel;
+      const acts = $(".archer-sitemap-card > .archer-toolbar .archer-toolbar-actions", panel);
+      if (acts) tools.appendChild(acts);
+      card.insertBefore(bar, $(".archer-toolbar", card) || card.firstChild);
+    } else if (key === "publish") {
+      const acts = $(".aisb-design-toolbar-actions", area);
+      if (acts) tools.appendChild(acts);
+      const pubCard = area.closest(".archer-publish-card") || area;
+      const shell = document.createElement("div");
+      shell.className = "archer-ws-pub";
+      pubCard.parentNode.insertBefore(shell, pubCard);
+      const side = document.createElement("aside");
+      side.className = "archer-ws-side";
+      side.setAttribute("aria-label", "Overzicht");
+      side.innerHTML = '<span class="archer-smap-panel-eyebrow">Overzicht</span>';
+      [$(".archer-summary-grid", panel), $(".archer-checks", panel)].forEach((n) => n && side.appendChild(n));
+      shell.appendChild(side);
+      shell.appendChild(pubCard);
+      // Het bewerkpaneel van de volledige preview rechts in de werkruimte, zoals bij de wireframes.
+      const D = window.AISB_Design;
+      if (D && D.initEditorPanel && !document.getElementById("aisb-editor-panel")) D.initEditorPanel();
+      const ep = document.getElementById("aisb-editor-panel");
+      if (ep) {
+        shell.appendChild(ep);
+        const sync = () => shell.classList.toggle("has-panel", ep.classList.contains("is-open"));
+        new MutationObserver(sync).observe(ep, { attributes: true, attributeFilter: ["class"] });
+        sync();
+      }
+      shell.parentNode.insertBefore(bar, shell);
+      area = shell;
+    } else {
+      const card = area.closest(".archer-sg-card") || area;
+      card.parentNode.insertBefore(bar, card);
+    }
+
+    const layout = () => {
+      document.body.classList.add("archer-ws-mode", "archer-ws-" + key);
+      const top = area.getBoundingClientRect().top + window.scrollY;
+      document.documentElement.style.setProperty("--ar-ws-top", Math.round(top) + "px");
+    };
+    $$(".archer-stepbar .archer-step").forEach((st) => {
+      const l = $(".archer-step-label", st);
+      if (l && !st.title) st.title = l.textContent.trim();
+    });
+    layout();
+    requestAnimationFrame(() => { layout(); window.scrollTo(0, 0); window.dispatchEvent(new Event("resize")); });
+    window.addEventListener("resize", () => requestAnimationFrame(layout));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     try { initStart(); } catch (e) { console.error("[Archer] start", e); }
     try { initWireframes(); } catch (e) { console.error("[Archer] wireframes", e); }
     try { initStyleGuide(); } catch (e) { console.error("[Archer] stijl", e); }
     try { initPublish(); } catch (e) { console.error("[Archer] publiceren", e); }
+    try { initWorkspace(); } catch (e) { console.error("[Archer] werkruimte", e); }
 
     // De volledige preview (stap Publiceren) verving elk menu door een platte lijst van alle pagina's.
     // De menu's komen al juist van de server (hoofdmenu met submenu's, footergroepen, juridisch).

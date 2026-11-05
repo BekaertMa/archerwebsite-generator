@@ -105,7 +105,6 @@ class AISB_Archer_Checks {
       <?php if ($cfg['moet']) : ?>
         <details class="archer-checks-sector"><summary>Zelf nakijken voor <?php echo esc_html(mb_strtolower($cfg['sector'])); ?></summary>
           <ul><?php foreach ($cfg['moet'] as $m) : ?><li><?php echo esc_html($m); ?></li><?php endforeach; ?></ul>
-          <p class="archer-muted">Uit het sectoradvies van UI/UX Pro Max.</p>
         </details>
       <?php endif; ?>
     </section>
