@@ -633,6 +633,7 @@
     const inner = wf.el.canvasInner;
     const COL_BODY = 336; // breedte van een sectievoorbeeld op het canvas
     let editorApi = null; // zijpaneel om een sectie te bewerken (verderop)
+    let libApi = null; // sectiebibliotheek: toevoegen (links) en voorbeelden kiezen (rechts)
     const PREVIEW = (window.AISB_WF && AISB_WF.previewUrl) || "";
     let parentOf = null; // slug => ouderslug, uit de sitemap
     let firstCanvas = true;
@@ -728,6 +729,7 @@
         '<div class="archer-cv-tools" role="toolbar">' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="up" title="Naar boven" aria-label="Naar boven">↑</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="down" title="Naar beneden" aria-label="Naar beneden">↓</button>' +
+        '<button type="button" class="archer-cv-tool" data-archer-cv-act="add" title="Sectie hierna toevoegen" aria-label="Sectie hierna toevoegen">+ Sectie</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="shuffle">Ander voorbeeld</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="lock">Vastzetten</button>' +
         '<button type="button" class="archer-cv-tool is-danger" data-archer-cv-act="del" title="Verwijderen" aria-label="Verwijderen">✕</button>' +
@@ -787,6 +789,7 @@
       $('[data-archer-cv-act="down"]', el).disabled = isFixed(s) || idx === movable[movable.length - 1];
       $('[data-archer-cv-act="shuffle"]', el).disabled = !!s.locked || !(s.ai_wireframe_id || s.bricks_template_id);
       $('[data-archer-cv-act="lock"]', el).textContent = s.locked ? "Losmaken" : "Vastzetten";
+      $('[data-archer-cv-act="add"]', el).hidden = isFoot(s);
       // Header en footer kan je niet verplaatsen; verwijderen kan wel.
       const body = $(".archer-cv-body", el);
       if (body) {
@@ -1228,7 +1231,7 @@
     const chromePost = wf.post.bind(wf);
     wf.post = async function (action, data) {
       const out = await chromePost(action, data);
-      if ((action === "aisb_shuffle_section_layout" || action === "aisb_replace_section_type") && out && out.success && data && data.page_slug) {
+      if ((action === "aisb_shuffle_section_layout" || action === "aisb_replace_section_type" || action === "aisb_archer_section_pick") && out && out.success && data && data.page_slug) {
         const w = out.data && out.data.wireframe;
         const sec = w && (w.sections || []).find((x) => x && x.uuid === data.uuid);
         if (sec && ["header", "footer"].includes(String(sec.type || "").toLowerCase())) {
@@ -1277,6 +1280,10 @@
       if (idx < 0) return;
       const act = btn.getAttribute("data-archer-cv-act");
 
+      if (act === "add") {
+        if (libApi) libApi.openFor(slug, uuid);
+        return;
+      }
       if (act === "up" || act === "down") {
         const step = act === "up" ? -1 : 1;
         const to = idx + step;
@@ -1568,6 +1575,8 @@
         const a = (sel.a = analyse(sel.nodes, docOf(sel.uuid)));
         let html = head;
         if (isFixed(s) && a.texts.length) html += `<p class="archer-ed-note">Wijzigingen aan de ${isHead(s) ? "header" : "footer"} gelden voor alle pagina's.</p>`;
+        // Voorbeeld: willekeurig een ander, of zelf kiezen uit de voorbeelden van hetzelfde type.
+        html += libApi ? libApi.variantsGroup(s) : "";
 
         // Layout
         const layout = [];
@@ -1610,6 +1619,7 @@
         const focusId = document.activeElement && panel.contains(document.activeElement) ? document.activeElement.id : "";
         const scroll = panel.scrollTop;
         panel.innerHTML = html;
+        if (libApi) libApi.fillVariants(panel, s, sel.slug);
         panel.scrollTop = scroll;
         if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
       }
@@ -1825,6 +1835,7 @@
 
       panel.addEventListener("click", async (e) => {
         if (e.target.closest("[data-ed-close]")) return close();
+        if (libApi && sel && libApi.onPanelClick(e, sel.slug, sel.uuid)) return;
         if (!sel || !sel.a || busy) return;
         const a = sel.a;
         let b;
@@ -1909,9 +1920,324 @@
         }
       };
 
-      return { open, close, flush: flushText, afterRender: syncAfterRender, isOpen: () => !!sel };
+      return { open, close, flush: flushText, afterRender: syncAfterRender, isOpen: () => !!sel, current: () => (sel ? { slug: sel.slug, uuid: sel.uuid } : null), rerender: () => sel && render() };
     })();
     editorApi = editor;
+
+    /* ── Sectiebibliotheek: links toevoegen per type, rechts een ander voorbeeld kiezen (zoals Relume) ── */
+
+    libApi = (() => {
+      const shell = wb.parentNode; // .archer-cv-shell
+      const side = document.createElement("aside");
+      side.className = "archer-smap-panel archer-cv-insert";
+      side.hidden = true;
+      side.setAttribute("aria-label", "Sectie toevoegen");
+      shell.insertBefore(side, wb);
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "archer-cv-addbtn";
+      openBtn.innerHTML = '<span aria-hidden="true">+</span> Sectie toevoegen';
+      wb.appendChild(openBtn);
+      openBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+
+      let types = null; // [{ type, label, desc, count, sample }]
+      const variants = {}; // type => [{ id, title, thumb }]
+      const loading = {};
+      let view = { type: "", q: "" }; // "" = categorieën
+      let target = { slug: "", after: "" };
+      let busy = false;
+
+      const post = (action, data) => wf.post(action, Object.assign({ project_id: wf.state.projectId }, data || {}));
+      const labelOf = (type) => (types || []).find((t) => t.type === type)?.label || WF_TYPES[type] || type;
+
+      async function loadTypes() {
+        if (types) return types;
+        const out = await post("aisb_archer_section_types");
+        if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Laden mislukt");
+        types = out.data.types || [];
+        return types;
+      }
+      function loadVariants(type) {
+        if (variants[type]) return Promise.resolve(variants[type]);
+        if (!loading[type]) {
+          loading[type] = post("aisb_archer_section_variants", { type }).then((out) => {
+            if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Laden mislukt");
+            variants[type] = out.data.variants || [];
+            return variants[type];
+          }).finally(() => delete loading[type]);
+        }
+        return loading[type];
+      }
+
+      // Voorbeeldbeeld: de schermafbeelding, of het voorbeeld zelf (iframe) zolang die er niet is.
+      const io = "IntersectionObserver" in window ? new IntersectionObserver((list) => {
+        list.forEach((en) => {
+          if (!en.isIntersecting) return;
+          const box = en.target;
+          io.unobserve(box);
+          if (box.querySelector("iframe")) return;
+          const f = document.createElement("iframe");
+          f.src = PREVIEW + box.getAttribute("data-lib-frame");
+          f.loading = "lazy";
+          f.tabIndex = -1;
+          f.setAttribute("aria-hidden", "true");
+          f.scrolling = "no";
+          box.appendChild(f);
+          const fit = () => box.style.setProperty("--lib-scale", ((box.offsetWidth || 240) / 1200).toFixed(4));
+          fit();
+          f.addEventListener("load", fit);
+        });
+      }, { rootMargin: "200px" }) : null;
+      const thumbHtml = (c, alt) =>
+        c && c.thumb
+          ? `<img class="archer-lib-img" src="${esc(c.thumb)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">`
+          : c ? `<span class="archer-lib-frame" data-lib-frame="${Number(c.id)}" aria-hidden="true"></span>` : "";
+      const wireFrames = (root) => $$("[data-lib-frame]", root).forEach((b) => (io ? io.observe(b) : null));
+
+      /* Rechterpaneel: groep "Voorbeeld" */
+      const typeOf = (s) => String((s && s.type) || "").toLowerCase();
+      function variantsGroup(s) {
+        if (!s || !s.bricks_template_id) return "";
+        const locked = !!s.locked;
+        return (
+          `<div class="archer-ed-group archer-lib-group"><div class="archer-ed-title">Voorbeeld</div>` +
+          `<div class="archer-lib-top"><span>${esc(labelOf(typeOf(s)))}</span>` +
+          `<button type="button" class="archer-btn archer-btn-outline archer-lib-shuffle" data-lib-shuffle${locked ? " disabled" : ""}>Ander voorbeeld</button></div>` +
+          (locked ? `<p class="archer-muted archer-lib-note">Deze sectie staat vast. Maak ze los om een ander voorbeeld te kiezen.</p>` : "") +
+          `<div class="archer-lib-grid is-compact" data-lib-variants${locked ? ' aria-disabled="true"' : ""}><p class="archer-muted">Voorbeelden laden…</p></div></div>`
+        );
+      }
+      function fillVariants(panel, s) {
+        const box = $("[data-lib-variants]", panel);
+        if (!box || !s) return;
+        const type = typeOf(s);
+        const draw = (list) => {
+          if (!box.isConnected) return;
+          const cur = Number(s.bricks_template_id);
+          const all = list.length;
+          const open = box.getAttribute("data-lib-all") === "1";
+          // Het huidige voorbeeld eerst, dan de rest.
+          const sorted = list.slice().sort((a, b) => (a.id === cur ? -1 : b.id === cur ? 1 : 0));
+          const shown = open ? sorted : sorted.slice(0, 8);
+          box.innerHTML =
+            shown.map((c, i) =>
+              `<button type="button" class="archer-lib-card${c.id === cur ? " is-current" : ""}" data-lib-pick="${c.id}"${s.locked ? " disabled" : ""} aria-label="Voorbeeld ${i + 1}${c.id === cur ? " (huidig)" : ""}">` +
+              thumbHtml(c) + (c.id === cur ? '<span class="archer-lib-badge">Huidig</span>' : "") + "</button>").join("") +
+            (all > shown.length ? `<button type="button" class="archer-link-btn archer-lib-more" data-lib-more>Alle ${all} voorbeelden tonen</button>` : "");
+          wireFrames(box);
+        };
+        if (variants[type]) return draw(variants[type]);
+        loadTypes().catch(() => {});
+        loadVariants(type).then(draw).catch((e) => { if (box.isConnected) box.innerHTML = `<p class="archer-danger-text">${esc(e.message)}</p>`; });
+      }
+
+      /** Model van de server overnemen (zoals na "Ander voorbeeld"). */
+      function adopt(slug, w) {
+        normalizeOrder(w);
+        wf.state.pageModels[slug] = w;
+        if (wf.state.pageSlug === slug) wf.state.model = w;
+        lastSaved[slug] = JSON.stringify(w);
+      }
+
+      async function pick(slug, uuid, id) {
+        if (busy) return;
+        busy = true;
+        const panel = $(".archer-cv-panel");
+        const box = panel && $("[data-lib-variants]", panel);
+        if (box) box.classList.add("is-busy");
+        const st = panel && $("[data-ed-status]", panel);
+        if (st) st.textContent = "Voorbeeld wisselen. AI schrijft de teksten…";
+        await flushWf();
+        try {
+          const out = await post("aisb_archer_section_pick", { sitemap_version_id: wf.state.sitemapId, page_slug: slug, uuid, template_id: id });
+          if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Wisselen mislukt");
+          adopt(slug, out.data.wireframe);
+          const el = $(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(uuid)}"]`, inner);
+          if (el) el.remove(); // het voorbeeld opnieuw laden
+          redrawPage(slug);
+          wf.setStatus("Ander voorbeeld gekozen.", "ok");
+        } catch (e) {
+          if (st) { st.textContent = e.message || "Wisselen mislukt"; st.classList.add("archer-danger-text"); }
+        }
+        busy = false;
+        if (box) box.classList.remove("is-busy");
+      }
+
+      function onPanelClick(e, slug, uuid) {
+        let b;
+        if ((b = e.target.closest("[data-lib-shuffle]"))) {
+          if (b.disabled) return true;
+          const t = $(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(uuid)}"] [data-archer-cv-act="shuffle"]`, inner);
+          if (t && !t.disabled) t.click();
+          return true;
+        }
+        if ((b = e.target.closest("[data-lib-more]"))) {
+          const box = b.closest("[data-lib-variants]");
+          box.setAttribute("data-lib-all", "1");
+          const s = (modelOf(slug)?.sections || []).find((x) => x.uuid === uuid);
+          fillVariants(box.parentNode, s);
+          return true;
+        }
+        if ((b = e.target.closest("[data-lib-pick]"))) {
+          const s = (modelOf(slug)?.sections || []).find((x) => x.uuid === uuid);
+          const id = Number(b.getAttribute("data-lib-pick"));
+          if (!b.disabled && s && id !== Number(s.bricks_template_id)) pick(slug, uuid, id);
+          return true;
+        }
+        return false;
+      }
+
+      /* Linkerpaneel: sectie toevoegen */
+      const pagesWithModel = () => wf.state.pages.filter((p) => (modelOf(p.slug)?.sections || []).length);
+      function targetText() {
+        const m = modelOf(target.slug);
+        const s = target.after && (m?.sections || []).find((x) => x.uuid === target.after);
+        return s && !isHead(s) ? `na “${nameOf(s) || typeLabelOf(s)}”` : s && isHead(s) ? "bovenaan, onder de header" : "onderaan, boven de footer";
+      }
+      function render() {
+        const pages = pagesWithModel();
+        if (!target.slug || !pages.some((p) => p.slug === target.slug)) target = { slug: pages[0] ? pages[0].slug : "", after: "" };
+        let html =
+          `<div class="archer-smap-panel-head"><div><span class="archer-smap-panel-eyebrow">Toevoegen</span><h3>${view.type ? esc(labelOf(view.type)) : "Sectie toevoegen"}</h3></div>` +
+          `<button type="button" class="archer-sec-tool" data-lib-close aria-label="Sluiten">✕</button></div>`;
+        if (!pages.length) {
+          side.innerHTML = html + `<p class="archer-muted">Maak eerst de wireframes, daarna kan je secties toevoegen.</p>`;
+          return;
+        }
+        html +=
+          `<label class="aisb-label" for="archer-lib-page">Op pagina</label>` +
+          `<select id="archer-lib-page" data-lib-page>${pages.map((p) => `<option value="${esc(p.slug)}"${p.slug === target.slug ? " selected" : ""}>${esc(p.title || p.slug)}</option>`).join("")}</select>` +
+          `<p class="archer-lib-where">Komt ${esc(targetText())}.${target.after ? ' <button type="button" class="archer-link-btn" data-lib-bottom>Onderaan</button>' : ""}</p>`;
+        if (!view.type) {
+          html += `<input type="search" class="archer-lib-search" data-lib-search placeholder="Zoek een type sectie" value="${esc(view.q)}" aria-label="Zoek een type sectie">`;
+          if (!types) {
+            html += `<p class="archer-muted" data-lib-wait>Types laden…</p>`;
+          } else {
+            const q = view.q.trim().toLowerCase();
+            const list = types.filter((t) => !q || (t.label + " " + t.desc + " " + t.type).toLowerCase().includes(q));
+            html += `<div class="archer-lib-cats">` + (list.length
+              ? list.map((t) =>
+                `<button type="button" class="archer-lib-cat" data-lib-type="${esc(t.type)}">` +
+                `<span class="archer-lib-cat-img">${thumbHtml(t.sample, "")}</span>` +
+                `<span class="archer-lib-cat-text"><strong>${esc(t.label)}</strong><span>${esc(t.desc)}</span><em>${t.count} voorbeelden</em></span></button>`).join("")
+              : `<p class="archer-muted">Geen type gevonden.</p>`) + `</div>`;
+          }
+        } else {
+          const t = (types || []).find((x) => x.type === view.type);
+          html +=
+            `<button type="button" class="archer-link-btn archer-lib-back" data-lib-back>← Alle types</button>` +
+            (t && t.desc ? `<p class="archer-lib-desc">${esc(t.desc)}</p>` : "") +
+            `<button type="button" class="archer-btn archer-btn-primary archer-lib-random" data-lib-add="0"${busy ? " disabled" : ""}>Laat AI een voorbeeld kiezen</button>` +
+            `<p class="archer-lib-or">of kies zelf:</p>` +
+            `<div class="archer-lib-grid" data-lib-addgrid>${variants[view.type] ? "" : '<p class="archer-muted">Voorbeelden laden…</p>'}</div>`;
+        }
+        html += `<p class="archer-ed-status" data-lib-status aria-live="polite"></p>`;
+        const scroll = side.scrollTop;
+        side.innerHTML = html;
+        side.scrollTop = scroll;
+        wireFrames(side);
+        if (!types) loadTypes().then(() => !side.hidden && render()).catch((e) => setStatus(e.message, true));
+        if (view.type) {
+          const grid = $("[data-lib-addgrid]", side);
+          loadVariants(view.type).then((list) => {
+            if (!grid.isConnected) return;
+            grid.innerHTML = list.map((c, i) =>
+              `<button type="button" class="archer-lib-card" data-lib-add="${c.id}"${busy ? " disabled" : ""} aria-label="${esc(labelOf(view.type))}, voorbeeld ${i + 1}">${thumbHtml(c)}</button>`).join("");
+            wireFrames(grid);
+          }).catch((e) => setStatus(e.message, true));
+        }
+      }
+      const setStatus = (t, err) => {
+        const el = $("[data-lib-status]", side);
+        if (el) { el.textContent = t || ""; el.classList.toggle("archer-danger-text", !!err); }
+      };
+
+      function show(slug, after) {
+        if (slug) target = { slug, after: after || "" };
+        else {
+          const cur = editorApi && editorApi.current();
+          if (cur) target = { slug: cur.slug, after: cur.uuid };
+        }
+        side.hidden = false;
+        shell.classList.add("has-insert");
+        render();
+      }
+      function hide() {
+        side.hidden = true;
+        shell.classList.remove("has-insert");
+      }
+
+      async function add(id) {
+        if (busy || !view.type || !target.slug) return;
+        busy = true;
+        render();
+        setStatus("Sectie toevoegen. AI schrijft de teksten…");
+        await flushWf();
+        const slug = target.slug;
+        try {
+          const out = await post("aisb_archer_section_add", {
+            sitemap_version_id: wf.state.sitemapId, page_slug: slug, type: view.type, template_id: id || 0, after_uuid: target.after || "",
+          });
+          if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Toevoegen mislukt");
+          adopt(slug, out.data.wireframe);
+          redrawPage(slug);
+          busy = false;
+          target = { slug, after: out.data.uuid };
+          view = { type: "", q: "" };
+          render();
+          setStatus("Sectie toegevoegd.");
+          // De nieuwe sectie tonen en meteen openen in het paneel rechts.
+          const el = $(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(out.data.uuid)}"]`, inner);
+          if (el) {
+            el.classList.add("is-new");
+            setTimeout(() => el.classList.remove("is-new"), 2500);
+          }
+          if (editorApi) editorApi.open(slug, out.data.uuid);
+          wf.setStatus("Sectie toegevoegd.", "ok");
+        } catch (e) {
+          busy = false;
+          render();
+          setStatus(e.message || "Toevoegen mislukt", true);
+        }
+      }
+
+      openBtn.addEventListener("click", () => (side.hidden ? show() : hide()));
+      side.addEventListener("mousedown", (e) => e.stopPropagation());
+      side.addEventListener("wheel", (e) => e.stopPropagation());
+      side.addEventListener("input", (e) => {
+        if (!e.target.matches("[data-lib-search]")) return;
+        view.q = e.target.value;
+        const pos = e.target.selectionStart;
+        render();
+        const f = $("[data-lib-search]", side);
+        if (f) { f.focus(); f.setSelectionRange(pos, pos); }
+      });
+      side.addEventListener("change", (e) => {
+        if (!e.target.matches("[data-lib-page]")) return;
+        target = { slug: e.target.value, after: "" };
+        render();
+      });
+      side.addEventListener("click", (e) => {
+        let b;
+        if (e.target.closest("[data-lib-close]")) return hide();
+        if (e.target.closest("[data-lib-back]")) { view.type = ""; return render(); }
+        if (e.target.closest("[data-lib-bottom]")) { target.after = ""; return render(); }
+        if ((b = e.target.closest("[data-lib-type]"))) { view.type = b.getAttribute("data-lib-type"); side.scrollTop = 0; return render(); }
+        if ((b = e.target.closest("[data-lib-add]")) && !b.disabled) return add(Number(b.getAttribute("data-lib-add")));
+      });
+      // Een andere sectie geselecteerd: nieuwe secties komen daarna.
+      inner.addEventListener("click", (e) => {
+        if (side.hidden || e.target.closest("button")) return;
+        const sec = e.target.closest(".archer-cv-sec");
+        const col = sec && sec.closest(".archer-cv-col");
+        if (!sec || !col || busy) return;
+        target = { slug: col.getAttribute("data-archer-cv-page"), after: sec.getAttribute("data-archer-cv-uuid") };
+        render();
+      });
+
+      return { variantsGroup, fillVariants, onPanelClick, openFor: (slug, uuid) => show(slug, uuid), hide };
+    })();
     const origOpenExpanded = wf.openExpandedPage;
     wf.openExpandedPage = function () {
       editor.close();
