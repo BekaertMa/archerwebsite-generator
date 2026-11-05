@@ -1999,7 +1999,12 @@
         '<button type="button" data-ie-cmd="superscript" title="Superscript" aria-label="Superscript">x<sup>2</sup></button>' +
         '<button type="button" data-ie-cmd="subscript" title="Subscript" aria-label="Subscript">x<sub>2</sub></button>' +
         "</div>" +
-        '<form class="archer-ie-link" hidden><input type="text" inputmode="url" placeholder="https://, /pagina/, mailto: of tel:" aria-label="Adres van de link"><button type="submit">OK</button></form>';
+        '<form class="archer-ie-link" hidden>' +
+        '<select data-ie-page aria-label="Link naar"></select>' +
+        '<input type="text" inputmode="url" data-ie-url placeholder="https://, mailto: of tel:" aria-label="Adres van de link">' +
+        '<button type="submit" class="is-ok">OK</button>' +
+        '<button type="button" data-ie-unlink title="Link weghalen" aria-label="Link weghalen">✕</button>' +
+        "</form>";
       document.body.appendChild(tb);
       let live = null; // { id, key, mode, el, doc, iframe }
       let pendingPoint = null; // klik op het canvas: daar meteen beginnen met typen
@@ -2058,6 +2063,7 @@
         $(".archer-ie-btns", tb).hidden = false;
         cancelAnimationFrame(rafId);
         loop();
+        updateActive();
         // Het veld in het paneel rechts zichtbaar maken.
         const f = $(`[data-ed-text="${CSS.escape(id)}"]`, panel);
         if (f) f.closest(".archer-ed-field")?.classList.add("is-live");
@@ -2125,7 +2131,9 @@
             // Het voorbeeld zet klikken uit (pointer-events: none); teksten moeten ze wel krijgen.
             "[data-archer-edit],[data-archer-edit] *{cursor:text;pointer-events:auto!important}" +
             "[data-archer-edit]:hover{outline:2px solid rgba(27,90,91,.55);outline-offset:3px}" +
-            "[data-archer-editing]{outline:2px solid #1B5A5B!important;outline-offset:3px;cursor:text}";
+            "[data-archer-editing]{outline:2px solid #1B5A5B!important;outline-offset:3px;cursor:text}" +
+            "[data-archer-edit] strong,[data-archer-edit] b{font-weight:700}[data-archer-edit] em,[data-archer-edit] i{font-style:italic}" +
+            "[data-archer-edit] a{text-decoration:underline}";
           doc.head.appendChild(st);
           doc.addEventListener("click", (e) => {
             if (e.target.closest && e.target.closest("a")) e.preventDefault(); // knoppen en links: niet volgen
@@ -2133,6 +2141,7 @@
             if (t) startInline(t, { x: e.clientX, y: e.clientY });
           }, true);
           doc.addEventListener("input", (e) => live && e.target === live.el && onInlineInput());
+          doc.addEventListener("selectionchange", () => live && live.doc === doc && updateActive());
           doc.addEventListener("keydown", (e) => {
             if (!live) return;
             if (e.key === "Escape") { e.preventDefault(); live.el.blur(); return finishInline(); }
@@ -2150,7 +2159,7 @@
           });
           doc.addEventListener("focusout", () => {
             setTimeout(() => {
-              if (live && live.doc === doc && doc.activeElement !== live.el && !tb.contains(document.activeElement)) finishInline();
+              if (live && live.doc === doc && doc.activeElement !== live.el && !tb.contains(document.activeElement) && $(".archer-ie-link", tb).hidden) finishInline();
             }, 150);
           });
           // Scrollen en zoomen boven het voorbeeld werkt zoals op de rest van het canvas.
@@ -2176,50 +2185,153 @@
         }
       }
 
+      // Ergens anders klikken (paneel, canvas): klaar met deze tekst.
+      document.addEventListener("mousedown", (e) => {
+        if (live && !tb.contains(e.target)) finishInline();
+      }, true);
       tb.addEventListener("mousedown", (e) => {
-        if (!e.target.closest("input")) e.preventDefault(); // de selectie in het voorbeeld behouden
+        if (!e.target.closest("input, select")) e.preventDefault(); // de selectie in het voorbeeld behouden
       });
-      tb.addEventListener("click", (e) => {
-        const b = e.target.closest("[data-ie-cmd]");
-        if (!b || !live) return;
-        const cmd = b.getAttribute("data-ie-cmd");
-        if (cmd === "link") {
-          const s = live.doc.getSelection();
-          savedRange = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null;
-          const a = savedRange && (savedRange.startContainer.parentElement || {}).closest ? savedRange.startContainer.parentElement.closest("a") : null;
-          $(".archer-ie-btns", tb).hidden = true;
-          const form = $(".archer-ie-link", tb);
-          form.hidden = false;
-          const inp = $("input", form);
-          inp.value = a && live.el.contains(a) ? a.getAttribute("href") || "" : "";
-          inp.focus();
-          return;
+      // Vet, cursief, superscript en subscript: echte <strong>, <em>, <sup> en <sub> (geen <b> of stijlen).
+      const TAGS = { bold: ["STRONG", "B"], italic: ["EM", "I"], superscript: ["SUP"], subscript: ["SUB"] };
+      const tagIn = (node, tags) => {
+        for (let n = node; n && live && n !== live.el; n = n.parentNode) if (n.nodeType === 1 && tags.includes(n.tagName)) return n;
+        return null;
+      };
+      function toggleTag(cmd) {
+        const tags = TAGS[cmd];
+        const doc = live.doc;
+        const s = doc.getSelection();
+        if (!s || !s.rangeCount) return;
+        const rg = s.getRangeAt(0);
+        if (!live.el.contains(rg.commonAncestorContainer)) return;
+        const found = tagIn(rg.commonAncestorContainer, tags) || (rg.startContainer === rg.endContainer ? null : tagIn(rg.startContainer, tags));
+        if (found) {
+          // Al vet (of cursief …): weghalen, de tekst blijft geselecteerd.
+          const first = found.firstChild;
+          const last = found.lastChild;
+          found.replaceWith(...found.childNodes);
+          if (first && last) {
+            const nr = doc.createRange();
+            nr.setStartBefore(first);
+            nr.setEndAfter(last);
+            s.removeAllRanges();
+            s.addRange(nr);
+          }
+        } else {
+          if (rg.collapsed) return;
+          const w = doc.createElement(tags[0].toLowerCase());
+          w.appendChild(rg.extractContents());
+          $$(tags.join(","), w).forEach((x) => x.replaceWith(...x.childNodes));
+          // Superscript en subscript sluiten elkaar uit.
+          if (cmd === "superscript" || cmd === "subscript") $$(cmd === "superscript" ? "sub" : "sup", w).forEach((x) => x.replaceWith(...x.childNodes));
+          rg.insertNode(w);
+          const nr = doc.createRange();
+          nr.selectNodeContents(w);
+          s.removeAllRanges();
+          s.addRange(nr);
         }
-        live.doc.execCommand(cmd, false, null);
-      });
-      $(".archer-ie-link", tb).addEventListener("submit", (e) => {
-        e.preventDefault();
-        if (!live) return;
-        const url = $("input", e.target).value.trim();
+        live.el.normalize();
+        onInlineInput();
+        updateActive();
+      }
+      function updateActive() {
+        if (!live || tb.hidden) return;
+        const s = live.doc.getSelection();
+        const node = s && s.rangeCount ? s.getRangeAt(0).commonAncestorContainer : null;
+        $$("[data-ie-cmd]", tb).forEach((b) => {
+          const cmd = b.getAttribute("data-ie-cmd");
+          const on = !!(node && (cmd === "link" ? tagIn(node, ["A"]) : tagIn(node, TAGS[cmd])));
+          b.classList.toggle("is-on", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+      const pagePath = (slug) => (slug === "home" ? "/" : "/" + slug + "/");
+      function openLinkForm() {
+        const s = live.doc.getSelection();
+        savedRange = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null;
+        const a = savedRange ? tagIn(savedRange.commonAncestorContainer, ["A"]) || tagIn(savedRange.startContainer, ["A"]) : null;
+        const href = a ? a.getAttribute("href") || "" : "";
+        const form = $(".archer-ie-link", tb);
+        const pages = (wf.state.pages || []).filter((p) => p.slug);
+        const match = pages.find((p) => pagePath(p.slug) === href);
+        $("[data-ie-page]", form).innerHTML =
+          `<option value="">Eigen adres…</option>` +
+          `<optgroup label="Pagina van de site">${pages.map((p) => `<option value="${esc(pagePath(p.slug))}"${match && match.slug === p.slug ? " selected" : ""}>${esc(p.title || p.slug)}</option>`).join("")}</optgroup>`;
+        const url = $("[data-ie-url]", form);
+        url.value = match ? "" : href;
+        url.hidden = !!match;
+        $("[data-ie-unlink]", form).hidden = !a;
+        $(".archer-ie-btns", tb).hidden = true;
+        form.hidden = false;
+        (match ? $("[data-ie-page]", form) : url).focus();
+      }
+      function closeLinkForm() {
+        $(".archer-ie-link", tb).hidden = true;
+        $(".archer-ie-btns", tb).hidden = false;
+        if (live) live.el.focus();
+      }
+      function restoreRange() {
         live.el.focus();
         const s = live.doc.getSelection();
         if (savedRange) {
           s.removeAllRanges();
           s.addRange(savedRange);
         }
-        if (!url) live.doc.execCommand("unlink", false, null);
-        else if (/^(https?:|mailto:|tel:|\/|#)/i.test(url)) live.doc.execCommand("createLink", false, url);
-        else live.doc.execCommand("createLink", false, "https://" + url.replace(/^\/+/, ""));
-        e.target.hidden = true;
-        $(".archer-ie-btns", tb).hidden = false;
+        return s;
+      }
+      function applyLink(href) {
+        if (!live) return;
+        const s = restoreRange();
+        const rg = s.rangeCount ? s.getRangeAt(0) : null;
+        const a = rg ? tagIn(rg.commonAncestorContainer, ["A"]) || tagIn(rg.startContainer, ["A"]) : null;
+        if (!href) {
+          if (a) a.replaceWith(...a.childNodes);
+        } else if (a) {
+          a.setAttribute("href", href);
+        } else if (rg && !rg.collapsed) {
+          const w = live.doc.createElement("a");
+          w.setAttribute("href", href);
+          w.appendChild(rg.extractContents());
+          $$("a", w).forEach((x) => x.replaceWith(...x.childNodes));
+          rg.insertNode(w);
+        }
+        live.el.normalize();
+        closeLinkForm();
         onInlineInput();
+        updateActive();
+      }
+      tb.addEventListener("click", (e) => {
+        if (!live) return;
+        if (e.target.closest("[data-ie-unlink]")) return applyLink("");
+        const b = e.target.closest("[data-ie-cmd]");
+        if (!b) return;
+        const cmd = b.getAttribute("data-ie-cmd");
+        if (cmd === "link") return openLinkForm();
+        toggleTag(cmd);
       });
-      $(".archer-ie-link input", tb).addEventListener("keydown", (e) => {
-        if (e.key !== "Escape") return;
+      tb.addEventListener("change", (e) => {
+        if (!e.target.matches("[data-ie-page]")) return;
+        const url = $("[data-ie-url]", tb);
+        url.hidden = !!e.target.value;
+        if (!e.target.value) url.focus();
+      });
+      $(".archer-ie-link", tb).addEventListener("submit", (e) => {
         e.preventDefault();
-        $(".archer-ie-link", tb).hidden = true;
-        $(".archer-ie-btns", tb).hidden = false;
-        if (live) live.el.focus();
+        if (!live) return;
+        const page = $("[data-ie-page]", tb).value;
+        let url = page || $("[data-ie-url]", tb).value.trim();
+        if (url && !page) {
+          if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(url)) url = "mailto:" + url;
+          else if (/^\+?[\d\s()./-]{8,}$/.test(url)) url = "tel:" + url.replace(/[^\d+]/g, "");
+          else if (!/^(https?:|mailto:|tel:|\/|#)/i.test(url)) url = "https://" + url.replace(/^\/+/, "");
+        }
+        applyLink(url);
+      });
+      tb.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape" || $(".archer-ie-link", tb).hidden) return;
+        e.preventDefault();
+        closeLinkForm();
       });
 
       // Ander voorbeeld, verwijderen of een nieuwe wireframe: het paneel volgt of sluit.

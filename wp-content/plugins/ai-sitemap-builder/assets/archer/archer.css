@@ -1314,3 +1314,26 @@ body.archer-app .archer-shell .archer-cv-body iframe.is-live { pointer-events: a
 .archer-cv-sec:hover .archer-cv-addpill, .archer-cv-sec.is-editing .archer-cv-addpill, .archer-cv-addpill:focus-visible { display: inline-flex; }
 .archer-cv-addpill[hidden] { display: none !important; }
 .archer-cv-sec:hover { z-index: 4; }
+
+/* ── Wireframes: panelen en canvas op één lijn (zelfde boven- en onderrand) ── */
+.archer-cv-shell { height: calc(100vh - 250px - var(--ar-admin-bar)); min-height: 560px; align-items: stretch; }
+body.archer-app .archer-shell .archer-cv-shell > .aisb-wf-whiteboard { margin: 0 !important; height: auto; min-height: 0; align-self: stretch; }
+.archer-cv-shell > .archer-cv-panel, .archer-cv-shell > .archer-cv-insert { height: auto; min-height: 0; align-self: stretch; }
+.archer-cv-shell:has(> .aisb-wf-whiteboard.is-hidden) { height: auto; min-height: 0; }
+.archer-cv-shell > .archer-cv-insert { border-top: 1px solid var(--ar-line); border-bottom: 1px solid var(--ar-line); }
+.archer-cv-shell > .archer-cv-panel { border-top: 1px solid var(--ar-line); border-bottom: 1px solid var(--ar-line); }
+@media (max-width: 760px) {
+  .archer-cv-shell { height: auto; }
+  body.archer-app .archer-shell .archer-cv-shell > .aisb-wf-whiteboard { height: calc(100vh - 250px - var(--ar-admin-bar)); min-height: 560px; }
+  .archer-cv-shell > .archer-cv-panel, .archer-cv-shell > .archer-cv-insert { max-height: 70vh; }
+}
+
+/* Inline opmaak: actieve knop en linkformulier */
+.archer-ie-tb button.is-on { background: var(--ar-bg-2); color: var(--ar-teal); }
+.archer-ie-link select { font: 400 13px/1.3 var(--ar-font); border: 1px solid var(--ar-line-2); border-radius: 8px; padding: 7px 9px; max-width: 200px; background: #fff; }
+.archer-ie-link select:focus { outline: 2px solid var(--ar-teal); outline-offset: 0; }
+.archer-ie-link input { width: 220px; }
+.archer-ie-link input[hidden] { display: none; }
+.archer-ie-tb .archer-ie-link button.is-ok { background: var(--ar-navy); color: #fff; padding: 0 12px; }
+.archer-ie-tb .archer-ie-link button.is-ok:hover { background: var(--ar-teal); }
+.archer-ie-link [data-ie-unlink][hidden] { display: none; }
