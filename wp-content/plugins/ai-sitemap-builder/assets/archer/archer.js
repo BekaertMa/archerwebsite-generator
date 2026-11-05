@@ -729,11 +729,12 @@
         '<div class="archer-cv-tools" role="toolbar">' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="up" title="Naar boven" aria-label="Naar boven">↑</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="down" title="Naar beneden" aria-label="Naar beneden">↓</button>' +
-        '<button type="button" class="archer-cv-tool" data-archer-cv-act="add" title="Sectie hierna toevoegen" aria-label="Sectie hierna toevoegen">+ Sectie</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="shuffle">Ander voorbeeld</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="lock">Vastzetten</button>' +
         '<button type="button" class="archer-cv-tool is-danger" data-archer-cv-act="del" title="Verwijderen" aria-label="Verwijderen">✕</button>' +
-        "</div>";
+        "</div>" +
+        // Sectie toevoegen op de rand onder deze sectie (zoals Relume).
+        '<button type="button" class="archer-cv-addpill" data-archer-cv-act="add" aria-label="Sectie hieronder toevoegen"><span aria-hidden="true">+</span> Sectie</button>';
       if (id) {
         const iframe = document.createElement("iframe");
         iframe.src = PREVIEW + id;
@@ -762,6 +763,8 @@
         const doc = iframe.contentDocument;
         const wrap = doc && doc.getElementById("aisb-preview");
         if (wrap) h = Math.ceil(wrap.getBoundingClientRect().height);
+        if (wrap && UI.measureCanvasText) UI.measureCanvasText(doc);
+        if (wrap && editorApi && editorApi.bindInline) editorApi.bindInline(iframe);
       } catch (e) {
         return;
       }
@@ -1030,7 +1033,46 @@
     }
     zoom.addEventListener("mousedown", (e) => e.stopPropagation());
     const zoomLevel = $("[data-archer-zoom-level]", zoom);
-    const showZoom = () => (zoomLevel.textContent = Math.round(wf.canvas.scale * 100) + "%");
+    // Zoom zoals in Relume: 100% = de lopende tekst van de voorbeelden is 14px groot op het scherm.
+    // De voorbeelden zijn 1200px breed en staan op COL_BODY px; de tekstgrootte meten we in een voorbeeld.
+    let textPx = 16;
+    const zoomBase = () => (COL_BODY / 1200) * (textPx / 14);
+    const pctOf = (scale) => scale * zoomBase() * 100;
+    const scaleOf = (pct) => pct / 100 / zoomBase();
+    const ZOOM_MIN = 10;
+    const ZOOM_MAX = 200;
+    const ZOOM_STEPS = [10, 15, 25, 33, 50, 67, 75, 100, 125, 150, 200];
+    const showZoom = () => (zoomLevel.textContent = Math.round(pctOf(wf.canvas.scale)) + "%");
+    let userZoomed = false;
+    const tally = {}; // tekstgrootte => aantal tekens, over de voorbeelden heen
+    UI.measureCanvasText = (doc) => {
+      if (!doc || doc.__archerMeasured) return;
+      doc.__archerMeasured = true;
+      $$("#aisb-preview p, #aisb-preview .brxe-text-basic, #aisb-preview .brxe-text, #aisb-preview li", doc).forEach((el) => {
+        const px = Math.round(parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 0);
+        const n = (el.textContent || "").trim().length;
+        if (px >= 10 && px <= 24 && n > 20) tally[px] = (tally[px] || 0) + n;
+      });
+      // De meest gebruikte grootte van de lopende tekst.
+      const best = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+      if (!best || Number(best) === textPx) return;
+      const pct = pctOf(wf.canvas.scale);
+      textPx = Number(best);
+      // Nog niet zelf gezoomd: het percentage blijft hetzelfde (de beginweergave blijft 50%).
+      if (!userZoomed) {
+        const rect = wb.getBoundingClientRect();
+        const prev = wf.canvas.scale;
+        const next = scaleOf(pct);
+        const cx = 24;
+        const cy = 24;
+        wf.canvas.tx = cx - ((cx - wf.canvas.tx) / prev) * next;
+        wf.canvas.ty = cy - ((cy - wf.canvas.ty) / prev) * next;
+        wf.canvas.scale = next;
+        inner.style.transform = `translate(${wf.canvas.tx}px, ${wf.canvas.ty}px) scale(${wf.canvas.scale})`;
+        void rect;
+      }
+      showZoom();
+    };
     const origApply = wf.applyCanvasTransform;
     if (origApply) {
       wf.applyCanvasTransform = function () {
@@ -1039,8 +1081,28 @@
         return r;
       };
     }
-    // Ctrl + scroll zoomt via canvas.js; het percentage volgt mee.
-    wb.addEventListener("wheel", () => requestAnimationFrame(showZoom), { passive: true });
+    // Ctrl + scroll (of knijpen) zoomt hier, met de grenzen van deze schaal (canvas.js stopt bij 200% van de oude schaal).
+    wb.addEventListener(
+      "wheel",
+      (e) => {
+        if (!e.ctrlKey) return requestAnimationFrame(showZoom);
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        userZoomed = true;
+        const rect = wb.getBoundingClientRect();
+        const prev = wf.canvas.scale;
+        const want = Math.min(scaleOf(ZOOM_MAX), Math.max(scaleOf(ZOOM_MIN), prev * Math.exp(-e.deltaY * 0.0025)));
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const wx = (cx - wf.canvas.tx) / prev;
+        const wy = (cy - wf.canvas.ty) / prev;
+        wf.canvas.scale = want;
+        wf.canvas.tx = cx - wx * want;
+        wf.canvas.ty = cy - wy * want;
+        setTransform();
+      },
+      { passive: false, capture: true },
+    );
     const setTransform = () => {
       inner.style.transform = `translate(${wf.canvas.tx}px, ${wf.canvas.ty}px) scale(${wf.canvas.scale})`;
       showZoom();
@@ -1050,7 +1112,10 @@
       const cx = rect.width / 2;
       const cy = Math.min(rect.height / 2, 200);
       const prev = wf.canvas.scale;
-      const next = Math.max(0.2, Math.min(1.5, prev * factor));
+      // Naar de volgende stap (50%, 67%, 75%, 100% …), zoals in Relume.
+      const cur = pctOf(prev);
+      const pct = factor > 1 ? ZOOM_STEPS.find((x) => x > cur + 0.5) || ZOOM_MAX : ZOOM_STEPS.slice().reverse().find((x) => x < cur - 0.5) || ZOOM_MIN;
+      const next = scaleOf(pct);
       const wx = (cx - wf.canvas.tx) / prev;
       const wy = (cy - wf.canvas.ty) / prev;
       wf.canvas.scale = next;
@@ -1062,6 +1127,7 @@
       const b = e.target.closest("[data-archer-zoom]");
       if (!b) return;
       const z = b.getAttribute("data-archer-zoom");
+      userZoomed = true;
       if (z === "in") zoomBy(1.2);
       else if (z === "out") zoomBy(1 / 1.2);
       else wf.fitToView();
@@ -1069,6 +1135,7 @@
 
     // Passend: zo veel mogelijk kolommen in de breedte, bovenaan beginnen.
     let fitPending = false;
+    let startView = true; // de eerste keer: 50%, links bovenaan (zoals Relume)
     wf.fitToView = function () {
       const rect = wb.getBoundingClientRect();
       const cols = $$(".archer-cv-col", inner);
@@ -1086,7 +1153,11 @@
       });
       const pad = 24;
       const w = maxX - minX;
-      const scale = Math.max(0.35, Math.min(1, (rect.width - pad * 2) / w));
+      let scale = Math.max(scaleOf(ZOOM_MIN), Math.min(scaleOf(100), (rect.width - pad * 2) / w));
+      if (startView) {
+        startView = false;
+        scale = scaleOf(50);
+      }
       wf.canvas.scale = scale;
       wf.canvas.tx = w * scale < rect.width ? (rect.width - w * scale) / 2 - minX * scale : pad - minX * scale;
       wf.canvas.ty = pad - (cols[0].offsetTop - 0) * scale + 8;
@@ -1267,7 +1338,7 @@
       if (!btn) {
         // Klik op een sectie: bewerken in het zijpaneel.
         const sec = e.target.closest(".archer-cv-sec");
-        if (sec && !e.target.closest("button")) editor.open(slug, sec.getAttribute("data-archer-cv-uuid"));
+        if (sec && !e.target.closest("button")) editor.open(slug, sec.getAttribute("data-archer-cv-uuid"), { x: e.clientX, y: e.clientY });
         return;
       }
       if (btn.disabled) return;
@@ -1485,7 +1556,7 @@
       }
 
       // Opmaak zoals in de server (AISB_Archer_Generate::clean_markup): geen kleuren, spans of style.
-      const ALLOWED = { basic: ["STRONG", "EM", "BR"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A"] };
+      const ALLOWED = { basic: ["STRONG", "EM", "BR", "SUP", "SUB", "A"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A", "SUP", "SUB"] };
       function cleanHtml(html, mode) {
         const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
         if (mode === "inline") {
@@ -1632,8 +1703,11 @@
         }
       };
 
-      async function open(slug, uuid) {
+      async function open(slug, uuid, point) {
         if (sel && sel.uuid === uuid) return;
+        finishInline();
+        pendingPoint = point || null;
+        $$("iframe.is-live", inner).forEach((f) => f.classList.remove("is-live"));
         await flushText();
         const s = sectionOf(slug, uuid);
         if (!s) return;
@@ -1662,10 +1736,15 @@
           sel.error = e.message || "Laden mislukt";
         }
         render();
+        const fr = $("iframe", secElOf(uuid) || document.createElement("i"));
+        if (fr && sel === mine) bindInline(fr);
       }
 
       function close() {
+        finishInline();
         flushText();
+        pendingPoint = null;
+        $$("iframe.is-live", inner).forEach((f) => f.classList.remove("is-live"));
         sel = null;
         panel.hidden = true;
         panel.innerHTML = "";
@@ -1905,6 +1984,244 @@
         if (e.key === "Escape" && sel && !(e.target.closest && e.target.closest("input, textarea"))) close();
       });
 
+
+      /* ── Tekst rechtstreeks in het voorbeeld aanpassen (zoals Relume) ── */
+      const tb = document.createElement("div");
+      tb.className = "archer-ie-tb";
+      tb.hidden = true;
+      tb.setAttribute("role", "toolbar");
+      tb.setAttribute("aria-label", "Opmaak");
+      tb.innerHTML =
+        '<div class="archer-ie-btns">' +
+        '<button type="button" data-ie-cmd="link" title="Link" aria-label="Link"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg></button>' +
+        '<button type="button" data-ie-cmd="bold" title="Vet" aria-label="Vet"><strong>B</strong></button>' +
+        '<button type="button" data-ie-cmd="italic" title="Cursief" aria-label="Cursief"><em>I</em></button>' +
+        '<button type="button" data-ie-cmd="superscript" title="Superscript" aria-label="Superscript">x<sup>2</sup></button>' +
+        '<button type="button" data-ie-cmd="subscript" title="Subscript" aria-label="Subscript">x<sub>2</sub></button>' +
+        "</div>" +
+        '<form class="archer-ie-link" hidden><input type="text" inputmode="url" placeholder="https://, /pagina/, mailto: of tel:" aria-label="Adres van de link"><button type="submit">OK</button></form>';
+      document.body.appendChild(tb);
+      let live = null; // { id, key, mode, el, doc, iframe }
+      let pendingPoint = null; // klik op het canvas: daar meteen beginnen met typen
+      let savedRange = null;
+      let rafId = 0;
+      const modeOf = (n) => n.mode || (n.name === "heading" || n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
+      const frameOf = (doc) => (doc && doc.defaultView ? doc.defaultView.frameElement : null);
+      const scaleOfFrame = (f) => {
+        const r = f.getBoundingClientRect();
+        return { r, s: r.width / (f.offsetWidth || 1200) };
+      };
+
+      function positionTb() {
+        if (!live || tb.hidden) return;
+        if (!live.el.isConnected || !live.iframe.isConnected) return finishInline();
+        const { r: ir, s } = scaleOfFrame(live.iframe);
+        const r = live.el.getBoundingClientRect();
+        const x = ir.left + (r.left + r.width / 2) * s;
+        const top = ir.top + r.top * s;
+        const below = top < 70;
+        tb.style.left = Math.max(8, Math.min(window.innerWidth - 8, x)) + "px";
+        tb.style.top = (below ? ir.top + r.bottom * s + 10 : top - 10) + "px";
+        tb.classList.toggle("is-below", below);
+      }
+      const loop = () => {
+        positionTb();
+        if (live) rafId = requestAnimationFrame(loop);
+      };
+
+      function startInline(el, point) {
+        if (!sel || !sel.a) return;
+        if (live && live.el === el) return;
+        finishInline();
+        const id = el.getAttribute("data-archer-edit");
+        const n = sel.a.byId[id];
+        if (!n) return;
+        const doc = el.ownerDocument;
+        const iframe = frameOf(doc);
+        if (!iframe) return;
+        const mode = modeOf(n);
+        live = { id, key: n.key || "text", mode, el, doc, iframe };
+        el.setAttribute("contenteditable", mode === "inline" ? "plaintext-only" : "true");
+        el.setAttribute("data-archer-editing", "");
+        el.setAttribute("spellcheck", "true");
+        el.focus();
+        if (point && doc.caretRangeFromPoint) {
+          const rg = doc.caretRangeFromPoint(point.x, point.y);
+          if (rg && el.contains(rg.startContainer)) {
+            const s = doc.getSelection();
+            s.removeAllRanges();
+            s.addRange(rg);
+          }
+        }
+        tb.hidden = mode === "inline";
+        $(".archer-ie-link", tb).hidden = true;
+        $(".archer-ie-btns", tb).hidden = false;
+        cancelAnimationFrame(rafId);
+        loop();
+        // Het veld in het paneel rechts zichtbaar maken.
+        const f = $(`[data-ed-text="${CSS.escape(id)}"]`, panel);
+        if (f) f.closest(".archer-ed-field")?.classList.add("is-live");
+      }
+
+      function finishInline() {
+        if (!live) return;
+        const l = live;
+        live = null;
+        cancelAnimationFrame(rafId);
+        tb.hidden = true;
+        l.el.removeAttribute("contenteditable");
+        l.el.removeAttribute("data-archer-editing");
+        $$(".archer-ed-field.is-live", panel).forEach((x) => x.classList.remove("is-live"));
+        flushText();
+      }
+
+      function onInlineInput() {
+        if (!live) return;
+        const raw = live.mode === "inline" ? esc(live.el.textContent) : live.el.innerHTML;
+        const value = cleanHtml(raw, live.mode);
+        textQueue[live.id] = { key: live.key, value };
+        const n = sel && sel.a && sel.a.byId[live.id];
+        if (n) n.text = value;
+        // Het veld in het paneel volgt mee.
+        const f = $(`[data-ed-text="${CSS.escape(live.id)}"]`, panel);
+        if (f && document.activeElement !== f) {
+          if (live.mode === "inline") f.textContent = live.el.textContent.replace(/\s+/g, " ").trim();
+          else f.innerHTML = value;
+        }
+        const max = f ? Number(f.getAttribute("data-ed-max")) || 0 : 0;
+        const lenEl = $(`[data-ed-len="${CSS.escape(live.id)}"]`, panel);
+        if (lenEl) {
+          const len = plainLen(live.mode === "inline" ? esc(value) : value);
+          lenEl.textContent = countText(len, max);
+          lenEl.classList.toggle("is-over", !!max && len > max);
+        }
+        measureIframe(live.iframe);
+        setStatus("");
+        clearTimeout(textTimer);
+        textTimer = setTimeout(flushText, 800);
+      }
+
+      function bindInline(iframe) {
+        if (!sel || !sel.a || !iframe) return;
+        const secEl = secElOf(sel.uuid);
+        if (!secEl || !secEl.contains(iframe)) return;
+        let doc;
+        try {
+          doc = iframe.contentDocument;
+        } catch (e) {
+          return;
+        }
+        if (!doc || !doc.getElementById("aisb-preview")) return;
+        $$("iframe.is-live", inner).forEach((f) => f !== iframe && f.classList.remove("is-live"));
+        iframe.classList.add("is-live");
+        sel.a.texts.forEach((t) => {
+          const d = domOf(doc, t.n.id);
+          if (d) d.setAttribute("data-archer-edit", t.n.id);
+        });
+        if (!doc.__archerInline) {
+          doc.__archerInline = true;
+          const st = doc.createElement("style");
+          st.textContent =
+            // Het voorbeeld zet klikken uit (pointer-events: none); teksten moeten ze wel krijgen.
+            "[data-archer-edit],[data-archer-edit] *{cursor:text;pointer-events:auto!important}" +
+            "[data-archer-edit]:hover{outline:2px solid rgba(27,90,91,.55);outline-offset:3px}" +
+            "[data-archer-editing]{outline:2px solid #1B5A5B!important;outline-offset:3px;cursor:text}";
+          doc.head.appendChild(st);
+          doc.addEventListener("click", (e) => {
+            if (e.target.closest && e.target.closest("a")) e.preventDefault(); // knoppen en links: niet volgen
+            const t = e.target.closest && e.target.closest("[data-archer-edit]");
+            if (t) startInline(t, { x: e.clientX, y: e.clientY });
+          }, true);
+          doc.addEventListener("input", (e) => live && e.target === live.el && onInlineInput());
+          doc.addEventListener("keydown", (e) => {
+            if (!live) return;
+            if (e.key === "Escape") { e.preventDefault(); live.el.blur(); return finishInline(); }
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            if (live.mode === "inline") return; // titels en knoppen: één regel
+            if (live.mode === "basic") doc.execCommand("insertLineBreak");
+            else doc.execCommand("insertParagraph");
+          });
+          doc.addEventListener("paste", (e) => {
+            if (!live) return;
+            e.preventDefault();
+            const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+            doc.execCommand("insertText", false, live.mode === "inline" ? t.replace(/\s+/g, " ") : t);
+          });
+          doc.addEventListener("focusout", () => {
+            setTimeout(() => {
+              if (live && live.doc === doc && doc.activeElement !== live.el && !tb.contains(document.activeElement)) finishInline();
+            }, 150);
+          });
+          // Scrollen en zoomen boven het voorbeeld werkt zoals op de rest van het canvas.
+          doc.addEventListener("wheel", (e) => {
+            const f = frameOf(doc);
+            if (!f) return;
+            e.preventDefault();
+            const { r, s } = scaleOfFrame(f);
+            wb.dispatchEvent(new WheelEvent("wheel", {
+              deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, ctrlKey: e.ctrlKey, metaKey: e.metaKey,
+              clientX: r.left + e.clientX * s, clientY: r.top + e.clientY * s, bubbles: true, cancelable: true,
+            }));
+          }, { passive: false });
+        }
+        if (pendingPoint) {
+          const { r, s } = scaleOfFrame(iframe);
+          const x = (pendingPoint.x - r.left) / s;
+          const y = (pendingPoint.y - r.top) / s;
+          pendingPoint = null;
+          const hit = doc.elementFromPoint(x, y);
+          const t = hit && hit.closest && hit.closest("[data-archer-edit]");
+          if (t) startInline(t, { x, y });
+        }
+      }
+
+      tb.addEventListener("mousedown", (e) => {
+        if (!e.target.closest("input")) e.preventDefault(); // de selectie in het voorbeeld behouden
+      });
+      tb.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-ie-cmd]");
+        if (!b || !live) return;
+        const cmd = b.getAttribute("data-ie-cmd");
+        if (cmd === "link") {
+          const s = live.doc.getSelection();
+          savedRange = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null;
+          const a = savedRange && (savedRange.startContainer.parentElement || {}).closest ? savedRange.startContainer.parentElement.closest("a") : null;
+          $(".archer-ie-btns", tb).hidden = true;
+          const form = $(".archer-ie-link", tb);
+          form.hidden = false;
+          const inp = $("input", form);
+          inp.value = a && live.el.contains(a) ? a.getAttribute("href") || "" : "";
+          inp.focus();
+          return;
+        }
+        live.doc.execCommand(cmd, false, null);
+      });
+      $(".archer-ie-link", tb).addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (!live) return;
+        const url = $("input", e.target).value.trim();
+        live.el.focus();
+        const s = live.doc.getSelection();
+        if (savedRange) {
+          s.removeAllRanges();
+          s.addRange(savedRange);
+        }
+        if (!url) live.doc.execCommand("unlink", false, null);
+        else if (/^(https?:|mailto:|tel:|\/|#)/i.test(url)) live.doc.execCommand("createLink", false, url);
+        else live.doc.execCommand("createLink", false, "https://" + url.replace(/^\/+/, ""));
+        e.target.hidden = true;
+        $(".archer-ie-btns", tb).hidden = false;
+        onInlineInput();
+      });
+      $(".archer-ie-link input", tb).addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        $(".archer-ie-link", tb).hidden = true;
+        $(".archer-ie-btns", tb).hidden = false;
+        if (live) live.el.focus();
+      });
+
       // Ander voorbeeld, verwijderen of een nieuwe wireframe: het paneel volgt of sluit.
       const syncAfterRender = () => {
         if (!sel) return;
@@ -1920,9 +2237,14 @@
         }
       };
 
-      return { open, close, flush: flushText, afterRender: syncAfterRender, isOpen: () => !!sel, current: () => (sel ? { slug: sel.slug, uuid: sel.uuid } : null), rerender: () => sel && render() };
+      return { open, close, flush: flushText, afterRender: syncAfterRender, isOpen: () => !!sel, current: () => (sel ? { slug: sel.slug, uuid: sel.uuid } : null), rerender: () => sel && render(), bindInline };
     })();
     editorApi = editor;
+
+    // Breedte van de schuifbalk, zodat het canvas over de volle breedte geen horizontale schuifbalk geeft.
+    const setSbw = () => document.documentElement.style.setProperty("--ar-sbw", Math.max(0, window.innerWidth - document.documentElement.clientWidth) + "px");
+    setSbw();
+    window.addEventListener("resize", setSbw);
 
     /* ── Sectiebibliotheek: links toevoegen per type, rechts een ander voorbeeld kiezen (zoals Relume) ── */
 

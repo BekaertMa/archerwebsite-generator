@@ -1268,3 +1268,49 @@ body.archer-app .archer-shell .archer-lib-shuffle { padding: 6px 12px; font-size
 @media (max-width: 760px) {
   .archer-cv-shell > .archer-cv-insert { order: 0; flex: 0 0 auto; width: auto; height: auto; min-height: 0; max-height: 70vh; border: 1px solid var(--ar-line); border-radius: var(--ar-radius-lg) var(--ar-radius-lg) 0 0; }
 }
+
+/* ── Wireframes: canvas over de volle breedte van het venster ── */
+body.archer-app { overflow-x: clip; }
+.archer-cv-shell {
+  --ar-vw: calc(100vw - var(--ar-sbw, 0px));
+  width: var(--ar-vw); max-width: none;
+  margin-left: calc(50% - var(--ar-vw) / 2); margin-right: calc(50% - var(--ar-vw) / 2);
+}
+body.archer-app .archer-shell .archer-cv-shell > .aisb-wf-whiteboard { border-radius: 0; border-left: 0; border-right: 0; }
+.archer-cv-shell > .archer-cv-panel { border-radius: 0; border-right: 0; }
+.archer-cv-shell > .archer-cv-insert { border-radius: 0; border-left: 0; }
+.archer-cv-shell > .archer-cv-panel, .archer-cv-shell > .archer-cv-insert { height: calc(100vh - 250px - var(--ar-admin-bar)); }
+
+/* Inline tekst aanpassen: het geselecteerde voorbeeld reageert op klikken */
+body.archer-app .archer-shell .archer-cv-body iframe.is-live { pointer-events: auto; }
+.archer-ie-tb {
+  position: fixed; z-index: 100000; transform: translate(-50%, -100%);
+  background: #fff; border: 1px solid var(--ar-line-2); border-radius: 12px; box-shadow: 0 6px 24px rgba(9, 9, 48, 0.16); padding: 4px;
+}
+.archer-ie-tb.is-below { transform: translate(-50%, 0); }
+.archer-ie-tb[hidden] { display: none; }
+.archer-ie-btns { display: flex; gap: 2px; }
+.archer-ie-btns[hidden], .archer-ie-link[hidden] { display: none; }
+.archer-ie-tb button {
+  min-width: 36px; height: 36px; border: 0; background: transparent; border-radius: 8px; cursor: pointer;
+  font: 600 15px/1 var(--ar-font); color: var(--ar-navy); display: inline-flex; align-items: center; justify-content: center; padding: 0 8px;
+}
+.archer-ie-tb button:hover { background: var(--ar-bg); }
+.archer-ie-tb sup, .archer-ie-tb sub { font-size: 10px; }
+.archer-ie-link { display: flex; gap: 4px; align-items: center; }
+.archer-ie-link input { width: 240px; font: 400 13px/1.3 var(--ar-font); border: 1px solid var(--ar-line-2); border-radius: 8px; padding: 7px 9px; }
+.archer-ie-link input:focus { outline: 2px solid var(--ar-teal); outline-offset: 0; }
+.archer-ed-field.is-live .archer-ed-rte { border-color: var(--ar-teal); }
+
+/* Sectie toevoegen op de rand onder een sectie (zoals Relume) */
+.archer-cv-addpill {
+  position: absolute; left: 50%; bottom: 0; z-index: 5; transform: translate(-50%, 50%);
+  display: none; align-items: center; gap: 4px; white-space: nowrap;
+  font: 700 12px/1 var(--ar-font); color: #fff; background: var(--ar-teal); border: 0; border-radius: 8px;
+  padding: 7px 12px; cursor: pointer; box-shadow: var(--ar-shadow);
+}
+.archer-cv-addpill span { font-size: 15px; line-height: 0; }
+.archer-cv-addpill:hover { background: var(--ar-navy); }
+.archer-cv-sec:hover .archer-cv-addpill, .archer-cv-sec.is-editing .archer-cv-addpill, .archer-cv-addpill:focus-visible { display: inline-flex; }
+.archer-cv-addpill[hidden] { display: none !important; }
+.archer-cv-sec:hover { z-index: 4; }

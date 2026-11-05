@@ -526,9 +526,9 @@ class AISB_Archer_Generate {
     if ($mode === 'basic') {
       $html = preg_replace('/<\s*(p|div)(\s[^>]*)?>/i', '<br>', $html);
       $html = preg_replace('/<\s*\/\s*(p|div)\s*>/i', '<br>', $html);
-      $allowed = ['strong' => [], 'em' => [], 'br' => []];
+      $allowed = ['strong' => [], 'em' => [], 'br' => [], 'sup' => [], 'sub' => [], 'a' => ['href' => true]];
     } else {
-      $allowed = ['p' => [], 'br' => [], 'strong' => [], 'em' => [], 'ul' => [], 'ol' => [], 'li' => [], 'a' => ['href' => true]];
+      $allowed = ['p' => [], 'br' => [], 'strong' => [], 'em' => [], 'ul' => [], 'ol' => [], 'li' => [], 'a' => ['href' => true], 'sup' => [], 'sub' => []];
     }
     $html = wp_kses($html, $allowed);
     $html = preg_replace('/(<br>\s*){3,}/i', '<br><br>', $html);
