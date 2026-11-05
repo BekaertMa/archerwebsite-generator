@@ -3,6 +3,7 @@
 return ['domain'=>'archer-content-types','plural-forms'=>'nplurals=2; plural=(n != 1);','language'=>'fr_BE','messages'=>[
   '"%s" is already used by WordPress. Choose another name or key.'=>'« %s » est déjà utilisé par WordPress. Choisissez un autre nom ou une autre clé.',
   '%1$d published, %2$d draft'=>'%1$d publié(s), %2$d brouillon(s)',
+  '%s (page per item)'=>'%s (page par élément)',
   'A content type is a list of similar items with their own fields, such as projects, references, cars or vacancies. Each type gets its own menu item, an overview and a page per item.'=>'Un type de contenu est une liste d’éléments similaires avec leurs propres champs, comme des projets, des références, des véhicules ou des offres d’emploi. Chaque type a son entrée de menu, une vue d’ensemble et une page par élément.',
   'Add category list'=>'Ajouter une liste de catégories',
   'Add content type'=>'Ajouter un type de contenu',

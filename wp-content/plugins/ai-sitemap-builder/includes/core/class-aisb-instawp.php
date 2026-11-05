@@ -1347,6 +1347,8 @@ class AISB_InstaWP {
     $nav_menu_items = [];
     foreach ($published_pages as $published_page) {
       $title = trim((string) ($published_page['title'] ?? ''));
+      // Archer: de startpagina heet in een menu altijd Home (de paginatitel is de SEO-titel).
+      if ((string) ($published_page['slug'] ?? '') === $front_slug) $title = 'Home';
       if ($title === '') {
         $title = ucwords(str_replace('-', ' ', (string) ($published_page['slug'] ?? '')));
       }
@@ -1401,6 +1403,22 @@ class AISB_InstaWP {
       }
     }
 
+    // Archer: overzichtspagina's met een detailpagina worden een lijst (query loop over een inhoudstype) met een
+    // Bricks-sjabloon per item; daarnaast het privacybeleid. Type, sjabloon en pagina bestaan vóór de injectie,
+    // zodat hun Bricks-inhoud mee met de pagina's bewaard wordt.
+    if (class_exists('AISB_Archer_Collections') && $project instanceof WP_Post && !empty($bricks_injections)) {
+      $bricks_injections = AISB_Archer_Collections::prepare((int) $project->ID, $bricks_injections);
+      $archer_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_login)) {
+        $archer_site_url = untrailingslashit((string) $site['site_url']);
+        $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
+        $archer_more = AISB_Archer_Collections::extra((int) $project->ID, $bricks_injections, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+        if ($archer_more) $bricks_injections = array_merge($bricks_injections, $archer_more);
+      }
+    }
+
     // The Bricks page-builder data lives in protected `_bricks_*` post meta.
     // XML-RPC `set_custom_fields` silently refuses to write protected meta on a
     // vanilla WordPress + Bricks clone (our plugin is not installed there), so
@@ -1429,6 +1447,18 @@ class AISB_InstaWP {
         $archer_site_url = untrailingslashit((string) $site['site_url']);
         $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
         $archer_favicon = AISB_Archer_Site::publish_favicon((int) $project->ID, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+      }
+    }
+
+    // Archer: de items van elke lijst, en de detailpagina's offline (het sjabloon toont de items).
+    if (class_exists('AISB_Archer_Collections') && $project instanceof WP_Post) {
+      $archer_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_login)) {
+        $archer_site_url = untrailingslashit((string) $site['site_url']);
+        $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
+        AISB_Archer_Collections::finish((int) $project->ID, $published_pages, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
           return $this->remote_request($url, $args);
         });
       }
@@ -1739,6 +1769,8 @@ class AISB_InstaWP {
       ];
       if (!empty($payload['header'])) $body['header'] = wp_json_encode($payload['header'], $json);
       if (!empty($payload['footer'])) $body['footer'] = wp_json_encode($payload['footer'], $json);
+      // Archer: een Bricks-sjabloon bewaart zijn inhoud alleen als het type meekomt (anders blijft het leeg).
+      if (!empty($payload['templateType'])) $body['templateType'] = (string) $payload['templateType'];
       $jobs[] = ['post_id' => $post_id, 'slug' => $slug, 'body' => $body];
     }
     if (!$jobs) return $results;
@@ -4571,7 +4603,7 @@ class AISB_InstaWP {
   function applySectionImages(root, urls) {
     if (!root || !Array.isArray(urls) || !urls.length) return;
     var imgs = Array.from(root.querySelectorAll("img")).filter(function (img) {
-      return !isLogoImage(img) && !isBrandSlot(img);
+      return !isLogoImage(img) && !isBrandSlot(img) && !(img.closest && img.closest(".archer-keep"));
     });
     imgs.forEach(function (img, index) {
       var src = urls[index] || urls[index % urls.length];

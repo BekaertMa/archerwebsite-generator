@@ -3,7 +3,7 @@
  * Plugin Name:       Archer Content Types
  * Plugin URI:        https://archerwebsites.be/
  * Description:       Custom content types without code: realisaties, projecten, referenties, wagens, vacatures or anything else, each with its own fields and categories. Ready for Bricks templates and query loops.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            Archer Websites
@@ -18,7 +18,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ARCHER_CT_VERSION', '1.0.0' );
+define( 'ARCHER_CT_VERSION', '1.1.0' );
 define( 'ARCHER_CT_FILE', __FILE__ );
 define( 'ARCHER_CT_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ARCHER_CT_URL', plugin_dir_url( __FILE__ ) );

@@ -5,6 +5,7 @@
  * - GET    /archer-ct/v1/types           all definitions
  * - POST   /archer-ct/v1/types           add or update definitions ({types:[...], replace:false})
  * - DELETE /archer-ct/v1/types/<key>     remove a definition (the posts are kept)
+ * - POST   /archer-ct/v1/template        Bricks template for one item of a type ({type, title})
  * - POST   /archer-ct/v1/items           add or update items of one type ({type, items:[...]})
  *
  * Items carry a "uid" from the builder. Publishing again updates an item only while
@@ -69,6 +70,16 @@ class Archer_CT_Rest {
 			array(
 				'methods'             => WP_REST_Server::DELETABLE,
 				'callback'            => array( $this, 'delete_type' ),
+				'permission_callback' => array( $this, 'can_manage' ),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/template',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'save_template' ),
 				'permission_callback' => array( $this, 'can_manage' ),
 			)
 		);
@@ -156,6 +167,71 @@ class Archer_CT_Rest {
 		}
 
 		return rest_ensure_response( array( 'deleted' => $key ) );
+	}
+
+	/**
+	 * POST /template: the Bricks template for one item of a type ({type, title}).
+	 *
+	 * Creates (or finds) a content template with the condition "post type = this type" and returns its ID.
+	 * The builder then saves the Bricks content through Bricks itself, like any other page.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function save_template( WP_REST_Request $request ) {
+		$type = sanitize_key( (string) $request->get_param( 'type' ) );
+		$def  = Archer_CT_Types::get( $type );
+		if ( ! $def ) {
+			return new WP_Error( 'archer_ct_not_found', __( 'This content type does not exist.', 'archer-content-types' ), array( 'status' => 404 ) );
+		}
+		if ( ! post_type_exists( 'bricks_template' ) ) {
+			return new WP_Error( 'archer_ct_no_bricks', 'Bricks is not active.', array( 'status' => 409 ) );
+		}
+
+		$found = get_posts(
+			array(
+				'post_type'      => 'bricks_template',
+				'post_status'    => array( 'publish', 'draft', 'private' ),
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'meta_key'       => '_archer_ct_template', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'meta_value'     => $type, // phpcs:ignore WordPress.DB.SlowDBQuery
+			)
+		);
+		$title = sanitize_text_field( (string) $request->get_param( 'title' ) );
+		$title = '' !== $title ? $title : $def['singular'];
+
+		if ( $found ) {
+			$id = (int) $found[0];
+		} else {
+			$id = wp_insert_post(
+				array(
+					'post_type'   => 'bricks_template',
+					'post_status' => 'publish',
+					/* translators: %s: singular name */
+					'post_title'  => sprintf( __( '%s (page per item)', 'archer-content-types' ), $title ),
+				),
+				true
+			);
+			if ( is_wp_error( $id ) ) {
+				return $id;
+			}
+			update_post_meta( $id, '_archer_ct_template', $type );
+		}
+
+		update_post_meta( $id, '_bricks_template_type', 'content' );
+		$settings = get_post_meta( $id, '_bricks_template_settings', true );
+		$settings = is_array( $settings ) ? $settings : array();
+		$settings['templateConditions'] = array(
+			array(
+				'id'       => substr( md5( 'archer-ct-' . $type ), 0, 6 ),
+				'main'     => 'postType',
+				'postType' => array( $type ),
+			),
+		);
+		update_post_meta( $id, '_bricks_template_settings', $settings );
+
+		return rest_ensure_response( array( 'id' => (int) $id, 'type' => $type ) );
 	}
 
 	/**

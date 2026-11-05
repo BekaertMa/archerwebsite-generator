@@ -15,6 +15,7 @@ require_once __DIR__ . '/class-aisb-archer-motion.php';
 require_once __DIR__ . '/class-aisb-archer-sector.php';
 require_once __DIR__ . '/class-aisb-archer-checks.php';
 require_once __DIR__ . '/class-aisb-archer-marketing.php';
+require_once __DIR__ . '/class-aisb-archer-collections.php';
 
 /**
  * Archer-interface voor de websitebouwer.

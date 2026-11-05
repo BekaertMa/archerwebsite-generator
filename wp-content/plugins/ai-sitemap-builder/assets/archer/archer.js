@@ -2241,6 +2241,18 @@
             }
           };
           await Promise.all([worker(), worker(), worker()]);
+          // Pagina's lopen tegelijk en dubbele foto's vallen af: dan blijven er soms vakken leeg (Garage De
+          // Kaproen: 3 van 67). Die pagina's nog eens, na elkaar, zodat ze de foto's van de rest al kennen.
+          for (let round = 0; round < 2; round++) {
+            const imgs = padImages();
+            const empty = list.filter((pg) => imgs.slice(pg.start, pg.start + pg.count).some((x) => isEmpty(x)));
+            if (!empty.length) break;
+            status.textContent = `Lege fotovakken aanvullen op ${empty.length} pagina${empty.length === 1 ? "" : "'s"}…`;
+            for (const pg of empty) {
+              try { await fill(pg, false); } catch (e) { console.warn("[Archer] stockfoto's", pg.slug, e); }
+            }
+            if (SG.applyImagesToAllIframes) SG.applyImagesToAllIframes();
+          }
           done();
         } finally { busy(false); }
       });

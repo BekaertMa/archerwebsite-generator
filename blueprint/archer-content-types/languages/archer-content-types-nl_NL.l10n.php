@@ -3,6 +3,7 @@
 return ['domain'=>'archer-content-types','plural-forms'=>'nplurals=2; plural=(n != 1);','language'=>'nl_NL','messages'=>[
   '"%s" is already used by WordPress. Choose another name or key.'=>'"%s" wordt al door WordPress gebruikt. Kies een andere naam of sleutel.',
   '%1$d published, %2$d draft'=>'%1$d gepubliceerd, %2$d concept',
+  '%s (page per item)'=>'%s (pagina per item)',
   'A content type is a list of similar items with their own fields, such as projects, references, cars or vacancies. Each type gets its own menu item, an overview and a page per item.'=>'Een inhoudstype is een lijst van gelijkaardige items met eigen velden, zoals projecten, referenties, wagens of vacatures. Elk type krijgt een eigen menu-item, een overzicht en een pagina per item.',
   'Add category list'=>'Categorielijst toevoegen',
   'Add content type'=>'Inhoudstype toevoegen',

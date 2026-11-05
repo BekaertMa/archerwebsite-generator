@@ -3,7 +3,7 @@ Contributors: archerwebsites
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 
 Custom content types without code: realisaties, projecten, referenties, wagens, vacatures or anything else.
@@ -32,6 +32,7 @@ Administrators only.
 * GET /wp-json/archer-ct/v1/types
 * POST /wp-json/archer-ct/v1/types — {"types":[{...definition...}], "replace": false}
 * DELETE /wp-json/archer-ct/v1/types/<key>
+* POST /wp-json/archer-ct/v1/template — {"type":"wagen","title":"Wagen"} → {"id":123}: the Bricks content template for one item.
 * POST /wp-json/archer-ct/v1/items — {"type":"wagen","items":[{"uid":"...","title":"...","excerpt":"...","content":"...","status":"draft","image":"https://...","meta":{"prijs":12500,"galerij":["https://..."]},"terms":{"wagen_carrosserie":["SUV"]}}]}
 
 Items are matched on "uid". Publishing again updates an item only while nobody changed it on the site; an edited item is reported as "kept". Image and gallery values accept attachment IDs or URLs (downloaded once into the media library). Types created through the API have source "archer"; "replace" only removes those, never types made on the site.
@@ -43,6 +44,9 @@ Items are matched on "uid". Publishing again updates an item only while nobody c
 * archer_ct_presets (filter) — the examples on the settings screen.
 
 == Changelog ==
+
+= 1.1.0 =
+* POST /archer-ct/v1/template: a Bricks content template per type (condition: post type), used by the Archer builder for the page of one item.
 
 = 1.0.0 =
 * First version.

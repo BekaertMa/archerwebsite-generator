@@ -19,6 +19,8 @@ class AISB_Archer_Site {
 
   public function init(): void {
     add_action('wp_ajax_aisb_archer_contact', [$this, 'ajax_contact']);
+    // Wireframes: geen formulier in de hero, en hoogstens één contactformulier per pagina.
+    add_filter('aisb_bricks_template_pool', [__CLASS__, 'form_pool'], 10, 3);
   }
 
   /* ───────────────────────── Contactgegevens ───────────────────────── */
@@ -524,12 +526,102 @@ class AISB_Archer_Site {
     return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($address);
   }
 
+  /** Html-id van het formulier op de pagina die nu verwerkt wordt ('' als er geen is). */
+  private static $anchor = '';
+
+  /** Html-id van het eerste formulier in een pagina van de export ('' als er geen is). */
+  public static function form_anchor(array $page): string {
+    foreach ((array) ($page['sections'] ?? []) as $sec) {
+      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
+      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
+        foreach ((array) ($sec[$key] ?? []) as $n) {
+          if (is_array($n) && ($n['name'] ?? '') === 'form' && !empty($n['id'])) {
+            // Een vaste id (Bricks geeft de elementen bij het publiceren nieuwe id's); apply_to_export zet hem.
+            $css = trim((string) ($n['settings']['_cssId'] ?? ''));
+            return $css !== '' ? $css : 'formulier';
+          }
+        }
+      }
+    }
+    return '';
+  }
+
+  /** Geeft het eerste formulier van een pagina de html-id $id, zodat knoppen ernaartoe kunnen springen. */
+  private static function set_form_id(array $page, string $id): array {
+    foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
+      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
+      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
+        foreach ((array) ($sec[$key] ?? []) as $i => $n) {
+          if (is_array($n) && ($n['name'] ?? '') === 'form') { $page['sections'][$k][$key][$i]['settings']['_cssId'] = $id; return $page; }
+        }
+      }
+    }
+    return $page;
+  }
+
+  /** Knoptekst die past bij het nieuwe doel van een knop die eerst naar zijn eigen pagina wees. */
+  private static function label_for(string $url, array $ctx, callable $link): string {
+    $lang = (string) ($ctx['lang'] ?? 'nl');
+    $L = [
+      'form' => ['nl' => 'Stel uw vraag', 'fr' => 'Posez votre question', 'en' => 'Ask your question'],
+      'tel' => ['nl' => 'Bel ons', 'fr' => 'Appelez-nous', 'en' => 'Call us'],
+      'mail' => ['nl' => 'Mail ons', 'fr' => 'Envoyez un e-mail', 'en' => 'Email us'],
+      'convert' => ['nl' => 'Maak een afspraak', 'fr' => 'Prenez rendez-vous', 'en' => 'Book an appointment'],
+      'contact' => ['nl' => 'Neem contact op', 'fr' => 'Contactez-nous', 'en' => 'Contact us'],
+      'home' => ['nl' => 'Naar de startpagina', 'fr' => "Retour à l'accueil", 'en' => 'Back to home'],
+    ];
+    $k = '';
+    if ($url !== '' && $url[0] === '#') $k = 'form';
+    elseif (strpos($url, 'tel:') === 0) $k = 'tel';
+    elseif (strpos($url, 'mailto:') === 0) $k = 'mail';
+    elseif ($ctx['convert'] !== '' && self::links_to(['url' => $url], $ctx['convert'], $link)) $k = 'convert';
+    elseif ($ctx['contact'] !== '' && self::links_to(['url' => $url], $ctx['contact'], $link)) $k = 'contact';
+    elseif (self::links_to(['url' => $url], 'home', $link)) $k = 'home';
+    return $k !== '' ? ($L[$k][$lang] ?? $L[$k]['nl']) : '';
+  }
+
+  /** Een [plaatshouder] die op een gewone pagina bleef staan: de tekst zonder haakjes (een bezoeker ziet geen haakjes). */
+  public static function unbracket(array $nodes): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !in_array($n['name'] ?? '', ['heading', 'text-basic', 'text', 'button', 'text-link', 'list', 'icon-box', 'accordion'], true)) continue;
+      $t = $n['settings']['text'] ?? null;
+      if (!is_string($t) || strpos($t, '[') === false) continue;
+      $nodes[$i]['settings']['text'] = preg_replace("/\\[([\\p{L}\\p{N} '’\\/-]{2,40})\\]/u", '$1', $t);
+    }
+    return $nodes;
+  }
+
   /** Doel van een knop of tekstlink. */
-  private static function target(string $text, array $ctx, callable $link): string {
+  /** Wijst een link naar de pagina met deze slug? */
+  private static function links_to($l, string $slug, callable $link): bool {
+    if ($slug === '' || !is_array($l)) return false;
+    $url = trim((string) ($l['url'] ?? ''));
+    if ($url === '') return false;
+    $path = '/' . trim((string) wp_parse_url($url, PHP_URL_PATH), '/') . '/';
+    $own = '/' . trim((string) wp_parse_url($link($slug), PHP_URL_PATH), '/') . '/';
+    return $path === $own;
+  }
+
+  private static function target(string $text, array $ctx, callable $link, string $current = ''): string {
+    $url = self::target_raw($text, $ctx, $link, $current);
+    if ($current === '' || !self::links_to(['url' => $url], $current, $link)) return $url;
+    // Staat er een formulier op deze pagina ("Plan afspraak" op de afspraakpagina): naar dat formulier.
+    if (self::$anchor !== '') return '#' . self::$anchor;
+    // Nooit naar de pagina zelf: de aanvraagpagina, dan contact, dan bellen of mailen.
+    foreach ([$ctx['convert'], $ctx['contact']] as $alt) {
+      if ($alt !== '' && $alt !== $current) return $link($alt);
+    }
+    $d = $ctx['data'];
+    if ($d['phone'] !== '') return self::tel($d['phone']);
+    if ($d['email'] !== '') return 'mailto:' . $d['email'];
+    return $link('home');
+  }
+
+  private static function target_raw(string $text, array $ctx, callable $link, string $current = ''): string {
     $t = mb_strtolower($text);
     $d = $ctx['data'];
     if ($d['phone'] !== '' && preg_match('/\b(bel|bellen|call|appel|appelez|telefo|téléphon)/u', $t)) return self::tel($d['phone']);
-    if ($d['email'] !== '' && preg_match('/(e-?mail|mail ons|schrijf)/u', $t)) return 'mailto:' . $d['email'];
+    if ($d['email'] !== '' && preg_match('/(e-?mail|^mail\b|\bmail ons|schrijf|@)/u', $t)) return 'mailto:' . $d['email'];
     if ($d['address'] !== '' && preg_match('/(route|wegbeschrijving|kaart|itinéraire|plan d.accès|directions)/u', $t)) return self::maps($d['address']);
     // Contactvragen (offerte, afspraak, kennismaking): naar de aanvraagpagina of de contactpagina.
     if (preg_match('/(contact|offerte|afspraak|kennismak|gesprek|aanvra|reserv|boek|devis|rendez|quote|book|neem|contacteer|stuur)/u', $t)) {
@@ -567,7 +659,7 @@ class AISB_Archer_Site {
    * Links, contactgegevens en sociale media in de elementen van één sectie.
    * $link: slug → url ('#' in de voorbeelden). $region: header, footer of ''.
    */
-  public static function apply_nodes(array $nodes, int $pid, callable $link, string $region = ''): array {
+  public static function apply_nodes(array $nodes, int $pid, callable $link, string $region = '', string $current = ''): array {
     $ctx = self::ctx($pid);
     if (!$ctx || !$nodes) return $nodes;
     $d = $ctx['data'];
@@ -581,10 +673,28 @@ class AISB_Archer_Site {
       $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
       $id = (string) ($n['id'] ?? '');
 
+      // De woorden van de briefing ("occasies", niet "occasions"), ook in teksten van vroeger.
+      if (isset($s['text']) && is_string($s['text']) && class_exists('AISB_Archer_Generate') && method_exists('AISB_Archer_Generate', 'brief_terms')) {
+        if (!isset($terms)) $terms = AISB_Archer_Generate::brief_terms($pid);
+        if ($terms) {
+          $s['text'] = AISB_Archer_Generate::fix_terms($s['text'], $terms);
+          $nodes[$i]['settings']['text'] = $s['text'];
+        }
+      }
+
       // Formulieren in de taal van de site. Bij het schrijven van de teksten beslist de taal van de sectie; een
       // sectie met bijna geen tekst bleef dan in het Engels ("Name", "Your Email", "Submit").
       if ($name === 'form' && in_array($ctx['lang'] ?? '', ['nl', 'fr'], true) && class_exists('AISB_Archer_Generate')) {
-        $nodes[$i]['settings'] = AISB_Archer_Generate::form_labels($s, $ctx['lang']);
+        $s = AISB_Archer_Generate::form_labels($s, $ctx['lang']);
+        // Het akkoord met het privacybeleid linkt naar de echte pagina (AISB_Archer_Collections maakt ze aan).
+        if (class_exists('AISB_Archer_Collections') && !empty($s['fields']) && is_array($s['fields'])) {
+          $priv = '/' . AISB_Archer_Collections::privacy_slug($pid) . '/';
+          foreach ($s['fields'] as &$pf) {
+            if (is_array($pf) && isset($pf['options']) && is_string($pf['options'])) $pf['options'] = preg_replace('#href="/privacy-policy/?"#', 'href="' . $priv . '"', $pf['options']);
+          }
+          unset($pf);
+        }
+        $nodes[$i]['settings'] = $s;
         continue;
       }
 
@@ -647,11 +757,30 @@ class AISB_Archer_Site {
       // Knoppen en tekstlinks: naar de juiste pagina (header: dat doet de Chrome-klasse al).
       if (in_array($name, ['button', 'text-link'], true)) {
         if ($region === 'header') continue;
-        if (!self::is_dead_link($s['link'] ?? null)) continue;
         $text = self::text_of($n);
+        // Een e-mailadres of telefoonnummer in de knoptekst ("Mail info@zaak.be"): altijd mailto: of tel:.
+        $plain = self::plain($text);
+        $direct = '';
+        if (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $plain, $em)) $direct = 'mailto:' . $em[0];
+        elseif ($d['phone'] !== '' && strlen(preg_replace('/\D/', '', $d['phone'])) >= 8 && strpos(preg_replace('/\D/', '', $plain), preg_replace('/\D/', '', $d['phone'])) !== false) $direct = self::tel($d['phone']);
+        if ($direct !== '') {
+          $s['link'] = ['type' => 'external', 'url' => $direct];
+          $nodes[$i]['settings'] = $s;
+          continue;
+        }
+        // Een knop naar de pagina waar hij zelf op staat, is geen volgende stap: ook die krijgt een ander doel.
+        if (!self::is_dead_link($s['link'] ?? null) && !self::links_to($s['link'] ?? null, $current, $link)) continue;
         if ($text === '') continue;
-        $url = self::target($text, $ctx, $link);
+        $self = $current !== '' && (self::links_to($s['link'] ?? null, $current, $link) || self::links_to(['url' => self::target_raw($text, $ctx, $link, $current)], $current, $link));
+        $url = self::target($text, $ctx, $link, $current);
         $s['link'] = ['type' => 'external', 'url' => $url] + (strpos($url, 'maps') !== false ? ['newTab' => true] : []);
+        // "Bekijk occasies" op de pagina met de occasies kreeg een ander doel: dan ook een tekst die daarbij past.
+        // Naar het formulier op de pagina: "Plan afspraak" blijft, "Bekijk occasies" niet.
+        $browse = (bool) preg_match('/(bekijk|ontdek|\bzie\b|voir|d[ée]couvr|view|see|explore|browse)/iu', $text);
+        if ($self && ($url[0] !== '#' || $browse) && self::page_for($text, $ctx['pages']) === $current) {
+          $new = self::label_for($url, $ctx, $link);
+          if ($new !== '' && isset($s['text'])) $s['text'] = $new;
+        }
         $nodes[$i]['settings'] = $s;
         continue;
       }
@@ -681,6 +810,8 @@ class AISB_Archer_Site {
         elseif ($d['phone'] !== '' && strpos(preg_replace('/\D/', '', $plain), preg_replace('/\D/', '', $d['phone'])) !== false) $href = self::tel($d['phone']);
         elseif ($d['address'] !== '' && stripos($plain, trim(explode(',', $d['address'])[0])) !== false) $href = self::maps($d['address']);
         $page = $href === '' && $text !== '' ? self::page_for($text, $ctx['pages']) : '';
+        // Een kaart die naar de pagina linkt waar ze zelf op staat: geen link.
+        if ($page !== '' && $page === $current) $page = '';
         if ($href !== '') $s['link'] = ['type' => 'external', 'url' => $href] + (strpos($href, 'maps') !== false ? ['newTab' => true] : []);
         elseif ($page !== '') $s['link'] = ['type' => 'external', 'url' => $link($page)];
         else {
@@ -869,17 +1000,58 @@ class AISB_Archer_Site {
     return $out;
   }
 
+  /**
+   * De knop in de header op de pagina waar hij naartoe wijst ("Afspraak" op de afspraakpagina): bellen,
+   * anders de contactpagina. Een knop die naar de pagina zelf wijst, is geen volgende stap.
+   */
+  public static function header_cta_elsewhere(array $nodes, int $pid, callable $link, string $current, string $anchor = ''): array {
+    if ($current === '') return $nodes;
+    $ctx = self::ctx($pid);
+    if (!$ctx) return $nodes;
+    $d = $ctx['data'];
+    $lang = (string) ($ctx['lang'] ?? 'nl');
+    foreach ($nodes as $i => $n) {
+      if (($n['name'] ?? '') !== 'button') continue;
+      $s = (array) ($n['settings'] ?? []);
+      if (!self::links_to($s['link'] ?? null, $current, $link)) continue;
+      if ($anchor !== '') {
+        // Een formulier op deze pagina: de knop blijft, maar gaat naar dat formulier.
+        $s['link'] = ['type' => 'external', 'url' => '#' . $anchor];
+      } elseif ($d['phone'] !== '') {
+        $s['link'] = ['type' => 'external', 'url' => self::tel($d['phone'])];
+        $s['text'] = ['fr' => 'Appelez-nous', 'en' => 'Call us'][$lang] ?? 'Bel ons';
+      } elseif ($ctx['contact'] !== '' && $ctx['contact'] !== $current) {
+        $s['link'] = ['type' => 'external', 'url' => $link($ctx['contact'])];
+        $s['text'] = 'Contact';
+      } elseif ($d['email'] !== '') {
+        $s['link'] = ['type' => 'external', 'url' => 'mailto:' . $d['email']];
+        $s['text'] = ['fr' => 'E-mail', 'en' => 'Email us'][$lang] ?? 'Mail ons';
+      } else {
+        continue;
+      }
+      $nodes[$i]['settings'] = $s;
+    }
+    return $nodes;
+  }
+
   /** Alle secties van de export (header en footer doet AISB_Archer_Chrome::apply). */
   public static function apply_to_export(array $pages, int $pid, callable $link): array {
+    // Overzicht en detailpagina van een lijst: hun [plaatshouders] worden velden (AISB_Archer_Collections).
+    $keep = [];
+    if (class_exists('AISB_Archer_Collections')) foreach (AISB_Archer_Collections::pairs($pid) as $pair) { $keep[$pair['overview']] = 1; $keep[$pair['detail']] = 1; }
     foreach ($pages as &$page) {
       $first = true;
+      self::$anchor = self::form_anchor($page);
+      if (self::$anchor === 'formulier') $page = self::set_form_id($page, 'formulier');
+      $bare = !isset($keep[sanitize_title((string) ($page['slug'] ?? ''))]);
       foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
         if (!is_array($sec)) continue;
         $type = strtolower((string) ($sec['type'] ?? ''));
         if (in_array($type, ['header', 'footer'], true)) continue;
         foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
           if (empty($sec[$key]) || !is_array($sec[$key])) continue;
-          $nodes = self::apply_nodes($sec[$key], $pid, $link, '');
+          $nodes = self::apply_nodes($sec[$key], $pid, $link, '', sanitize_title((string) ($page['slug'] ?? '')));
+          if ($bare) $nodes = self::unbracket($nodes);
           // Eerste inhoudssectie: de hero komt een keer binnen (AISB_Archer_Motion).
           if ($first && class_exists('AISB_Archer_Motion')) $nodes = AISB_Archer_Motion::hero_nodes($nodes);
           $page['sections'][$k][$key] = $nodes;
@@ -891,7 +1063,47 @@ class AISB_Archer_Site {
       $page = self::one_h1($page, (string) ($titles[$slug]['title'] ?? ''));
     }
     unset($page);
+    self::$anchor = '';
     return $pages;
+  }
+
+  /**
+   * Formulier in een sectiesjabloon: 'contact' (een gewoon formulier), 'newsletter' (enkel een e-mailveld of een
+   * sjabloon voor de nieuwsbrief) of '' (geen formulier).
+   */
+  public static function template_form(int $template_id): string {
+    static $cache = [];
+    if (isset($cache[$template_id])) return $cache[$template_id];
+    $nodes = get_post_meta($template_id, '_bricks_page_content_2', true);
+    $kind = '';
+    foreach ((array) $nodes as $n) {
+      if (!is_array($n) || ($n['name'] ?? '') !== 'form') continue;
+      $fields = array_values(array_filter((array) ($n['settings']['fields'] ?? []), fn($f) => is_array($f) && !in_array((string) ($f['type'] ?? ''), ['checkbox', 'hidden'], true)));
+      $only_mail = count($fields) === 1 && (string) ($fields[0]['type'] ?? '') === 'email';
+      $tags = taxonomy_exists('template_tag') ? wp_get_post_terms($template_id, 'template_tag', ['fields' => 'names']) : [];
+      $title = strtolower((string) get_the_title($template_id) . ' ' . implode(' ', is_array($tags) ? $tags : []));
+      $kind = ($only_mail || preg_match('/newsletter|nieuwsbrief|subscribe|inschrij/', $title)) ? 'newsletter' : 'contact';
+      if ($kind === 'contact') break;
+    }
+    return $cache[$template_id] = $kind;
+  }
+
+  /**
+   * Keuze van sectiesjablonen bij het maken van een wireframe (filter aisb_bricks_template_pool).
+   * Een hero zonder formulier (een formulier naast de titel duwt de boodschap weg). Staat er al een
+   * contactformulier op de pagina, dan geen tweede; een inschrijving op de nieuwsbrief mag wel.
+   */
+  public static function form_pool(array $pool, string $type, array $used_ids): array {
+    $hero = in_array($type, ['hero', 'banner', 'intro'], true);
+    $has_contact = false;
+    foreach ($used_ids as $uid) if (self::template_form((int) $uid) === 'contact') { $has_contact = true; break; }
+    if (!$hero && !$has_contact) return $pool;
+    $keep = array_values(array_filter($pool, function ($t) use ($hero) {
+      $kind = self::template_form((int) ($t['id'] ?? 0));
+      return $hero ? $kind === '' : $kind !== 'contact';
+    }));
+    // Geen enkel sjabloon zonder formulier van dit soort: dan blijft de gewone keuze (beter dan een lege sectie).
+    return $keep ?: $pool;
   }
 
   /** Indexen van de elementen in de volgorde waarin ze op de pagina staan (de lijst van Bricks is plat). */
