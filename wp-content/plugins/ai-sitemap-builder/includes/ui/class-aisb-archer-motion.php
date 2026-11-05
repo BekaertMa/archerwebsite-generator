@@ -49,6 +49,8 @@ class AISB_Archer_Motion {
     $a = 'animation:archer-hero-in 400ms ' . self::EASE_OUT . ' backwards;';
     $d = fn(int $ms) => 'animation-delay:' . $ms . 'ms;';
     return self::MARK
+      // Een absoluut geplaatste foto (hero-89) mag niet over de volgende sectie lopen.
+      . '.archer-hero [class*="img-wrapper"]{max-height:100%;}'
       . '@keyframes archer-hero-in{from{opacity:0;transform:translateY(8px);}}'
       . '@keyframes archer-hero-fade{from{opacity:0;}}'
       . '.archer-hero :is(h1,h2).brxe-heading{' . $a . $d(60) . '}'
@@ -85,6 +87,123 @@ class AISB_Archer_Motion {
 (function () {
   if (window.__archerMotion) return;
   window.__archerMotion = 1;
+  // Cookiemelding in de taal van de site. archer-cookie-consent 1.1 doet dit zelf; sites met 1.0 hebben een vaste
+  // Engelse knop en een melding in de taal van de browser. Zelfde teksten als de plugin, zodat niets verspringt.
+  (function () {
+    var lang = (document.documentElement.getAttribute("lang") || "").slice(0, 2).toLowerCase();
+    var labels = { nl: "Cookie-instellingen", fr: "Paramètres cookies", de: "Cookie-Einstellungen", en: "Cookie settings" };
+    // Vaste Engelse Bricks-teksten voor schermlezers (overslaglink, "opent in nieuw tabblad", mobiel menu).
+    var bricks = {
+      nl: { skip: "Naar de inhoud", tab: "Opent in een nieuw tabblad", open: "Menu openen", close: "Menu sluiten" },
+      fr: { skip: "Aller au contenu", tab: "S'ouvre dans un nouvel onglet", open: "Ouvrir le menu", close: "Fermer le menu" },
+      de: { skip: "Zum Inhalt springen", tab: "Öffnet in einem neuen Tab", open: "Menü öffnen", close: "Menü schließen" }
+    };
+    var b = bricks[lang];
+    if (b) {
+      var sk = document.querySelector("a.skip-link"); if (sk) sk.textContent = b.skip;
+      var nt = document.getElementById("brx-new-tab-link-description"); if (nt) nt.textContent = b.tab;
+      document.querySelectorAll('[aria-label="Open mobile menu"],[aria-label="Open menu"]').forEach(function (e) { e.setAttribute("aria-label", b.open); });
+      document.querySelectorAll('[aria-label="Close mobile menu"],[aria-label="Close menu"]').forEach(function (e) { e.setAttribute("aria-label", b.close); });
+      if (window.bricksData && window.bricksData.i18n) {
+        var i = window.bricksData.i18n;
+        if (i.opensInNewTab) i.opensInNewTab = b.tab;
+        if (i.openMobileMenu) i.openMobileMenu = b.open;
+        if (i.closeMobileMenu) i.closeMobileMenu = b.close;
+      }
+    }
+    var fix = function () {
+      var t = document.querySelector(".archer-cc-floating-trigger");
+      if (t && labels[lang] && t.textContent !== labels[lang]) t.textContent = labels[lang];
+      var cc = window.CookieConsent;
+      if (cc && cc.setLanguage && lang && labels[lang]) { try { cc.setLanguage(lang); } catch (e) {} }
+    };
+    fix();
+    setTimeout(fix, 800);
+  })();
+  // Leesbaarheid: geen donkere tekst, iconen of logo's op een donkere achtergrond (en omgekeerd). Stijlen, logo's en
+  // secties komen van verschillende plaatsen; een donker logo kwam zo op een zwarte footer (Garage De Kaproen).
+  (function () {
+    var rgb = function (v) {
+      var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(String(v || ""));
+      return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] : null;
+    };
+    var lum = function (c) {
+      var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    };
+    var ratio = function (a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    // De achtergrond waarop een element staat; null bij een foto of verloop (dan niet ingrijpen).
+    var bgOf = function (el) {
+      for (var p = el; p && p.nodeType === 1; p = p.parentElement) {
+        var cs = getComputedStyle(p);
+        if (cs.backgroundImage && cs.backgroundImage !== "none") return null;
+        var c = rgb(cs.backgroundColor);
+        if (c && c[3] >= 0.6) return c;
+      }
+      return [255, 255, 255, 1];
+    };
+    var fixText = function () {
+      var els = document.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,a,span,label,blockquote,figcaption,.brxe-text-basic,.brxe-icon,i[class*='iconoir'],svg");
+      var n = 0;
+      for (var i = 0; i < els.length && n < 2500; i++) {
+        var el = els[i];
+        if (el.closest("#cc-main, .archer-cc-floating-trigger, script, style, noscript")) continue;
+        var isIcon = el.tagName === "svg" || el.tagName === "I" || el.classList.contains("brxe-icon");
+        if (!isIcon) {
+          var own = false;
+          for (var k = 0; k < el.childNodes.length; k++) if (el.childNodes[k].nodeType === 3 && el.childNodes[k].textContent.trim()) { own = true; break; }
+          if (!own) continue;
+        }
+        n++;
+        var cs = getComputedStyle(el);
+        if (cs.visibility === "hidden" || cs.display === "none") continue;
+        var fg = rgb(isIcon && el.tagName === "svg" ? (cs.stroke !== "none" ? cs.stroke : cs.color) : cs.color);
+        if (!fg || fg[3] < 0.4) continue;
+        // Een knop met een eigen vlak: dat vlak telt, niet de band eronder (witte tekst op een witte knop).
+        var bg = bgOf(el);
+        if (!bg) continue;
+        // Alleen echt slecht leesbare combinaties: een merkkleur als accent op wit (oranje: 3:1) blijft staan.
+        var dark = lum(bg) < 0.2;
+        if (ratio(fg, bg) >= (dark ? (isIcon ? 2.5 : 3) : 2)) continue;
+        el.style.setProperty("color", dark ? "#ffffff" : "#141414", "important");
+        if (el.tagName === "svg" && cs.stroke !== "none") el.style.setProperty("stroke", dark ? "#ffffff" : "#141414", "important");
+      }
+    };
+    // Logo's: de gemiddelde lichtheid van het logo tegenover de achtergrond; te weinig verschil geeft een licht
+    // (of donker) vlak achter het logo. Het logo zelf blijft in zijn kleuren.
+    var fixLogo = function (img) {
+      if (!img.complete || !img.naturalWidth || img.getAttribute("data-archer-contrast")) return;
+      img.setAttribute("data-archer-contrast", "1");
+      var bg = bgOf(img.parentElement || img);
+      if (!bg) return;
+      try {
+        var w = Math.min(120, img.naturalWidth), h = Math.max(1, Math.round(w * img.naturalHeight / img.naturalWidth));
+        var c = document.createElement("canvas"); c.width = w; c.height = h;
+        var x = c.getContext("2d"); x.drawImage(img, 0, 0, w, h);
+        var d = x.getImageData(0, 0, w, h).data, sum = 0, cnt = 0;
+        for (var j = 0; j < d.length; j += 4) if (d[j + 3] > 128) { sum += lum([d[j], d[j + 1], d[j + 2]]); cnt++; }
+        if (!cnt) return;
+        var l = sum / cnt, lb = lum(bg);
+        if ((Math.max(l, lb) + 0.05) / (Math.min(l, lb) + 0.05) >= 2.2) return;
+        var lightChip = l < 0.4;
+        img.style.setProperty("background", lightChip ? "#ffffff" : "#141414", "important");
+        img.style.setProperty("padding", "6px 10px", "important");
+        img.style.setProperty("border-radius", "8px", "important");
+        img.style.setProperty("box-sizing", "content-box", "important");
+      } catch (e) {}
+    };
+    var run = function () {
+      fixText();
+      Array.prototype.forEach.call(document.querySelectorAll("img.bricks-site-logo, .brxe-logo img"), function (img) {
+        if (img.complete) fixLogo(img); else img.addEventListener("load", function () { fixLogo(img); }, { once: true });
+      });
+    };
+    if (document.readyState === "complete") run(); else window.addEventListener("load", run);
+    // De publicatie-runtime kleurt knoppen soms pas later in: nog eens nakijken.
+    setTimeout(run, 1500);
+    setTimeout(run, 3500);
+    setTimeout(run, 7000);
+  })();
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // Alt-teksten (UI/UX Pro Max: elke foto een beschrijving): foto's zonder alt krijgen de titel van hun blok
   // of sectie, in de taal van de site. Logo's en versiering blijven zoals ze zijn.

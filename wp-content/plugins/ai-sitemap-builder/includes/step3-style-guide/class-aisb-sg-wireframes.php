@@ -117,7 +117,13 @@ class AISB_SG_Wireframes {
       }
       $result_pages[] = [
         'slug'               => $slug,
-        'title'              => $model['page']['title'] ?? ucfirst(str_replace('-', ' ', $slug)),
+        // Archer: de paginatitel uit de sitemap ("Regio's", "Dakgoten en zinkwerk"), niet de slug van het wireframemodel.
+        'title'              => (static function () use ($sitemap_pages, $slug, $model) {
+          foreach ($sitemap_pages as $sp) {
+            if (is_array($sp) && sanitize_title((string) ($sp['slug'] ?? '')) === $slug && trim((string) ($sp['page_title'] ?? '')) !== '') return trim(wp_strip_all_tags((string) $sp['page_title']));
+          }
+          return $model['page']['title'] ?? ucfirst(str_replace('-', ' ', $slug));
+        })(),
         'sitemap_version_id' => $sitemap_id,
         'sections'           => $sections,
       ];

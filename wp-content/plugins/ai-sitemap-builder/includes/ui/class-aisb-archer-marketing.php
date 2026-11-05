@@ -24,6 +24,8 @@ class AISB_Archer_Marketing {
       . "- Put proof and objection handling (FAQ, how it works, guarantees the brief actually states) right before the final call to action, not at the top.\n"
       . "- Plan a testimonials, reviews or client-logo section only when the brief names real customers, reviews or clients. No logo wall as decoration (awwwards-sites, Meng To).\n"
       . "- Plan sections around what the visitor needs to decide, in the visitor's words, not around the company's internal structure.\n"
+      . "- Plan only services and conditions the brief names; never invent extras (home visits, pick-up, replacement car, 24/7, financing) in section names or purposes.\n"
+      . "- SEO titles are unique per page: meta_title starts with this page's own topic, never the home page's title.\n"
       . "- SEO: primary_keyword is what a customer would type into Google or ask an AI assistant (service + town or region when the brief names one). meta_title: at most 60 characters, starts with that service, ends with the business name. meta_description: at most 155 characters, one concrete benefit and the next step; no keyword lists.\n";
   }
 
@@ -36,8 +38,11 @@ class AISB_Archer_Marketing {
       . "- The hero reads as a small transformation: the situation the visitor is in, the better result, the action that gets them there.\n"
       . "- No AI tells: no contrast reveals ('not X, but Y', 'not just ..., but ...'), no lists of negations ('no hassle, no waiting, no surprises'), no sentence that trails into extra comma clauses, no question you answer yourself ('The result? ...'), no colon reveals ('The best part: ...'), no openers like 'Whether you are ...' or 'In a world where ...'.\n"
       . "- Buttons: an action verb plus what the visitor gets ('Vraag een offerte aan', 'Plan uw afspraak', 'Bekijk de realisaties'). Next to the main button, one short line that lowers the risk may follow only when the brief supports it (free quote, no obligation, answer within a day).\n"
+      . "- Two buttons in one section lead to two different actions (for example a quote and a phone call), never two labels for the same action.\n"
       . "- Answer first: the first sentence of a section states the point directly, so it still makes sense when quoted on its own by Google or an AI assistant. FAQ answers start with the answer (yes, no, the number, the step) and stay within the LIMITS.\n"
       . "- Use the service and the place the brief names in the hero and the intro text where it reads naturally. Never stack keywords.\n"
+      . "- The section descriptions and page purposes are instructions for you, not copy. Never write about the website itself in the visible text: no 'detail page', 'overview page', 'this page', 'section', 'menu', 'template' or 'click here to see the detail page'. Write about the business, its offer and the visitor.\n"
+      . "- Only the services, conditions and extras the brief names. Never add home visits, pick-up and delivery, a replacement car, 24/7 service, free quotes or financing unless the brief says so.\n"
       . "- Claims need support from the brief. Without it, write the closest true statement or a [placeholder]; never invent numbers, guarantees or results. Never call the business award-winning, number one, the best or the leading one unless the brief proves it.\n";
   }
 
@@ -45,7 +50,7 @@ class AISB_Archer_Marketing {
   public static function section_hint(string $purpose, string $type = ''): string {
     $t = mb_strtolower($purpose . ' ' . $type);
     $roles = [
-      'hero|banner|intro' => 'Hero: the core value proposition in the headline; the line under it says for whom and what result; the button is the page\'s primary action.',
+      'hero|banner|intro' => 'Hero: the headline names what the business does or what this page is about (the service, not only a place or a slogan); the line under it says for whom, where and what result; the button is the page\'s primary action.',
       'faq|question|vraag|vragen|questions' => 'FAQ: the real questions and objections a customer has before they act (price, timing, area, what happens next). Each answer starts with the answer itself.',
       'testimonial|review|getuig|klant(en)?verhal|social proof|logo' => 'Proof: only proof the brief gives. Without real reviews or names, keep the [placeholders]; never write a quote yourself.',
       'process|step|stap|werkwijze|how it works|hoe werkt|approach|aanpak' => 'How it works: 3 or 4 concrete steps from first contact to result, so the job feels smaller and clearer. Each step says what the customer does or gets.',

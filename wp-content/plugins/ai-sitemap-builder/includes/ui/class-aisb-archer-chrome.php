@@ -189,7 +189,7 @@ class AISB_Archer_Chrome {
         'label' => trim(wp_strip_all_tags((string) ($p['nav_label'] ?? ''))),
         'parent' => $slug === 'home' ? '' : $par,
         'type' => (string) ($p['page_type'] ?? ''),
-        'detail' => ($p['archer_added'] ?? '') === 'detail',
+        'detail' => ($p['archer_added'] ?? '') === 'detail' || strcasecmp((string) ($p['page_type'] ?? ''), 'Detail') === 0,
       ];
     }
     foreach ($out as &$p) if ($p['parent'] !== '' && !isset($out[$p['parent']])) $p['parent'] = '';
@@ -204,6 +204,8 @@ class AISB_Archer_Chrome {
   }
 
   public static function label(array $p): string {
+    // De startpagina heet in een menu altijd "Home" (de paginatitel is de SEO-titel, bv. "Garage Zottegem").
+    if (($p['slug'] ?? '') === 'home') return preg_match('/^(accueil|page d.accueil)$/iu', trim((string) ($p['label'] ?: $p['title']))) ? 'Accueil' : 'Home';
     return $p['label'] !== '' ? $p['label'] : $p['title'];
   }
 
@@ -216,6 +218,10 @@ class AISB_Archer_Chrome {
     return strcasecmp($p['type'], 'contact') === 0 || (bool) preg_match('/(^|-)(contact|kontakt)(-|$)/i', $p['slug']);
   }
 
+  public static function is_conversion(array $p): bool {
+    return (bool) preg_match('/(^|-)(offerte|offertes|quote|devis|afspraak|afspraken|appointment|rendez-vous|reserv|boek|booking|prijsaanvraag|waardebepaling|schatting)/i', $p['slug']);
+  }
+
   /** Mag in het menu: geen home (het logo), geen juridische pagina's, geen sjabloon per item. */
   public static function menu_page(array $p): bool {
     return $p['slug'] !== 'home' && !$p['detail'] && !self::is_legal($p);
@@ -224,7 +230,9 @@ class AISB_Archer_Chrome {
   /** Vast voorstel (zonder AI): hoofdpagina's met hun subpagina's, contact als knop. */
   public static function proposal(array $pages): array {
     $cta = '';
-    foreach ($pages as $p) if ($p['parent'] === '' && self::is_contact($p)) { $cta = $p['slug']; break; }
+    // De knop in de header: de conversiepagina (offerte, afspraak, reservatie) als die er is, anders contact.
+    foreach ($pages as $p) if ($p['parent'] === '' && self::is_conversion($p)) { $cta = $p['slug']; break; }
+    if ($cta === '') foreach ($pages as $p) if ($p['parent'] === '' && self::is_contact($p)) { $cta = $p['slug']; break; }
     $items = [];
     foreach ($pages as $p) {
       if ($p['parent'] !== '' || !self::menu_page($p) || $p['slug'] === $cta) continue;
@@ -455,7 +463,13 @@ class AISB_Archer_Chrome {
   const CREDIT = 'Website door <a href="https://archerwebsites.be" target="_blank" rel="noopener">Archer Websites</a>';
 
   public static function credit(array $ctx): string {
-    return '© ' . $ctx['year'] . ' ' . esc_html($ctx['name']) . ' · ' . self::CREDIT;
+    $privacy = '';
+    if (class_exists('AISB_Archer_Collections') && !empty($ctx['project_id'])) {
+      $pid = (int) $ctx['project_id'];
+      $label = ['fr' => 'Politique de confidentialité', 'en' => 'Privacy policy'][AISB_Archer_Collections::lang($pid)] ?? 'Privacybeleid';
+      $privacy = ' · <a href="/' . esc_attr(AISB_Archer_Collections::privacy_slug($pid)) . '/">' . esc_html($label) . '</a>';
+    }
+    return '© ' . $ctx['year'] . ' ' . esc_html($ctx['name']) . $privacy . ' · ' . self::CREDIT;
   }
 
   /** Een creditregel als laatste element van de footer (in de container van de bovenste sectie). */
@@ -630,7 +644,13 @@ class AISB_Archer_Chrome {
         $type = strtolower((string) ($sec['type'] ?? ''));
         if (!in_array($type, ['header', 'footer'], true)) continue;
         foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
-          if (!empty($sec[$key]) && is_array($sec[$key])) $page['sections'][$k][$key] = self::apply($sec[$key], $ctx, $type, $link);
+          if (empty($sec[$key]) || !is_array($sec[$key])) continue;
+          $nodes = self::apply($sec[$key], $ctx, $type, $link);
+          // Op de pagina waar de headerknop naartoe wijst, krijgt die knop een ander doel.
+          if ($type === 'header' && class_exists('AISB_Archer_Site')) {
+            $nodes = AISB_Archer_Site::header_cta_elsewhere($nodes, $project_id, $link, sanitize_title((string) ($page['slug'] ?? '')), AISB_Archer_Site::form_anchor($page));
+          }
+          $page['sections'][$k][$key] = $nodes;
         }
       }
     }

@@ -19,6 +19,8 @@ class AISB_Archer_Site {
 
   public function init(): void {
     add_action('wp_ajax_aisb_archer_contact', [$this, 'ajax_contact']);
+    // Wireframes: geen formulier in de hero, en hoogstens één contactformulier per pagina.
+    add_filter('aisb_bricks_template_pool', [__CLASS__, 'form_pool'], 10, 3);
   }
 
   /* ───────────────────────── Contactgegevens ───────────────────────── */
@@ -113,6 +115,25 @@ class AISB_Archer_Site {
     $ix = [];
     foreach ($nodes as $i => $n) if (is_array($n) && isset($n['id'])) $ix[(string) $n['id']] = $i;
     return $ix;
+  }
+
+  /** Het sociale platform van een merkicoon onder een knoop ("instagram"), of ''. */
+  private static function subtree_platform(array $nodes, array $ix, string $id): string {
+    $stack = [$id];
+    $seen = 0;
+    while ($stack && $seen < 30) {
+      $cur = array_shift($stack);
+      $seen++;
+      if (!isset($ix[$cur])) continue;
+      $n = $nodes[$ix[$cur]];
+      $icon = (string) ($n['settings']['icon']['icon'] ?? '');
+      if ($icon !== '') {
+        if (strpos($icon, 'x-twitter') !== false || strpos($icon, 'fa-twitter') !== false) return 'x';
+        foreach (['linkedin', 'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest'] as $k) if (strpos($icon, $k) !== false) return $k;
+      }
+      foreach ((array) ($n['children'] ?? []) as $c) $stack[] = (string) $c;
+    }
+    return '';
   }
 
   /** Alle tekst onder een knoop (zonder de knoop zelf als die een icoon is). */
@@ -481,7 +502,11 @@ class AISB_Archer_Site {
       if ($convert === '' && preg_match('/offerte|afspraak|reserv|boek|aanvra|devis|rendez|booking|quote/i', $slug . ' ' . $label)) $convert = $slug;
     }
     $cta = (string) ($chrome['menu']['cta'] ?? '');
+    $langs = json_decode((string) get_post_meta($pid, 'aisb_project_languages', true), true);
+    $first = strtolower((string) (is_array($langs) && $langs ? reset($langs) : 'Dutch'));
+    $lang = preg_match('/^(nl|dutch|nederlands)/', $first) ? 'nl' : (preg_match('/^(fr|french|fran)/', $first) ? 'fr' : (preg_match('/^(en|english|engels)/', $first) ? 'en' : ''));
     return [
+      'lang' => $lang,
       'pages' => $pages,
       'contact' => $contact !== '' ? $contact : ($cta !== '' ? $cta : 'contact'),
       'convert' => $convert,
@@ -501,19 +526,225 @@ class AISB_Archer_Site {
     return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($address);
   }
 
+  /** Vestigingen: het adres, of meer adressen gescheiden door ";" of "|" ("Kerkstraat 1, Gent; Markt 2, Aalst"). */
+  public static function locations(int $pid): array {
+    $a = trim((string) self::contact($pid)['address']);
+    if ($a === '') return [];
+    return array_values(array_filter(array_map('trim', preg_split('/\s*[;|]\s*/', $a))));
+  }
+
+  /**
+   * Kaarten met een kaartje (Google Maps) in een sectie: zoveel als er vestigingen zijn, elk op het echte adres.
+   * Het sjabloon had er drie, ook voor een zaak met één adres; de kaartjes stonden op "Berlin, Germany".
+   */
+  public static function fit_maps(array $nodes, array $locs): array {
+    if (!$locs) return $nodes;
+    $ix = self::index($nodes);
+    $maps = [];
+    foreach ($nodes as $n) if (is_array($n) && in_array($n['name'] ?? '', ['map', 'map-leaflet'], true)) $maps[] = (string) $n['id'];
+    if (!$maps) return $nodes;
+    $sig = function (array $n): string {
+      $st = (array) ($n['settings'] ?? []);
+      return ($n['name'] ?? '') . '|' . implode(',', (array) ($st['_cssGlobalClasses'] ?? [])) . '|' . trim((string) ($st['_cssClasses'] ?? ''));
+    };
+    $has_map = function (string $id) use (&$has_map, $nodes, $ix): bool {
+      if (!isset($ix[$id])) return false;
+      if (in_array($nodes[$ix[$id]]['name'] ?? '', ['map', 'map-leaflet'], true)) return true;
+      foreach ((array) ($nodes[$ix[$id]]['children'] ?? []) as $c) if ($has_map((string) $c)) return true;
+      return false;
+    };
+    // De groep gelijke kaarten rond het eerste kaartje.
+    $cards = [];
+    for ($up = $maps[0]; $up !== '' && isset($ix[$up]); $up = (string) ($nodes[$ix[$up]]['parent'] ?? '')) {
+      $par = (string) ($nodes[$ix[$up]]['parent'] ?? '');
+      if ($par === '' || $par === '0' || !isset($ix[$par])) break;
+      $same = [];
+      foreach ((array) ($nodes[$ix[$par]]['children'] ?? []) as $c) {
+        $c = (string) $c;
+        if (isset($ix[$c]) && $sig($nodes[$ix[$c]]) === $sig($nodes[$ix[$up]]) && $has_map($c)) $same[] = $c;
+      }
+      if (count($same) >= 2) { $cards = $same; break; }
+    }
+    if (count($cards) > count($locs)) {
+      $keep = array_slice($cards, 0, count($locs));
+      $nodes = self::remove($nodes, array_slice($cards, count($locs)));
+      // Eén kaart: de hele breedte (vaste id, want Bricks geeft bij het publiceren nieuwe element-id's).
+      if (count($keep) === 1) {
+        $ix = self::index($nodes);
+        $i = $ix[$keep[0]];
+        $css_id = trim((string) ($nodes[$i]['settings']['_cssId'] ?? '')) ?: 'archer-vestiging';
+        $nodes[$i]['settings']['_cssId'] = $css_id;
+        $nodes[$i]['settings']['_cssCustom'] = trim((string) ($nodes[$i]['settings']['_cssCustom'] ?? '') . "\n#" . $css_id . ' {grid-column: 1 / -1; max-width: none;}');
+      }
+    }
+    // Elk kaartje op een adres van de zaak (in volgorde van de kaarten, anders het eerste adres).
+    $k = 0;
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !in_array($n['name'] ?? '', ['map', 'map-leaflet'], true)) continue;
+      $addr = $locs[$k % count($locs)];
+      $k++;
+      $nodes[$i]['settings']['address'] = $addr;
+      $nodes[$i]['settings']['addresses'] = [['id' => substr(md5($addr), 0, 6), 'address' => $addr]];
+      if (empty($nodes[$i]['settings']['zoom'])) $nodes[$i]['settings']['zoom'] = 15;
+    }
+    return $nodes;
+  }
+
+  /**
+   * Tabbladen op de contactpagina zijn vestigingen ("Herzele", "Zottegem", "Brakel"): zoveel tabs als er adressen
+   * zijn, met de gemeente als titel. Eén adres: geen tabs, enkel de inhoud van het eerste tabblad.
+   */
+  public static function fit_location_tabs(array $nodes, array $locs): array {
+    $n_loc = max(1, count($locs));
+    $ix = self::index($nodes);
+    foreach ($nodes as $t) {
+      if (!is_array($t) || ($t['name'] ?? '') !== 'tabs-nested') continue;
+      $tid = (string) $t['id'];
+      $kids = array_values(array_filter(array_map('strval', (array) ($t['children'] ?? [])), fn($c) => isset($ix[$c])));
+      if (count($kids) < 2) continue;
+      [$menu, $content] = $kids;
+      $titles = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$menu]]['children'] ?? [])), fn($c) => isset($ix[$c])));
+      $panes = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$content]]['children'] ?? [])), fn($c) => isset($ix[$c])));
+      if (count($panes) <= $n_loc) continue;
+      if ($n_loc === 1) {
+        // De inhoud van het eerste tabblad komt op de plaats van de tabs.
+        $parent = (string) ($t['parent'] ?? '');
+        $move = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$panes[0]]]['children'] ?? [])), fn($c) => isset($ix[$c])));
+        foreach ($move as $m) $nodes[$ix[$m]]['parent'] = $parent;
+        if ($parent !== '' && isset($ix[$parent])) {
+          $ch = array_map('strval', (array) ($nodes[$ix[$parent]]['children'] ?? []));
+          $pos = array_search($tid, $ch, true);
+          array_splice($ch, $pos === false ? count($ch) : $pos, 0, $move);
+          $nodes[$ix[$parent]]['children'] = $ch;
+        }
+        $nodes[$ix[$panes[0]]]['children'] = [];
+        $nodes = self::remove($nodes, [$tid]);
+      } else {
+        $nodes = self::remove($nodes, array_merge(array_slice($titles, $n_loc), array_slice($panes, $n_loc)));
+        $ix = self::index($nodes);
+        foreach (array_slice($titles, 0, $n_loc) as $k => $title) {
+          $parts = array_map('trim', explode(',', (string) $locs[$k]));
+          $town = trim((string) preg_replace('/^\d{4,5}\s*/', '', (string) end($parts)));
+          foreach ($nodes as $i => $n) {
+            if ((string) ($n['parent'] ?? '') === $title && in_array($n['name'] ?? '', ['text-basic', 'text', 'heading'], true) && $town !== '') { $nodes[$i]['settings']['text'] = $town; break; }
+          }
+        }
+      }
+      $ix = self::index($nodes);
+    }
+    return $nodes;
+  }
+
+  /** Html-id van het formulier op de pagina die nu verwerkt wordt ('' als er geen is). */
+  private static $anchor = '';
+
+  /** Html-id van het eerste formulier in een pagina van de export ('' als er geen is). */
+  public static function form_anchor(array $page): string {
+    foreach ((array) ($page['sections'] ?? []) as $sec) {
+      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
+      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
+        foreach ((array) ($sec[$key] ?? []) as $n) {
+          if (is_array($n) && ($n['name'] ?? '') === 'form' && !empty($n['id'])) {
+            // Een vaste id (Bricks geeft de elementen bij het publiceren nieuwe id's); apply_to_export zet hem.
+            $css = trim((string) ($n['settings']['_cssId'] ?? ''));
+            return $css !== '' ? $css : 'formulier';
+          }
+        }
+      }
+    }
+    return '';
+  }
+
+  /** Geeft het eerste formulier van een pagina de html-id $id, zodat knoppen ernaartoe kunnen springen. */
+  private static function set_form_id(array $page, string $id): array {
+    foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
+      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
+      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
+        foreach ((array) ($sec[$key] ?? []) as $i => $n) {
+          if (is_array($n) && ($n['name'] ?? '') === 'form') { $page['sections'][$k][$key][$i]['settings']['_cssId'] = $id; return $page; }
+        }
+      }
+    }
+    return $page;
+  }
+
+  /** Knoptekst die past bij het nieuwe doel van een knop die eerst naar zijn eigen pagina wees. */
+  private static function label_for(string $url, array $ctx, callable $link): string {
+    $lang = (string) ($ctx['lang'] ?? 'nl');
+    $L = [
+      'form' => ['nl' => 'Stel uw vraag', 'fr' => 'Posez votre question', 'en' => 'Ask your question'],
+      'tel' => ['nl' => 'Bel ons', 'fr' => 'Appelez-nous', 'en' => 'Call us'],
+      'mail' => ['nl' => 'Mail ons', 'fr' => 'Envoyez un e-mail', 'en' => 'Email us'],
+      'convert' => ['nl' => 'Maak een afspraak', 'fr' => 'Prenez rendez-vous', 'en' => 'Book an appointment'],
+      'contact' => ['nl' => 'Neem contact op', 'fr' => 'Contactez-nous', 'en' => 'Contact us'],
+      'home' => ['nl' => 'Naar de startpagina', 'fr' => "Retour à l'accueil", 'en' => 'Back to home'],
+    ];
+    $k = '';
+    if ($url !== '' && $url[0] === '#') $k = 'form';
+    elseif (strpos($url, 'tel:') === 0) $k = 'tel';
+    elseif (strpos($url, 'mailto:') === 0) $k = 'mail';
+    elseif ($ctx['convert'] !== '' && self::links_to(['url' => $url], $ctx['convert'], $link)) $k = 'convert';
+    elseif ($ctx['contact'] !== '' && self::links_to(['url' => $url], $ctx['contact'], $link)) $k = 'contact';
+    elseif (self::links_to(['url' => $url], 'home', $link)) $k = 'home';
+    return $k !== '' ? ($L[$k][$lang] ?? $L[$k]['nl']) : '';
+  }
+
+  /** Een [plaatshouder] die op een gewone pagina bleef staan: de tekst zonder haakjes (een bezoeker ziet geen haakjes). */
+  public static function unbracket(array $nodes): array {
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !in_array($n['name'] ?? '', ['heading', 'text-basic', 'text', 'button', 'text-link', 'list', 'icon-box', 'accordion'], true)) continue;
+      $t = $n['settings']['text'] ?? null;
+      if (!is_string($t) || strpos($t, '[') === false) continue;
+      $nodes[$i]['settings']['text'] = preg_replace("/\\[([\\p{L}\\p{N} '’\\/-]{2,40})\\]/u", '$1', $t);
+    }
+    return $nodes;
+  }
+
   /** Doel van een knop of tekstlink. */
-  private static function target(string $text, array $ctx, callable $link): string {
+  /** Wijst een link naar de pagina met deze slug? */
+  private static function links_to($l, string $slug, callable $link): bool {
+    if ($slug === '' || !is_array($l)) return false;
+    $url = trim((string) ($l['url'] ?? ''));
+    if ($url === '') return false;
+    $path = '/' . trim((string) wp_parse_url($url, PHP_URL_PATH), '/') . '/';
+    $own = '/' . trim((string) wp_parse_url($link($slug), PHP_URL_PATH), '/') . '/';
+    return $path === $own;
+  }
+
+  private static function target(string $text, array $ctx, callable $link, string $current = ''): string {
+    $url = self::target_raw($text, $ctx, $link, $current);
+    if ($current === '' || !self::links_to(['url' => $url], $current, $link)) return $url;
+    // Staat er een formulier op deze pagina ("Plan afspraak" op de afspraakpagina): naar dat formulier.
+    if (self::$anchor !== '') return '#' . self::$anchor;
+    // Nooit naar de pagina zelf: de aanvraagpagina, dan contact, dan bellen of mailen.
+    foreach ([$ctx['convert'], $ctx['contact']] as $alt) {
+      if ($alt !== '' && $alt !== $current) return $link($alt);
+    }
+    $d = $ctx['data'];
+    if ($d['phone'] !== '') return self::tel($d['phone']);
+    if ($d['email'] !== '') return 'mailto:' . $d['email'];
+    return $link('home');
+  }
+
+  private static function target_raw(string $text, array $ctx, callable $link, string $current = ''): string {
     $t = mb_strtolower($text);
     $d = $ctx['data'];
     if ($d['phone'] !== '' && preg_match('/\b(bel|bellen|call|appel|appelez|telefo|téléphon)/u', $t)) return self::tel($d['phone']);
-    if ($d['email'] !== '' && preg_match('/(e-?mail|mail ons|schrijf)/u', $t)) return 'mailto:' . $d['email'];
+    if ($d['email'] !== '' && preg_match('/(e-?mail|^mail\b|\bmail ons|schrijf|@)/u', $t)) return 'mailto:' . $d['email'];
     if ($d['address'] !== '' && preg_match('/(route|wegbeschrijving|kaart|itinéraire|plan d.accès|directions)/u', $t)) return self::maps($d['address']);
     // Contactvragen (offerte, afspraak, kennismaking): naar de aanvraagpagina of de contactpagina.
     if (preg_match('/(contact|offerte|afspraak|kennismak|gesprek|aanvra|reserv|boek|devis|rendez|quote|book|neem|contacteer|stuur)/u', $t)) {
       if ($ctx['convert'] !== '' && preg_match('/(offerte|afspraak|reserv|boek|aanvra|devis|rendez|quote|book)/u', $t)) return $link($ctx['convert']);
       return $link($ctx['contact']);
     }
-    $page = self::page_for($text, $ctx['pages']);
+    $page = '';
+    // "Bekijk foto's", "Ons werk", "Projecten bekijken": naar de pagina met realisaties als die er is.
+    if (preg_match("/(foto|realisatie|project|portfolio|ons werk|referentie|galerij|gallery|photos|réalisation)/u", $t)) {
+      foreach ($ctx['pages'] as $p) {
+        if (empty($p['detail']) && preg_match('/(^|-)(realisaties?|projecten|projects?|portfolio|referenties?|galerij|gallery|ons-werk|realisations?)(-|$)/', (string) ($p['slug'] ?? ''))) { $page = (string) $p['slug']; break; }
+      }
+    }
+    if ($page === '') $page = self::page_for($text, $ctx['pages']);
     return $link($page !== '' ? $page : $ctx['contact']);
   }
 
@@ -537,18 +768,44 @@ class AISB_Archer_Site {
    * Links, contactgegevens en sociale media in de elementen van één sectie.
    * $link: slug → url ('#' in de voorbeelden). $region: header, footer of ''.
    */
-  public static function apply_nodes(array $nodes, int $pid, callable $link, string $region = ''): array {
+  public static function apply_nodes(array $nodes, int $pid, callable $link, string $region = '', string $current = ''): array {
     $ctx = self::ctx($pid);
     if (!$ctx || !$nodes) return $nodes;
     $d = $ctx['data'];
     $ix = self::index($nodes);
     $remove = [];
+    $social_parents = [];
     $is_li = fn($n) => (string) ($n['settings']['tag'] ?? '') === 'li';
     foreach ($nodes as $i => $n) {
       if (!is_array($n)) continue;
       $name = (string) ($n['name'] ?? '');
       $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
       $id = (string) ($n['id'] ?? '');
+
+      // De woorden van de briefing ("occasies", niet "occasions"), ook in teksten van vroeger.
+      if (isset($s['text']) && is_string($s['text']) && class_exists('AISB_Archer_Generate') && method_exists('AISB_Archer_Generate', 'brief_terms')) {
+        if (!isset($terms)) $terms = AISB_Archer_Generate::brief_terms($pid);
+        if ($terms) {
+          $s['text'] = AISB_Archer_Generate::fix_terms($s['text'], $terms);
+          $nodes[$i]['settings']['text'] = $s['text'];
+        }
+      }
+
+      // Formulieren in de taal van de site. Bij het schrijven van de teksten beslist de taal van de sectie; een
+      // sectie met bijna geen tekst bleef dan in het Engels ("Name", "Your Email", "Submit").
+      if ($name === 'form' && in_array($ctx['lang'] ?? '', ['nl', 'fr'], true) && class_exists('AISB_Archer_Generate')) {
+        $s = AISB_Archer_Generate::form_labels($s, $ctx['lang']);
+        // Het akkoord met het privacybeleid linkt naar de echte pagina (AISB_Archer_Collections maakt ze aan).
+        if (class_exists('AISB_Archer_Collections') && !empty($s['fields']) && is_array($s['fields'])) {
+          $priv = '/' . AISB_Archer_Collections::privacy_slug($pid) . '/';
+          foreach ($s['fields'] as &$pf) {
+            if (is_array($pf) && isset($pf['options']) && is_string($pf['options'])) $pf['options'] = preg_replace('#href="/privacy-policy/?"#', 'href="' . $priv . '"', $pf['options']);
+          }
+          unset($pf);
+        }
+        $nodes[$i]['settings'] = $s;
+        continue;
+      }
 
       // Contactplaatshouders: echte gegevens, of het lijstitem weg als ze ontbreken.
       if (in_array($name, ['text-basic', 'text', 'heading', 'button', 'text-link'], true) && isset($s['text']) && is_string($s['text'])) {
@@ -599,7 +856,9 @@ class AISB_Archer_Site {
           $nodes[$i]['settings'] = $s;
         } else {
           $li = self::ancestor($nodes, $ix, $id, $is_li, 2);
-          $remove[] = $li !== '' ? $li : $id;
+          $gone = $li !== '' ? $li : $id;
+          $remove[] = $gone;
+          $social_parents[] = (string) ($nodes[$ix[$gone]]['parent'] ?? '');
         }
         continue;
       }
@@ -607,25 +866,88 @@ class AISB_Archer_Site {
       // Knoppen en tekstlinks: naar de juiste pagina (header: dat doet de Chrome-klasse al).
       if (in_array($name, ['button', 'text-link'], true)) {
         if ($region === 'header') continue;
-        if (!self::is_dead_link($s['link'] ?? null)) continue;
         $text = self::text_of($n);
+        // Een e-mailadres of telefoonnummer in de knoptekst ("Mail info@zaak.be"): altijd mailto: of tel:.
+        $plain = self::plain($text);
+        $direct = '';
+        if (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $plain, $em)) $direct = 'mailto:' . $em[0];
+        elseif ($d['phone'] !== '' && strlen(preg_replace('/\D/', '', $d['phone'])) >= 8 && strpos(preg_replace('/\D/', '', $plain), preg_replace('/\D/', '', $d['phone'])) !== false) $direct = self::tel($d['phone']);
+        if ($direct !== '') {
+          $s['link'] = ['type' => 'external', 'url' => $direct];
+          $nodes[$i]['settings'] = $s;
+          continue;
+        }
+        // Een knop naar de pagina waar hij zelf op staat, is geen volgende stap: ook die krijgt een ander doel.
+        if (!self::is_dead_link($s['link'] ?? null) && !self::links_to($s['link'] ?? null, $current, $link)) continue;
         if ($text === '') continue;
-        $url = self::target($text, $ctx, $link);
+        $self = $current !== '' && (self::links_to($s['link'] ?? null, $current, $link) || self::links_to(['url' => self::target_raw($text, $ctx, $link, $current)], $current, $link));
+        $url = self::target($text, $ctx, $link, $current);
         $s['link'] = ['type' => 'external', 'url' => $url] + (strpos($url, 'maps') !== false ? ['newTab' => true] : []);
+        // "Bekijk occasies" op de pagina met de occasies kreeg een ander doel: dan ook een tekst die daarbij past.
+        // Naar het formulier op de pagina: "Plan afspraak" blijft, "Bekijk occasies" niet.
+        $browse = (bool) preg_match('/(bekijk|ontdek|\bzie\b|voir|d[ée]couvr|view|see|explore|browse)/iu', $text);
+        if ($self && ($url[0] !== '#' || $browse) && self::page_for($text, $ctx['pages']) === $current) {
+          $new = self::label_for($url, $ctx, $link);
+          if ($new !== '' && isset($s['text'])) $s['text'] = $new;
+        }
         $nodes[$i]['settings'] = $s;
         continue;
       }
 
       // Kaarten en blokken met een lege link: naar de pagina die bij de titel past, anders geen link.
       if (array_key_exists('link', $s) && self::is_dead_link($s['link']) && in_array($name, ['block', 'div', 'container', 'image', 'heading', 'icon'], true)) {
+        // Een blok rond een sociaal icoon ("Instagram" in de footer): het adres van dat platform, of weg.
+        // Zonder dit werd het een link naar een pagina met de naam van die pagina (Garage De Kaproen).
+        $platform = in_array($name, ['block', 'div'], true) ? self::subtree_platform($nodes, $ix, $id) : '';
+        if ($platform !== '') {
+          if (in_array($region, ['header', 'footer'], true) && !empty($d['socials'][$platform])) {
+            $s['link'] = ['type' => 'external', 'url' => $d['socials'][$platform], 'newTab' => true, 'rel' => 'noopener', 'ariaLabel' => ucfirst($platform)];
+            $nodes[$i]['settings'] = $s;
+          } else {
+            $li = self::ancestor($nodes, $ix, $id, $is_li, 2);
+            $gone = $li !== '' ? $li : $id;
+            $remove[] = $gone;
+            $social_parents[] = (string) ($nodes[$ix[$gone]]['parent'] ?? '');
+          }
+          continue;
+        }
         $text = $name === 'heading' ? self::text_of($n) : self::subtree_text($nodes, $ix, $id, 120);
-        $page = $text !== '' ? self::page_for($text, $ctx['pages']) : '';
-        if ($page !== '') $s['link'] = ['type' => 'external', 'url' => $link($page)];
-        else unset($s['link']);
+        // Een blok rond een adres, telefoonnummer of e-mailadres (footer, contactkaart): de echte link.
+        $plain = self::plain($text);
+        $href = '';
+        if ($d['email'] !== '' && stripos($plain, $d['email']) !== false) $href = 'mailto:' . $d['email'];
+        elseif ($d['phone'] !== '' && strpos(preg_replace('/\D/', '', $plain), preg_replace('/\D/', '', $d['phone'])) !== false) $href = self::tel($d['phone']);
+        elseif ($d['address'] !== '' && stripos($plain, trim(explode(',', $d['address'])[0])) !== false) $href = self::maps($d['address']);
+        $page = $href === '' && $text !== '' ? self::page_for($text, $ctx['pages']) : '';
+        // Een kaart die naar de pagina linkt waar ze zelf op staat: geen link.
+        if ($page !== '' && $page === $current) $page = '';
+        if ($href !== '') $s['link'] = ['type' => 'external', 'url' => $href] + (strpos($href, 'maps') !== false ? ['newTab' => true] : []);
+        elseif ($page !== '') $s['link'] = ['type' => 'external', 'url' => $link($page)];
+        else {
+          unset($s['link']);
+          // Een <a> zonder link is geen link: een gewoon blok.
+          if (($s['tag'] ?? '') === 'a') $s['tag'] = 'div';
+        }
         $nodes[$i]['settings'] = $s;
       }
     }
     if ($remove) $nodes = self::remove($nodes, array_unique($remove));
+    // Alle sociale items weg: hun lege lijst ook, en de kolom eromheen als daar enkel nog een titel staat.
+    if (!empty($social_parents)) {
+      $ix = self::index($nodes);
+      $drop = [];
+      foreach (array_unique(array_filter($social_parents)) as $pid) {
+        if (!isset($ix[$pid]) || !empty($nodes[$ix[$pid]]['children'])) continue;
+        $drop[] = $pid;
+        $gp = (string) ($nodes[$ix[$pid]]['parent'] ?? '');
+        if ($gp === '' || !isset($ix[$gp]) || empty($nodes[$ix[$gp]]['parent'])) continue;
+        $rest = array_filter((array) ($nodes[$ix[$gp]]['children'] ?? []), fn($c) => (string) $c !== $pid);
+        $only_titles = true;
+        foreach ($rest as $c) if (!isset($ix[(string) $c]) || !in_array($nodes[$ix[(string) $c]]['name'] ?? '', ['heading', 'text-basic', 'text'], true)) $only_titles = false;
+        if ($only_titles) $drop[] = $gp;
+      }
+      if ($drop) $nodes = self::remove($nodes, $drop);
+    }
     // Een lege lijst sociale media: de titel erboven ("Volg ons") mag ook weg.
     if ($region === 'footer') {
       $ix = self::index($nodes);
@@ -760,53 +1082,227 @@ class AISB_Archer_Site {
   }
 
 
+  /**
+   * Titel en zoekomschrijving per pagina uit de sitemap van het project (voor het publiceren).
+   * @return array<string,array{title:string,description:string}>
+   */
+  public static function seo_by_slug(int $pid): array {
+    $sid = (int) get_post_meta($pid, 'aisb_latest_sitemap_id', true);
+    $json = $sid ? json_decode((string) get_post_meta($sid, 'aisb_sitemap_json', true), true) : null;
+    $out = [];
+    foreach ((array) ($json['sitemap'] ?? []) as $p) {
+      if (!is_array($p)) continue;
+      $slug = sanitize_title((string) ($p['slug'] ?? ''));
+      if ($slug === '') continue;
+      $title = trim(wp_strip_all_tags((string) ($p['page_title'] ?? '')));
+      // Startpagina: niet "Home | Bedrijf" in de browser en in Google, maar de SEO-titel zonder de bedrijfsnaam
+      // ("Dakwerker Oudenaarde"); de SEO-plugin zet de naam van de site er zelf achter.
+      if ($slug === 'home' || ($p['page_type'] ?? '') === 'home') {
+        $meta = trim(wp_strip_all_tags((string) ($p['seo']['meta_title'] ?? '')));
+        $meta = trim((string) preg_replace('/(\s*\|[^|]*|\s+[\x{2013}\x{2014}-]\s+(?:(?!\s[\x{2013}\x{2014}-]\s).)*)$/u', '', $meta));
+        if ($meta !== '' && mb_strlen($meta) <= 60) $title = $meta;
+      }
+      $desc = trim(wp_strip_all_tags((string) ($p['seo']['meta_description'] ?? '')));
+      if ($desc === '') $desc = trim(wp_strip_all_tags((string) ($p['page_purpose'] ?? '')));
+      $out[$slug] = ['title' => $title, 'description' => mb_substr($desc, 0, 160)];
+    }
+    return $out;
+  }
+
+  /**
+   * De knop in de header op de pagina waar hij naartoe wijst ("Afspraak" op de afspraakpagina): bellen,
+   * anders de contactpagina. Een knop die naar de pagina zelf wijst, is geen volgende stap.
+   */
+  public static function header_cta_elsewhere(array $nodes, int $pid, callable $link, string $current, string $anchor = ''): array {
+    if ($current === '') return $nodes;
+    $ctx = self::ctx($pid);
+    if (!$ctx) return $nodes;
+    $d = $ctx['data'];
+    $lang = (string) ($ctx['lang'] ?? 'nl');
+    foreach ($nodes as $i => $n) {
+      if (($n['name'] ?? '') !== 'button') continue;
+      $s = (array) ($n['settings'] ?? []);
+      if (!self::links_to($s['link'] ?? null, $current, $link)) continue;
+      if ($anchor !== '') {
+        // Een formulier op deze pagina: de knop blijft, maar gaat naar dat formulier.
+        $s['link'] = ['type' => 'external', 'url' => '#' . $anchor];
+      } elseif ($d['phone'] !== '') {
+        $s['link'] = ['type' => 'external', 'url' => self::tel($d['phone'])];
+        $s['text'] = ['fr' => 'Appelez-nous', 'en' => 'Call us'][$lang] ?? 'Bel ons';
+      } elseif ($ctx['contact'] !== '' && $ctx['contact'] !== $current) {
+        $s['link'] = ['type' => 'external', 'url' => $link($ctx['contact'])];
+        $s['text'] = 'Contact';
+      } elseif ($d['email'] !== '') {
+        $s['link'] = ['type' => 'external', 'url' => 'mailto:' . $d['email']];
+        $s['text'] = ['fr' => 'E-mail', 'en' => 'Email us'][$lang] ?? 'Mail ons';
+      } else {
+        continue;
+      }
+      $nodes[$i]['settings'] = $s;
+    }
+    return $nodes;
+  }
+
   /** Alle secties van de export (header en footer doet AISB_Archer_Chrome::apply). */
   public static function apply_to_export(array $pages, int $pid, callable $link): array {
+    // Overzicht en detailpagina van een lijst: hun [plaatshouders] worden velden (AISB_Archer_Collections).
+    $keep = [];
+    if (class_exists('AISB_Archer_Collections')) foreach (AISB_Archer_Collections::pairs($pid) as $pair) { $keep[$pair['overview']] = 1; $keep[$pair['detail']] = 1; }
+    $ctx_contact = (string) (self::ctx($pid)['contact'] ?? '');
     foreach ($pages as &$page) {
       $first = true;
+      self::$anchor = self::form_anchor($page);
+      if (self::$anchor === 'formulier') $page = self::set_form_id($page, 'formulier');
+      $bare = !isset($keep[sanitize_title((string) ($page['slug'] ?? ''))]);
       foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
         if (!is_array($sec)) continue;
         $type = strtolower((string) ($sec['type'] ?? ''));
         if (in_array($type, ['header', 'footer'], true)) continue;
         foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
           if (empty($sec[$key]) || !is_array($sec[$key])) continue;
-          $nodes = self::apply_nodes($sec[$key], $pid, $link, '');
+          $nodes = self::apply_nodes($sec[$key], $pid, $link, '', sanitize_title((string) ($page['slug'] ?? '')));
+          if ($bare) $nodes = self::unbracket($nodes);
+          $nodes = self::fit_maps($nodes, self::locations($pid));
+          if (($ctx_contact ?? '') !== '' && sanitize_title((string) ($page['slug'] ?? '')) === $ctx_contact) $nodes = self::fit_location_tabs($nodes, self::locations($pid));
           // Eerste inhoudssectie: de hero komt een keer binnen (AISB_Archer_Motion).
           if ($first && class_exists('AISB_Archer_Motion')) $nodes = AISB_Archer_Motion::hero_nodes($nodes);
           $page['sections'][$k][$key] = $nodes;
         }
         $first = false;
       }
-      $page = self::one_h1($page);
+      if (!isset($titles)) $titles = self::seo_by_slug($pid);
+      $slug = sanitize_title((string) ($page['slug'] ?? ''));
+      $page = self::one_h1($page, (string) ($titles[$slug]['title'] ?? ''));
     }
     unset($page);
+    self::$anchor = '';
     return $pages;
   }
 
   /**
-   * Precies één H1 per pagina (UI/UX Pro Max, ux-guidelines: één hoofdtitel voor Google en schermlezers).
-   * Geen H1: de eerste titel van de eerste inhoudssectie wordt H1. Meer dan één: de volgende worden H2.
+   * Formulier in een sectiesjabloon: 'contact' (een gewoon formulier), 'newsletter' (enkel een e-mailveld of een
+   * sjabloon voor de nieuwsbrief) of '' (geen formulier).
    */
-  public static function one_h1(array $page): array {
-    $order = [];
+  public static function template_form(int $template_id): string {
+    static $cache = [];
+    if (isset($cache[$template_id])) return $cache[$template_id];
+    $nodes = get_post_meta($template_id, '_bricks_page_content_2', true);
+    $kind = '';
+    foreach ((array) $nodes as $n) {
+      if (!is_array($n) || ($n['name'] ?? '') !== 'form') continue;
+      $fields = array_values(array_filter((array) ($n['settings']['fields'] ?? []), fn($f) => is_array($f) && !in_array((string) ($f['type'] ?? ''), ['checkbox', 'hidden'], true)));
+      $only_mail = count($fields) === 1 && (string) ($fields[0]['type'] ?? '') === 'email';
+      $tags = taxonomy_exists('template_tag') ? wp_get_post_terms($template_id, 'template_tag', ['fields' => 'names']) : [];
+      $title = strtolower((string) get_the_title($template_id) . ' ' . implode(' ', is_array($tags) ? $tags : []));
+      $kind = ($only_mail || preg_match('/newsletter|nieuwsbrief|subscribe|inschrij/', $title)) ? 'newsletter' : 'contact';
+      if ($kind === 'contact') break;
+    }
+    return $cache[$template_id] = $kind;
+  }
+
+  /**
+   * Keuze van sectiesjablonen bij het maken van een wireframe (filter aisb_bricks_template_pool).
+   * Een hero zonder formulier (een formulier naast de titel duwt de boodschap weg). Staat er al een
+   * contactformulier op de pagina, dan geen tweede; een inschrijving op de nieuwsbrief mag wel.
+   */
+  public static function form_pool(array $pool, string $type, array $used_ids): array {
+    $hero = in_array($type, ['hero', 'banner', 'intro'], true);
+    $has_contact = false;
+    foreach ($used_ids as $uid) if (self::template_form((int) $uid) === 'contact') { $has_contact = true; break; }
+    if (!$hero && !$has_contact) return $pool;
+    $keep = array_values(array_filter($pool, function ($t) use ($hero) {
+      $kind = self::template_form((int) ($t['id'] ?? 0));
+      return $hero ? $kind === '' : $kind !== 'contact';
+    }));
+    // Geen enkel sjabloon zonder formulier van dit soort: dan blijft de gewone keuze (beter dan een lege sectie).
+    return $keep ?: $pool;
+  }
+
+  /** Indexen van de elementen in de volgorde waarin ze op de pagina staan (de lijst van Bricks is plat). */
+  private static function tree_order(array $nodes): array {
+    $by = [];
+    foreach ($nodes as $i => $n) if (is_array($n) && isset($n['id'])) $by[(string) $n['id']] = $i;
+    $out = [];
+    $seen = [];
+    $walk = function (string $id) use (&$walk, &$out, &$seen, $nodes, $by) {
+      if (isset($seen[$id]) || !isset($by[$id])) return;
+      $seen[$id] = true;
+      $out[] = $by[$id];
+      foreach ((array) ($nodes[$by[$id]]['children'] ?? []) as $c) $walk((string) $c);
+    };
+    foreach ($nodes as $n) {
+      if (!is_array($n) || !isset($n['id'])) continue;
+      $par = (string) ($n['parent'] ?? '0');
+      if ($par === '0' || $par === '' || !isset($by[$par])) $walk((string) $n['id']);
+    }
+    foreach ($by as $id => $i) if (!isset($seen[$id])) $out[] = $i;
+    return $out;
+  }
+
+  /**
+   * Precies één H1 per pagina (UI/UX Pro Max, ux-guidelines: één hoofdtitel voor Google en schermlezers).
+   * De H1 hoort in de hero. Heeft de hero geen titel (sommige sjablonen tonen enkel tekst en foto's), dan komt
+   * de paginatitel er als H1 boven de tekst. Anders: de eerste titel van de pagina wordt H1. Meer dan één H1:
+   * de volgende worden H2. Volgorde zoals op de pagina, niet zoals in de platte lijst van Bricks (Garage De
+   * Kaproen: een titel uit een uitklaplijst verderop werd de H1 van "Over ons").
+   */
+  public static function one_h1(array $page, string $title = ''): array {
+    $keys = static function (array $sec): array {
+      return array_values(array_filter(['bricks_elements_bricks', 'bricks_elements'], fn($k) => !empty($sec[$k]) && is_array($sec[$k])));
+    };
+    $content = [];
     foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
-      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
-      $key = !empty($sec['bricks_elements_bricks']) ? 'bricks_elements_bricks' : (!empty($sec['bricks_elements']) ? 'bricks_elements' : '');
-      if ($key === '') continue;
-      foreach ((array) $sec[$key] as $n) {
-        if (is_array($n) && ($n['name'] ?? '') === 'heading') $order[] = [$k, (string) ($n['id'] ?? ''), strtolower((string) ($n['settings']['tag'] ?? 'h3'))];
+      if (is_array($sec) && !in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true) && $keys($sec)) $content[] = $k;
+    }
+    if (!$content) return $page;
+
+    $headings = function (array $nodes): array {
+      $ids = [];
+      foreach (self::tree_order($nodes) as $i) {
+        $n = $nodes[$i];
+        if (($n['name'] ?? '') === 'heading') $ids[] = [(string) ($n['id'] ?? ''), strtolower((string) ($n['settings']['tag'] ?? 'h3'))];
+      }
+      return $ids;
+    };
+
+    // Hero zonder titel: de paginatitel als H1 erin zetten, voor de eerste tekst.
+    $hero = $content[0];
+    $hero_key = $keys($page['sections'][$hero])[0];
+    $title = trim($title);
+    if ($title !== '' && !$headings($page['sections'][$hero][$hero_key])) {
+      $nid = 'ah1' . substr(md5($title . $hero), 0, 3);
+      foreach ($keys($page['sections'][$hero]) as $key) {
+        $nodes = $page['sections'][$hero][$key];
+        $at = null;
+        foreach (self::tree_order($nodes) as $i) {
+          if (in_array((string) ($nodes[$i]['name'] ?? ''), ['text-basic', 'text', 'rich-text'], true)) { $at = $i; break; }
+        }
+        if ($at === null) continue;
+        $par = (string) ($nodes[$at]['parent'] ?? '0');
+        $nodes[] = ['id' => $nid, 'name' => 'heading', 'parent' => $par, 'children' => [], 'settings' => ['text' => $title, 'tag' => 'h1'], 'label' => 'Paginatitel'];
+        foreach ($nodes as $i => $n) {
+          if (is_array($n) && (string) ($n['id'] ?? '') === $par) {
+            $ch = array_values(array_map('strval', (array) ($n['children'] ?? [])));
+            $pos = array_search((string) $nodes[$at]['id'], $ch, true);
+            array_splice($ch, $pos === false ? 0 : $pos, 0, [$nid]);
+            $nodes[$i]['children'] = $ch;
+          }
+        }
+        $page['sections'][$hero][$key] = $nodes;
       }
     }
+
+    $order = [];
+    foreach ($content as $k) foreach ($headings($page['sections'][$k][$keys($page['sections'][$k])[0]]) as $h) $order[] = $h;
     if (!$order) return $page;
     $set = [];
-    $h1 = array_values(array_filter($order, fn($o) => $o[2] === 'h1'));
-    if (!$h1) $set[$order[0][1]] = 'h1';
-    else foreach (array_slice($h1, 1) as $o) $set[$o[1]] = 'h2';
+    $h1 = array_values(array_filter($order, fn($o) => $o[1] === 'h1'));
+    if (!$h1) $set[$order[0][0]] = 'h1';
+    else foreach (array_slice($h1, 1) as $o) $set[$o[0]] = 'h2';
     if (!$set) return $page;
-    foreach ($page['sections'] as $k => $sec) {
-      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
-        if (empty($sec[$key]) || !is_array($sec[$key])) continue;
-        foreach ($sec[$key] as $i => $n) {
+    foreach ($content as $k) {
+      foreach ($keys($page['sections'][$k]) as $key) {
+        foreach ($page['sections'][$k][$key] as $i => $n) {
           $id = is_array($n) ? (string) ($n['id'] ?? '') : '';
           if ($id !== '' && isset($set[$id]) && ($n['name'] ?? '') === 'heading') $page['sections'][$k][$key][$i]['settings']['tag'] = $set[$id];
         }
@@ -818,9 +1314,9 @@ class AISB_Archer_Site {
   /* ───────────────────────── Favicon ───────────────────────── */
 
   /** PNG van 512×512: het logo van de klant (vierkant gemaakt), anders het icoon van Archer Websites. */
-  public static function favicon_png(int $pid): string {
-    $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
-    $logo = is_array($guide) ? trim((string) ($guide['logoUrl'] ?? '')) : '';
+  /** Bytes van het logo (data-URI, bestand in de uploads of een webadres); SVG en onbekende soorten geven ''. */
+  public static function logo_bytes(string $logo): string {
+    $logo = trim($logo);
     $bytes = '';
     if (preg_match('#^data:image/(png|jpe?g|gif|webp);base64,(.+)$#is', $logo, $m)) {
       $bytes = (string) base64_decode($m[2]);
@@ -834,6 +1330,58 @@ class AISB_Archer_Site {
         if (!is_wp_error($r) && (int) wp_remote_retrieve_response_code($r) === 200) $bytes = (string) wp_remote_retrieve_body($r);
       }
     }
+    return $bytes;
+  }
+
+  /**
+   * Het logo als bestand in de mediabibliotheek van de gepubliceerde site, en het adres daarvan. Anders staat
+   * het als data-URI in elke pagina (zwaar) en maakt de SEO-plugin er een onbruikbare og:image van.
+   * Eén keer per site en per logo; bij opnieuw publiceren wordt het bestaande bestand hergebruikt.
+   */
+  public static function publish_logo(int $pid, string $logo, string $site_url, array $cookies, string $nonce, callable $request): string {
+    $logo = trim($logo);
+    $site_url = untrailingslashit($site_url);
+    $host = (string) wp_parse_url($site_url, PHP_URL_HOST);
+    if ($logo === '' || $nonce === '' || $host === '') return '';
+    if ((string) wp_parse_url($logo, PHP_URL_HOST) === $host) return $logo;
+    $bytes = self::logo_bytes($logo);
+    if ($bytes === '') return '';
+    $info = @getimagesizefromstring($bytes);
+    $ext = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? '';
+    if ($ext === '') return '';
+    $md5 = md5($bytes);
+    $cache = get_post_meta($pid, '_aisb_archer_logo_remote', true);
+    if (is_array($cache) && ($cache['host'] ?? '') === $host && ($cache['md5'] ?? '') === $md5 && !empty($cache['url'])) {
+      $head = $request((string) $cache['url'], ['method' => 'HEAD', 'timeout' => 10]);
+      if (!is_wp_error($head) && (int) ($head['code'] ?? 0) === 200) return (string) $cache['url'];
+    }
+    $name = sanitize_title((string) get_the_title($pid)) ?: 'logo';
+    $up = $request($site_url . '/wp-json/wp/v2/media', [
+      'method' => 'POST', 'timeout' => 30, 'cookies' => $cookies,
+      'headers' => ['X-WP-Nonce' => $nonce, 'Content-Type' => $info['mime'], 'Content-Disposition' => 'attachment; filename="' . $name . '-logo.' . $ext . '"'],
+      'body' => $bytes,
+    ]);
+    $media = (!is_wp_error($up) && (int) ($up['code'] ?? 0) < 300) ? json_decode((string) ($up['body'] ?? ''), true) : null;
+    $url = is_array($media) ? (string) ($media['source_url'] ?? '') : '';
+    if ($url === '') {
+      error_log('[AISB] Archer: logo opladen mislukt: ' . (is_wp_error($up) ? $up->get_error_message() : 'HTTP ' . ($up['code'] ?? 0) . ' ' . substr((string) ($up['body'] ?? ''), 0, 200)));
+      return '';
+    }
+    $mid = (int) ($media['id'] ?? 0);
+    if ($mid) {
+      $request($site_url . '/wp-json/wp/v2/media/' . $mid, [
+        'method' => 'POST', 'timeout' => 15, 'cookies' => $cookies,
+        'headers' => ['X-WP-Nonce' => $nonce, 'Content-Type' => 'application/json'],
+        'body' => wp_json_encode(['alt_text' => 'Logo ' . get_the_title($pid), 'title' => 'Logo ' . get_the_title($pid)]),
+      ]);
+    }
+    update_post_meta($pid, '_aisb_archer_logo_remote', ['host' => $host, 'md5' => $md5, 'url' => $url, 'id' => $mid]);
+    return $url;
+  }
+
+  public static function favicon_png(int $pid): string {
+    $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
+    $bytes = self::logo_bytes(is_array($guide) ? (string) ($guide['logoUrl'] ?? '') : '');
     if ($bytes !== '' && function_exists('imagecreatefromstring')) {
       $im = @imagecreatefromstring($bytes);
       if ($im) {

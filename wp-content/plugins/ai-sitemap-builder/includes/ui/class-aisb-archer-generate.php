@@ -92,8 +92,8 @@ class AISB_Archer_Generate {
     }
     unset($pf);
     $map = [
-      'nl' => ['name' => 'Naam', 'full name' => 'Naam', 'your name' => 'Naam', 'first name' => 'Voornaam', 'last name' => 'Achternaam', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'E-mailadres', 'your email' => 'E-mail', 'phone' => 'Telefoon', 'phone number' => 'Telefoon', 'telephone' => 'Telefoon', 'message' => 'Bericht', 'your message' => 'Bericht', 'subject' => 'Onderwerp', 'company' => 'Bedrijf', 'date' => 'Datum', 'send' => 'Versturen', 'submit' => 'Versturen'],
-      'fr' => ['name' => 'Nom', 'full name' => 'Nom', 'your name' => 'Nom', 'first name' => 'Prénom', 'last name' => 'Nom', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'Adresse e-mail', 'your email' => 'E-mail', 'phone' => 'Téléphone', 'phone number' => 'Téléphone', 'telephone' => 'Téléphone', 'message' => 'Message', 'your message' => 'Message', 'subject' => 'Sujet', 'company' => 'Entreprise', 'date' => 'Date', 'send' => 'Envoyer', 'submit' => 'Envoyer'],
+      'nl' => ['name' => 'Naam', 'full name' => 'Naam', 'your name' => 'Naam', 'first name' => 'Voornaam', 'last name' => 'Achternaam', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'E-mailadres', 'your email' => 'E-mail', 'phone' => 'Telefoon', 'phone number' => 'Telefoon', 'telephone' => 'Telefoon', 'message' => 'Bericht', 'your message' => 'Bericht', 'subject' => 'Onderwerp', 'company' => 'Bedrijf', 'date' => 'Datum', 'send' => 'Versturen', 'submit' => 'Versturen', 'send message' => 'Versturen', 'send request' => 'Versturen', 'submit request' => 'Versturen', 'get in touch' => 'Versturen', 'contact us' => 'Versturen', 'request a quote' => 'Offerte vragen', 'get a quote' => 'Offerte vragen', 'book now' => 'Afspraak maken', 'register' => 'Inschrijven', 'sign up' => 'Inschrijven', 'subscribe' => 'Inschrijven', 'join' => 'Inschrijven', 'get started' => 'Versturen'],
+      'fr' => ['name' => 'Nom', 'full name' => 'Nom', 'your name' => 'Nom', 'first name' => 'Prénom', 'last name' => 'Nom', 'email' => 'E-mail', 'e-mail' => 'E-mail', 'email address' => 'Adresse e-mail', 'your email' => 'E-mail', 'phone' => 'Téléphone', 'phone number' => 'Téléphone', 'telephone' => 'Téléphone', 'message' => 'Message', 'your message' => 'Message', 'subject' => 'Sujet', 'company' => 'Entreprise', 'date' => 'Date', 'send' => 'Envoyer', 'submit' => 'Envoyer', 'send message' => 'Envoyer', 'send request' => 'Envoyer', 'submit request' => 'Envoyer', 'get in touch' => 'Envoyer', 'contact us' => 'Envoyer', 'request a quote' => 'Demander un devis', 'get a quote' => 'Demander un devis', 'book now' => 'Prendre rendez-vous', 'register' => "S'inscrire", 'sign up' => "S'inscrire", 'subscribe' => "S'inscrire", 'join' => "S'inscrire", 'get started' => 'Envoyer'],
     ][$lang];
     foreach ($settings['fields'] as &$f) {
       if (!is_array($f) || !isset($f['label']) || !is_string($f['label'])) continue;
@@ -102,7 +102,7 @@ class AISB_Archer_Generate {
     }
     unset($f);
     if (isset($settings['submitButtonText']) && is_string($settings['submitButtonText'])) {
-      $k = strtolower(trim($settings['submitButtonText']));
+      $k = strtolower(trim(rtrim($settings['submitButtonText'], ' !.→>')));
       if (isset($map[$k])) $settings['submitButtonText'] = $map[$k];
     }
     return $settings;
@@ -187,6 +187,20 @@ class AISB_Archer_Generate {
       $notes = AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid_now, 'aisb_style_guide', true), true), 'copy');
       if ($notes !== '') $base .= $notes . "Match this voice; the copy rules above still apply.\n";
     }
+    // Overzicht of detailpagina van een lijst (occasies, realisaties ...): bij het publiceren worden de kaarten
+    // de items van een inhoudstype en wordt de detailpagina het sjabloon voor één item.
+    $slug_now = sanitize_title((string) wp_unslash($_POST['page_slug'] ?? ''));
+    if ($pid_now && $slug_now !== '' && class_exists('AISB_Archer_Collections')) {
+      foreach (AISB_Archer_Collections::pairs($pid_now) as $pair) {
+        $sg = $pair['def']['singular'];
+        $pl = $pair['def']['plural'];
+        if ($pair['overview'] === $slug_now) {
+          $base .= "LIST PAGE: this page is the overview of the " . $pl . ". In the section with repeated cards, every card is one item (one " . $sg . "), never a feature, a step or a label like 'More info' or 'Details'. Card heading: the name of that item; card text: one short line about it. Without real items in the brief, use clear [placeholders] such as [Merk en model] or [Projectnaam] and keep them distinct per card. Every card gets its own page later; a button on a card says what it opens (for example 'Bekijk deze " . mb_strtolower($sg) . "').\n";
+        } elseif ($pair['detail'] === $slug_now) {
+          $base .= "ITEM TEMPLATE: this page becomes the page of every single " . $sg . ". Write it for one item: the hero heading is a [placeholder] for its name, item-specific facts are short [placeholders] that name the fact ([bouwjaar], [kilometerstand], [prijs], [plaats]), and the rest is general text that is true for every item (how to ask about it, guarantees from the brief).\n";
+        }
+      }
+    }
     $system = 'Return valid JSON only. No markdown. No explanation.';
     // De hele pagina van boven naar onder: elke sectie weet wat erboven en eronder staat.
     $flow = [];
@@ -254,13 +268,96 @@ class AISB_Archer_Generate {
           $new = (is_array($ans) && isset($ans[$ref]) && is_string($ans[$ref])) ? trim(wp_strip_all_tags($ans[$ref])) : $item['text'];
           if ($new === '' ) $new = $item['text'];
           // Iets te lang mag (beter dan een afgebroken zin); veel te lang wordt netjes ingekort.
-          $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $item['limit'] * 1.1 ? $new : self::trim_to($new, $item['limit']);
+          // Titels nog ruimer: een halve titel ("Werk in de Vlaamse") is erger dan een regel extra.
+          $mtype = (string) ($to_translate[$key]['modules'][$mid]['type'] ?? '');
+          $room = $mtype === 'heading' ? 1.6 : 1.1;
+          $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $item['limit'] * $room ? $new : self::trim_to($new, (int) round($item['limit'] * ($mtype === 'heading' ? 1.3 : 1)));
         }
       }
     }
     // Herhaling over secties heen (drie keer dezelfde uitleg): één herschrijfvraag voor de dubbels.
     $out = self::dedupe_sections($self, $out, $to_translate, $limits, $system);
+    return self::finish_words($out, $to_translate, $pid_now);
+  }
+
+  /**
+   * Laatste controle op de woorden zelf.
+   * - Afgekapte woorden op het einde van korte teksten ("Plan bezichtig"): het woord afmaken met het volledige
+   *   woord dat elders op de pagina of in de briefing staat ("bezichtiging").
+   * - Dezelfde woorden als de briefing voor het aanbod: schrijft de briefing "occasies", dan nergens "occasions".
+   */
+  /** Woorden uit de briefing die voorrang krijgen op hun varianten (variant => woord van de briefing). */
+  public static function brief_terms(int $pid): array {
+    static $cache = [];
+    if (isset($cache[$pid])) return $cache[$pid];
+    $brief = $pid ? mb_strtolower(wp_strip_all_tags((string) get_post_meta($pid, 'aisb_project_brief', true))) : '';
+    $terms = [];
+    foreach (['occasie' => ['occasion'], 'occasies' => ['occasions'], 'herstelling' => ['reparatie'], 'herstellingen' => ['reparaties'], 'offerte' => ['quote'], 'offertes' => ['quotes']] as $nl => $alts) {
+      if ($brief === '' || !preg_match('/\b' . preg_quote($nl, '/') . '\b/u', $brief)) continue;
+      foreach ($alts as $alt) if (!preg_match('/\b' . preg_quote($alt, '/') . '\b/u', $brief)) $terms[$alt] = $nl;
+    }
+    return $cache[$pid] = $terms;
+  }
+
+  /** Varianten vervangen door het woord van de briefing, met dezelfde hoofdletter. */
+  public static function fix_terms(string $text, array $terms): string {
+    foreach ($terms as $alt => $nl) {
+      $text = preg_replace_callback('/\b' . preg_quote($alt, '/') . '\b/iu', function ($m) use ($nl) {
+        return mb_strtoupper(mb_substr($m[0], 0, 1)) === mb_substr($m[0], 0, 1) ? mb_strtoupper(mb_substr($nl, 0, 1)) . mb_substr($nl, 1) : $nl;
+      }, $text);
+    }
+    return $text;
+  }
+
+  public static function finish_words(array $out, array $to_translate, int $pid = 0): array {
+    $brief = $pid ? mb_strtolower(wp_strip_all_tags((string) get_post_meta($pid, 'aisb_project_brief', true))) : '';
+    $pool = $brief;
+    foreach ($out as $sec) foreach ((array) ($sec['modules'] ?? []) as $mod) foreach ((array) ($mod['settings'] ?? []) as $v) if (is_string($v)) $pool .= ' ' . mb_strtolower(wp_strip_all_tags($v));
+    $words = array_count_values(preg_split('/[^\p{L}\p{N}\'’-]+/u', $pool, -1, PREG_SPLIT_NO_EMPTY));
+    $terms = self::brief_terms($pid);
+    foreach ($out as $key => &$sec) {
+      foreach ((array) ($sec['modules'] ?? []) as $mid => $mod) {
+        $type = (string) ($to_translate[$key]['modules'][$mid]['type'] ?? ($mod['type'] ?? ''));
+        foreach ((array) ($mod['settings'] ?? []) as $sk => $val) {
+          if (!is_string($val) || $val === '') continue;
+          $new = self::fix_terms($val, $terms);
+          if (in_array($type, ['button', 'text-link', 'heading'], true)) $new = self::unglue($new, $words);
+          if (in_array($type, ['button', 'text-link', 'heading'], true) && preg_match('/(\p{L}{5,})\s*$/u', wp_strip_all_tags($new), $m)) {
+            $last = mb_strtolower($m[1]);
+            if (empty($words[$last]) || $words[$last] < 2) {
+              $best = '';
+              foreach ($words as $w => $c) {
+                $w = (string) $w;
+                if (mb_strlen($w) - mb_strlen($last) >= 3 && mb_strlen($w) - mb_strlen($last) <= 6 && mb_strpos($w, $last) === 0 && ($best === '' || $c > ($words[$best] ?? 0))) $best = $w;
+              }
+              if ($best !== '' && ($words[$last] ?? 0) <= 1) {
+                $repl = mb_strtoupper(mb_substr($m[1], 0, 1)) === mb_substr($m[1], 0, 1) ? mb_strtoupper(mb_substr($best, 0, 1)) . mb_substr($best, 1) : $best;
+                $new = preg_replace('/' . preg_quote($m[1], '/') . '(\s*)$/u', $repl . '$1', $new);
+              }
+            }
+          }
+          $sec['modules'][$mid]['settings'][$sk] = $new;
+        }
+      }
+    }
+    unset($sec);
     return $out;
+  }
+
+  /**
+   * Twee woorden die de AI aan elkaar plakte ("Vraag uw wagenaan"): een bekend woord uit de tekst met een
+   * los achtervoegsel als aan, op of uit erachter, terwijl het geplakte woord nergens anders voorkomt.
+   */
+  public static function unglue(string $text, array $words): string {
+    static $tails = ['aan', 'op', 'uit', 'af', 'mee', 'toe', 'terug', 'binnen'];
+    static $keep = ['voor', 'boven', 'daar', 'waar', 'hier', 'achter', 'onder', 'door', 'over', 'tegen', 'naast', 'vooruit', 'bergop', 'trap', 'jaar', 'maand', 'week'];
+    return (string) preg_replace_callback('/\b(\p{L}{4,})(' . implode('|', $tails) . ')\b/u', function ($m) use ($words, $keep) {
+      $whole = mb_strtolower($m[0]);
+      $head = mb_strtolower($m[1]);
+      if (!empty($words[$whole]) && $words[$whole] > 1) return $m[0];
+      if (in_array($head, $keep, true) || empty($words[$head]) || $words[$head] < 2) return $m[0];
+      return $m[1] . ' ' . $m[2];
+    }, $text);
   }
 
   /** Woorden die tellen voor de vergelijking (zonder lidwoorden en kleine woorden). */
@@ -357,9 +454,13 @@ class AISB_Archer_Generate {
 
   /* ───────────────────────── Tekstlengte en opmaak ───────────────────────── */
 
-  /** Soort tekstveld: 'inline' (titel, knop: platte tekst), 'basic' (korte tekst), 'rich' (teksteditor). */
+  /**
+   * Soort tekstveld: 'title' (titel: één regel met vet, cursief en links), 'inline' (knop: platte tekst),
+   * 'basic' (korte tekst), 'rich' (teksteditor).
+   */
   public static function mode_for(string $name): string {
-    if (in_array($name, ['heading', 'button', 'text-link', 'icon-box', 'counter'], true)) return 'inline';
+    if ($name === 'heading') return 'title';
+    if (in_array($name, ['button', 'text-link', 'icon-box', 'counter'], true)) return 'inline';
     if ($name === 'text') return 'rich';
     return 'basic';
   }
@@ -371,7 +472,8 @@ class AISB_Archer_Generate {
   public static function text_limit(string $name, string $placeholder): int {
     $len = mb_strlen(trim(html_entity_decode(wp_strip_all_tags($placeholder), ENT_QUOTES, 'UTF-8')));
     if ($name === 'heading') return $len ? (int) max(24, min(80, round($len * 1.3))) : 60;
-    if (in_array($name, ['button', 'text-link'], true)) return $len ? (int) max(16, min(28, round($len * 1.6))) : 24;
+    // Knoppen: genoeg plaats voor een werkwoord en een volledig woord ("Plan een bezichtiging").
+    if (in_array($name, ['button', 'text-link'], true)) return $len ? (int) max(22, min(32, round($len * 1.6))) : 26;
     if ($len === 0) return 0;
     if ($len <= 30) return (int) max(22, round($len * 1.6)); // labels, taglines
     return (int) min(600, round($len * 1.2));
@@ -425,12 +527,18 @@ class AISB_Archer_Generate {
       $html = preg_replace('/<br\s*\/?>/i', ' ', $html);
       return trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags($html, false)));
     }
+    if ($mode === 'title') {
+      // Titel: één regel; opmaak en links mogen, regeleinden en blokken niet.
+      $html = preg_replace('/<br\s*\/?>|<\s*\/?\s*(p|div)(\s[^>]*)?>/i', ' ', $html);
+      $html = wp_kses($html, ['strong' => [], 'em' => [], 'sup' => [], 'sub' => [], 'a' => ['href' => true]]);
+      return trim(preg_replace('/\s+/u', ' ', $html));
+    }
     if ($mode === 'basic') {
       $html = preg_replace('/<\s*(p|div)(\s[^>]*)?>/i', '<br>', $html);
       $html = preg_replace('/<\s*\/\s*(p|div)\s*>/i', '<br>', $html);
-      $allowed = ['strong' => [], 'em' => [], 'br' => []];
+      $allowed = ['strong' => [], 'em' => [], 'br' => [], 'sup' => [], 'sub' => [], 'a' => ['href' => true]];
     } else {
-      $allowed = ['p' => [], 'br' => [], 'strong' => [], 'em' => [], 'ul' => [], 'ol' => [], 'li' => [], 'a' => ['href' => true]];
+      $allowed = ['p' => [], 'br' => [], 'strong' => [], 'em' => [], 'ul' => [], 'ol' => [], 'li' => [], 'a' => ['href' => true], 'sup' => [], 'sub' => []];
     }
     $html = wp_kses($html, $allowed);
     $html = preg_replace('/(<br>\s*){3,}/i', '<br><br>', $html);
@@ -888,7 +996,7 @@ PROMPT;
       . '{"cta":"slug or empty","items":[{"slug":"page slug, or empty for a group label without its own page","label":"menu label","children":[{"slug":"page slug","label":"menu label"}]}]}. '
       . 'Rules: at most 6 top-level items; group related pages under one item (an existing overview page, or a short group label with an empty slug) instead of listing everything at top level; '
       . 'children only one level deep, at most 8 per item; use only slugs from the list; every slug at most once; keep the order a visitor expects (offer first, about and contact last); '
-      . 'the contact page is the "cta" (a button in the header) and not also a menu item; labels 1 to 3 words in ' . $lang . ', spelled exactly like the page title when you reuse it (keep apostrophes, hyphens and accents: "Regio\'s", "Zorg-op-maat"), no other punctuation; '
+      . 'the "cta" (a button in the header) is the main conversion page when the site has one (quote, appointment, booking, reservation, valuation), otherwise the contact page; the cta is never also a menu item; when the cta is not the contact page, contact is the last menu item; labels 1 to 3 words in ' . $lang . ', spelled exactly like the page title when you reuse it (keep apostrophes, hyphens and accents: "Regio\'s", "Zorg-op-maat"), no other punctuation; '
       . 'pages that do not fit may be left out (they stay in the footer).';
     $user = wp_json_encode(['website' => (string) ($data['website_name'] ?? ''), 'goal' => (string) ($data['website_goal'] ?? ''), 'pages' => $list], JSON_UNESCAPED_UNICODE);
     $res = $this->ai_multi(['m' => ['system' => $system, 'user' => $user]], 'plan', 60)['m'] ?? null;

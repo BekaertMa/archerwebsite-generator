@@ -94,6 +94,8 @@ class AISB_Wireframes_Bricks {
   public function pick_bricks_template(string $section_type, array $by_type, array $exclude_ids = []): ?array {
     $try = function(string $key) use ($by_type, $exclude_ids): ?array {
       $pool = $by_type[strtolower($key)] ?? [];
+      // Archer: sjablonen weglaten die niet passen bij wat al op de pagina staat (bv. een tweede formulier).
+      $pool = (array) apply_filters('aisb_bricks_template_pool', $pool, strtolower($key), $exclude_ids);
       if ($exclude_ids) {
         $pool = array_values(array_filter($pool, function($t) use ($exclude_ids) {
           return !in_array((int) $t['id'], $exclude_ids, true);

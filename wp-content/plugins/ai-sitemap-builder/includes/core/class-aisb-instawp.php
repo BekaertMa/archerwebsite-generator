@@ -276,6 +276,8 @@ class AISB_InstaWP {
       $site_name = $this->default_site_name($project);
     }
 
+    // Archer: al eerder gepubliceerd zonder bewaarde site (oudere versie): de site terugvinden via InstaWP.
+    if (!$site_name_supplied) $this->archer_recover_site($project_id);
     if (!$site_name_supplied) {
       $existing_session = $this->load_latest_publish_session($project_id);
       if (is_array($existing_session) && !empty($existing_session['site_name'])) {
@@ -413,6 +415,7 @@ class AISB_InstaWP {
     $template_id = trim((string) ($settings['instawp_template_id'] ?? ''));
     if ($api_key === '' || $template_id === '') wp_send_json_success(['status' => 'not_configured']);
 
+    $this->archer_recover_site($project_id);
     $session = $this->load_latest_publish_session($project_id);
     if (is_array($session) && !empty($session['site_name'])) wp_send_json_success(['status' => 'ready']);
     if ($this->archer_prewarm_running($project_id)) wp_send_json_success(['status' => 'running']);
@@ -446,6 +449,53 @@ class AISB_InstaWP {
       $wpdb->delete($wpdb->options, ['option_name' => $key]);
     }
     exit;
+  }
+
+  /**
+   * Archer: projecten die gepubliceerd werden voor de site bewaard bleef. Zoekt de InstaWP-site van
+   * aisb_published_url terug en bewaart ze, zodat opnieuw publiceren die site bijwerkt.
+   */
+  private function archer_recover_site(int $project_id): void {
+    if (get_transient($this->get_publish_session_key($project_id)) || get_post_meta($project_id, '_aisb_instawp_site', true)) return;
+    $url = (string) get_post_meta($project_id, 'aisb_published_url', true);
+    $host = $url !== '' ? strtolower((string) wp_parse_url($url, PHP_URL_HOST)) : '';
+    if ($host === '') return;
+    $settings = AISB_Settings::get_settings();
+    $api_key = trim((string) ($settings['instawp_api_key'] ?? ''));
+    if ($api_key === '') return;
+    $site_id = '';
+    for ($page = 1; $page <= 5 && $site_id === ''; $page++) {
+      $response = wp_remote_get(trailingslashit(self::API_BASE) . 'sites?per_page=100&page=' . $page, [
+        'timeout' => 30,
+        'headers' => ['Authorization' => 'Bearer ' . $api_key, 'Accept' => 'application/json'],
+      ]);
+      if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) return;
+      $list = json_decode(wp_remote_retrieve_body($response), true);
+      $items = is_array($list['data'] ?? null) ? $list['data'] : [];
+      if (!$items) break;
+      foreach ($items as $item) {
+        if (!is_array($item)) continue;
+        foreach (['url', 'sub_domain', 'domain'] as $k) {
+          $v = strtolower((string) ($item[$k] ?? ''));
+          if ($v !== '' && ($v === $host || (string) wp_parse_url((strpos($v, '://') ? '' : 'https://') . $v, PHP_URL_HOST) === $host)) { $site_id = (string) ($item['id'] ?? ''); break 2; }
+        }
+      }
+    }
+    if ($site_id === '') return;
+    $details = $this->fetch_instawp_site_details($site_id, $api_key, 60);
+    if (is_wp_error($details)) return;
+    $site = $this->extract_wordpress_site_config($details);
+    if (is_wp_error($site)) return;
+    $name = (string) ($details['data']['name'] ?? $this->extract_first_value($details, ['name']));
+    update_post_meta($project_id, '_aisb_instawp_site', [
+      'site_name' => sanitize_title($name !== '' ? $name : $host),
+      'saved_at' => time(),
+      'site_id' => $site_id,
+      'magic_login_url' => '',
+      'clone' => $details,
+      'site' => $site,
+    ]);
+    error_log('[AISB] Archer: bestaande site teruggevonden voor project ' . $project_id . ': ' . $host);
   }
 
   private function verify_nonce(string $nonce): bool {
@@ -502,7 +552,10 @@ class AISB_InstaWP {
 
   private function load_latest_publish_session(int $project_id): ?array {
     $session = get_transient($this->get_publish_session_key($project_id));
-    return is_array($session) ? $session : null;
+    if (is_array($session)) return $session;
+    // Archer: de bewaarde site van het project (blijft staan na het publiceren).
+    $kept = get_post_meta($project_id, '_aisb_instawp_site', true);
+    return is_array($kept) && !empty($kept['site_name']) ? $kept : null;
   }
 
   private function load_saved_publish_session(int $project_id, string $site_name): ?array {
@@ -574,6 +627,16 @@ class AISB_InstaWP {
   }
 
   private function store_publish_session(int $project_id, string $site_name, array $clone, array $site): void {
+    // Archer: de site van het project blijft bewaard (verborgen post meta), zodat opnieuw publiceren
+    // dezelfde site bijwerkt in plaats van telkens een nieuwe InstaWP-site te maken.
+    update_post_meta($project_id, '_aisb_instawp_site', [
+      'site_name' => $site_name,
+      'saved_at' => time(),
+      'site_id' => $this->extract_first_value($clone, ['site_id', 'id']),
+      'magic_login_url' => $this->extract_instawp_magic_login_url($clone),
+      'clone' => $clone,
+      'site' => $site,
+    ]);
     set_transient($this->get_publish_session_key($project_id), [
       'site_name' => $site_name,
       'saved_at' => time(),
@@ -591,7 +654,8 @@ class AISB_InstaWP {
   private function get_or_create_publish_site(int $project_id, string $site_name, string $template_id, string $api_key, int $timeout) {
     $session = $this->load_saved_publish_session($project_id, $site_name);
     if (is_array($session)) {
-      if ($this->instawp_site_payload_is_reachable($session, $timeout)) {
+      // Archer: nog een keer proberen voor we de site opgeven (een DNS-hapering mag geen nieuwe site opleveren).
+      if ($this->instawp_site_payload_is_reachable($session, $timeout) || (sleep(3) === 0 && $this->instawp_site_payload_is_reachable($session, $timeout))) {
         $ready_site = $this->extract_wordpress_site_config($session);
         if (!is_wp_error($ready_site)) {
           return [
@@ -606,6 +670,7 @@ class AISB_InstaWP {
 
       error_log('[AISB] Discarding saved InstaWP publish session for "' . $site_name . '": host no longer resolves or site config is incomplete');
       $this->clear_publish_session($project_id);
+      delete_post_meta($project_id, '_aisb_instawp_site');
     }
 
     $clone = $this->create_instant_site($template_id, $api_key, $site_name, $timeout);
@@ -1112,6 +1177,19 @@ class AISB_InstaWP {
       return $existing_pages;
     }
 
+    // Archer: het logo als bestand op de site zelf, niet als data-URI in elke pagina (en geen data-URI als og:image).
+    if (class_exists('AISB_Archer_Site') && method_exists('AISB_Archer_Site', 'publish_logo') && $project instanceof WP_Post && trim((string) ($style_guide['logoUrl'] ?? '')) !== '') {
+      $archer_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_login)) {
+        $archer_site_url = untrailingslashit((string) $site['site_url']);
+        $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
+        $archer_logo = AISB_Archer_Site::publish_logo((int) $project->ID, (string) $style_guide['logoUrl'], $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+        if ($archer_logo !== '') $style_guide['logoUrl'] = $archer_logo;
+      }
+    }
+
     $published_pages = [];
     $front_page_id = 0;
     $project_name = $project instanceof WP_Post ? (string) $project->post_title : '';
@@ -1140,9 +1218,13 @@ class AISB_InstaWP {
         $project_name
       );
 
+      // Archer: paginatitel ("Regio's") en zoekomschrijving uit de sitemap; de export kent enkel de slug.
+      // De omschrijving wordt het uittreksel, dat Bricks gebruikt voor meta description en og:description.
+      if (!isset($archer_seo)) $archer_seo = class_exists('AISB_Archer_Site') && $project instanceof WP_Post ? AISB_Archer_Site::seo_by_slug((int) $project->ID) : [];
       $content_struct = [
-        'title' => (string) ($page['title'] ?? ucfirst(str_replace('-', ' ', $slug))),
+        'title' => (string) ($archer_seo[$slug]['title'] ?? $page['title'] ?? ucfirst(str_replace('-', ' ', $slug))),
         'description' => $html,
+        'mt_excerpt' => (string) ($archer_seo[$slug]['description'] ?? ''),
         'wp_slug' => $slug,
         'page_status' => 'publish',
         'wp_page_order' => (int) $page_index,
@@ -1265,6 +1347,8 @@ class AISB_InstaWP {
     $nav_menu_items = [];
     foreach ($published_pages as $published_page) {
       $title = trim((string) ($published_page['title'] ?? ''));
+      // Archer: de startpagina heet in een menu altijd Home (de paginatitel is de SEO-titel).
+      if ((string) ($published_page['slug'] ?? '') === $front_slug) $title = 'Home';
       if ($title === '') {
         $title = ucwords(str_replace('-', ' ', (string) ($published_page['slug'] ?? '')));
       }
@@ -1319,6 +1403,22 @@ class AISB_InstaWP {
       }
     }
 
+    // Archer: overzichtspagina's met een detailpagina worden een lijst (query loop over een inhoudstype) met een
+    // Bricks-sjabloon per item; daarnaast het privacybeleid. Type, sjabloon en pagina bestaan vóór de injectie,
+    // zodat hun Bricks-inhoud mee met de pagina's bewaard wordt.
+    if (class_exists('AISB_Archer_Collections') && $project instanceof WP_Post && !empty($bricks_injections)) {
+      $bricks_injections = AISB_Archer_Collections::prepare((int) $project->ID, $bricks_injections);
+      $archer_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_login)) {
+        $archer_site_url = untrailingslashit((string) $site['site_url']);
+        $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
+        $archer_more = AISB_Archer_Collections::extra((int) $project->ID, $bricks_injections, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+        if ($archer_more) $bricks_injections = array_merge($bricks_injections, $archer_more);
+      }
+    }
+
     // The Bricks page-builder data lives in protected `_bricks_*` post meta.
     // XML-RPC `set_custom_fields` silently refuses to write protected meta on a
     // vanilla WordPress + Bricks clone (our plugin is not installed there), so
@@ -1347,6 +1447,18 @@ class AISB_InstaWP {
         $archer_site_url = untrailingslashit((string) $site['site_url']);
         $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
         $archer_favicon = AISB_Archer_Site::publish_favicon((int) $project->ID, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+      }
+    }
+
+    // Archer: de items van elke lijst, en de detailpagina's offline (het sjabloon toont de items).
+    if (class_exists('AISB_Archer_Collections') && $project instanceof WP_Post) {
+      $archer_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_login)) {
+        $archer_site_url = untrailingslashit((string) $site['site_url']);
+        $archer_nonce = $this->fetch_wp_rest_nonce($archer_site_url, $archer_login['cookies'], $timeout);
+        AISB_Archer_Collections::finish((int) $project->ID, $published_pages, $archer_site_url, $archer_login['cookies'], $archer_nonce, function (string $url, array $args) {
           return $this->remote_request($url, $args);
         });
       }
@@ -1459,6 +1571,32 @@ class AISB_InstaWP {
       return [];
     }
     $headers = ['X-WP-Nonce' => $nonce, 'Content-Type' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'];
+
+    // Archer: opnieuw publiceren op dezelfde site. De menu's van de vorige keer bestaan dan al met dezelfde naam
+    // en aanmaken mislukt ("term exists"); dan kregen header en footer de verkeerde menu's. Eerst die oude menu's
+    // (met hun items) weghalen; de menu-elementen van Bricks krijgen hierna de nieuwe ids.
+    $archer_slugs = [];
+    foreach ($specs as $spec) {
+      $slug = sanitize_title((string) ($spec['name'] ?? ''));
+      if ($slug !== '') $archer_slugs[$slug] = true;
+    }
+    $archer_old = $this->remote_request($site_url . '/wp-json/wp/v2/menus?per_page=100&context=edit', [
+      'method' => 'GET', 'timeout' => $timeout, 'cookies' => $cookies, 'headers' => $headers,
+    ]);
+    $archer_old = (!is_wp_error($archer_old) && (int) ($archer_old['code'] ?? 0) === 200) ? json_decode((string) ($archer_old['body'] ?? ''), true) : [];
+    $archer_del = [];
+    foreach ((array) $archer_old as $menu) {
+      if (is_array($menu) && !empty($menu['id']) && isset($archer_slugs[(string) ($menu['slug'] ?? '')])) {
+        $archer_del[] = ['method' => 'DELETE', 'path' => '/wp/v2/menus/' . (int) $menu['id'] . '?force=true'];
+      }
+    }
+    if ($archer_del) {
+      $archer_gone = 0;
+      foreach ($this->archer_rest_batch($site_url, $cookies, $headers, $archer_del, $timeout) as $r) {
+        if (is_array($r) && (int) ($r['status'] ?? 0) === 200) $archer_gone++;
+      }
+      error_log('[AISB] Archer menu batch: ' . $archer_gone . ' van ' . count($archer_del) . ' oude menu\'s weggehaald voor opnieuw publiceren.');
+    }
 
     $keys = array_keys($specs);
     $requests = [];
@@ -1631,6 +1769,8 @@ class AISB_InstaWP {
       ];
       if (!empty($payload['header'])) $body['header'] = wp_json_encode($payload['header'], $json);
       if (!empty($payload['footer'])) $body['footer'] = wp_json_encode($payload['footer'], $json);
+      // Archer: een Bricks-sjabloon bewaart zijn inhoud alleen als het type meekomt (anders blijft het leeg).
+      if (!empty($payload['templateType'])) $body['templateType'] = (string) $payload['templateType'];
       $jobs[] = ['post_id' => $post_id, 'slug' => $slug, 'body' => $body];
     }
     if (!$jobs) return $results;
@@ -4463,7 +4603,7 @@ class AISB_InstaWP {
   function applySectionImages(root, urls) {
     if (!root || !Array.isArray(urls) || !urls.length) return;
     var imgs = Array.from(root.querySelectorAll("img")).filter(function (img) {
-      return !isLogoImage(img) && !isBrandSlot(img);
+      return !isLogoImage(img) && !isBrandSlot(img) && !(img.closest && img.closest(".archer-keep"));
     });
     imgs.forEach(function (img, index) {
       var src = urls[index] || urls[index % urls.length];
@@ -4528,6 +4668,8 @@ class AISB_InstaWP {
       if (aisbOpaque(cs.backgroundColor)) el.style.setProperty("background-color", color, "important");
     });
     root.querySelectorAll(".brxe-button,.bricks-button").forEach(function (el) {
+      // Archer: een knop die al omgekeerd werd, blijft zo (een tweede ronde gaf witte tekst op een witte knop).
+      if (el.getAttribute("data-aisb-inv")) return;
       var cs = window.getComputedStyle(el);
       if (!aisbOpaque(cs.backgroundColor)) {
         // Omlijnde knop: tekst en lijn in de leeskleur van de band.
@@ -4538,6 +4680,7 @@ class AISB_InstaWP {
       if (aisbNear(cs.backgroundColor, color)) {
         // Knop in dezelfde kleur als de band: omkeren, anders verdwijnt hij.
         var inv = isDark ? "#ffffff" : paletteDark;
+        el.setAttribute("data-aisb-inv", "1");
         el.style.setProperty("background-color", inv, "important");
         el.style.setProperty("border-color", inv, "important");
         el.style.setProperty("color", color, "important");

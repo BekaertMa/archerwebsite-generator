@@ -4,6 +4,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/class-aisb-archer-sitemap-rules.php';
 require_once __DIR__ . '/class-aisb-archer-generate.php';
 require_once __DIR__ . '/class-aisb-archer-section-edit.php';
+require_once __DIR__ . '/class-aisb-archer-section-library.php';
 require_once __DIR__ . '/class-aisb-archer-taste.php';
 require_once __DIR__ . '/class-aisb-archer-template-import.php';
 require_once __DIR__ . '/class-aisb-archer-chrome.php';
@@ -15,6 +16,7 @@ require_once __DIR__ . '/class-aisb-archer-motion.php';
 require_once __DIR__ . '/class-aisb-archer-sector.php';
 require_once __DIR__ . '/class-aisb-archer-checks.php';
 require_once __DIR__ . '/class-aisb-archer-marketing.php';
+require_once __DIR__ . '/class-aisb-archer-collections.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -58,6 +60,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Sitemap_Rules())->init();
     (new AISB_Archer_Generate())->init();
     (new AISB_Archer_Section_Edit())->init();
+    (new AISB_Archer_Section_Library())->init();
     (new AISB_Archer_Taste())->init();
     (new AISB_Archer_Template_Import())->init();
     (new AISB_Archer_Chrome())->init();

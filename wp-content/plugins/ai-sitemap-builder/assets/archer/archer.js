@@ -90,10 +90,40 @@
     } catch (e) {
       throw new Error("De server gaf geen geldig antwoord.");
     }
+    // WordPress antwoordt "0" (niet aangemeld) of "-1" (verlopen beveiligingscode) zonder uitleg.
+    if (json === 0 || json === -1) {
+      throw new Error("Je bent niet meer aangemeld of de pagina staat te lang open. Vernieuw de pagina (en meld je opnieuw aan) en probeer opnieuw.");
+    }
     if (!res.ok || !json || json.success !== true) {
       throw new Error((json && json.data && json.data.message) || "Er ging iets mis.");
     }
     return json.data;
+  };
+
+  /**
+   * Foutmeldingen van de server (WordPress, InstaWP) in het Nederlands. Bekende meldingen krijgen een
+   * eigen uitleg; een andere Engelse melding wordt een algemene zin. De oorspronkelijke tekst gaat naar de console.
+   */
+  UI.nlError = function (msg) {
+    const m = String(msg || "").trim();
+    if (!m) return "Er ging iets mis. Probeer het opnieuw.";
+    const rules = [
+      [/still provisioning|clone_timeout|did not finish the clone|timed out|cURL error 28|Operation timed out/i, "InstaWP is de website nog aan het klaarzetten en antwoordde niet op tijd. Je wijzigingen zijn bewaard: probeer het over een minuut opnieuw."],
+      [/already running/i, "Er loopt al een publicatie voor deze website. Wacht tot die klaar is en probeer dan opnieuw."],
+      [/Not logged in|Invalid nonce|^0$|^-1$/i, "Je bent niet meer aangemeld of de pagina staat te lang open. Vernieuw de pagina (en meld je opnieuw aan) en probeer opnieuw."],
+      [/Forbidden/i, "Je hebt geen toegang tot dit project."],
+      [/resolve the InstaWP host|DNS|could not be parsed|host is empty|site URL is missing/i, "Het webadres van de website is (nog) niet bereikbaar. Probeer het over een minuut opnieuw."],
+      [/login did not return|login failed|credentials/i, "Aanmelden op de website lukte niet. Probeer het opnieuw; lukt het niet, neem dan contact op met Archer."],
+      [/Failed to create page|save failed|XML-RPC/i, "Een pagina kon niet op de website gezet worden. Probeer het opnieuw."],
+      [/does not contain any|did not contain any pages|no page body|payload is empty|Missing page_slug|Missing sitemap/i, "Er is nog niets om te publiceren: controleer of de pagina's secties hebben."],
+      [/API key|template slug|template is a legacy|No InstaWP template/i, "Publiceren is nog niet ingesteld (InstaWP-sleutel of -sjabloon ontbreekt). Neem contact op met Archer."],
+      [/invalid JSON|invalid site details|request failed|rejected/i, "InstaWP gaf een onverwacht antwoord. Probeer het over een minuut opnieuw."],
+      [/compile|wireframe/i, "Een pagina kon niet omgezet worden voor de website. Probeer het opnieuw of laat die pagina opnieuw maken."],
+    ];
+    for (const [re, nl] of rules) if (re.test(m)) return nl;
+    // Al Nederlands (onze eigen meldingen): zo laten.
+    if (/\b(de|het|een|niet|je|uw|website|pagina)\b/i.test(m) && !/\b(the|could|failed|not|was|is still)\b/i.test(m)) return m;
+    return "Publiceren lukte niet door een fout op de server. Probeer het opnieuw; lukt het niet, neem dan contact op met Archer.";
   };
 
   /** Vervangt losse Engelse tekstknopen in een blok door Nederlandse tekst. */
@@ -603,6 +633,7 @@
     const inner = wf.el.canvasInner;
     const COL_BODY = 336; // breedte van een sectievoorbeeld op het canvas
     let editorApi = null; // zijpaneel om een sectie te bewerken (verderop)
+    let libApi = null; // sectiebibliotheek: toevoegen (links) en voorbeelden kiezen (rechts)
     const PREVIEW = (window.AISB_WF && AISB_WF.previewUrl) || "";
     let parentOf = null; // slug => ouderslug, uit de sitemap
     let firstCanvas = true;
@@ -701,7 +732,9 @@
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="shuffle">Ander voorbeeld</button>' +
         '<button type="button" class="archer-cv-tool" data-archer-cv-act="lock">Vastzetten</button>' +
         '<button type="button" class="archer-cv-tool is-danger" data-archer-cv-act="del" title="Verwijderen" aria-label="Verwijderen">✕</button>' +
-        "</div>";
+        "</div>" +
+        // Sectie toevoegen op de rand onder deze sectie (zoals Relume).
+        '<button type="button" class="archer-cv-addpill" data-archer-cv-act="add" aria-label="Sectie hieronder toevoegen"><span aria-hidden="true">+</span> Sectie</button>';
       if (id) {
         const iframe = document.createElement("iframe");
         iframe.src = PREVIEW + id;
@@ -730,6 +763,8 @@
         const doc = iframe.contentDocument;
         const wrap = doc && doc.getElementById("aisb-preview");
         if (wrap) h = Math.ceil(wrap.getBoundingClientRect().height);
+        if (wrap && UI.measureCanvasText) UI.measureCanvasText(doc);
+        if (wrap && editorApi && editorApi.bindInline) editorApi.bindInline(iframe);
       } catch (e) {
         return;
       }
@@ -757,6 +792,7 @@
       $('[data-archer-cv-act="down"]', el).disabled = isFixed(s) || idx === movable[movable.length - 1];
       $('[data-archer-cv-act="shuffle"]', el).disabled = !!s.locked || !(s.ai_wireframe_id || s.bricks_template_id);
       $('[data-archer-cv-act="lock"]', el).textContent = s.locked ? "Losmaken" : "Vastzetten";
+      $('[data-archer-cv-act="add"]', el).hidden = isFoot(s);
       // Header en footer kan je niet verplaatsen; verwijderen kan wel.
       const body = $(".archer-cv-body", el);
       if (body) {
@@ -997,7 +1033,50 @@
     }
     zoom.addEventListener("mousedown", (e) => e.stopPropagation());
     const zoomLevel = $("[data-archer-zoom-level]", zoom);
-    const showZoom = () => (zoomLevel.textContent = Math.round(wf.canvas.scale * 100) + "%");
+    // Zoom zoals in Relume: 100% = de lopende tekst van de voorbeelden is 14px groot op het scherm.
+    // De voorbeelden zijn 1200px breed en staan op COL_BODY px; de tekstgrootte meten we in een voorbeeld.
+    let textPx = 16;
+    const zoomBase = () => (COL_BODY / 1200) * (textPx / 14);
+    const pctOf = (scale) => scale * zoomBase() * 100;
+    const scaleOf = (pct) => pct / 100 / zoomBase();
+    const ZOOM_MIN = 10;
+    const ZOOM_MAX = 200;
+    const ZOOM_STEPS = [10, 15, 25, 33, 50, 67, 75, 100, 125, 150, 200];
+    const showZoom = () => {
+      zoomLevel.textContent = Math.round(pctOf(wf.canvas.scale)) + "%";
+      // Voor de koppen en werkbalken die op het scherm even groot blijven.
+      inner.style.setProperty("--cv-scale", String(wf.canvas.scale || 1));
+    };
+    let userZoomed = false;
+    const tally = {}; // tekstgrootte => aantal tekens, over de voorbeelden heen
+    UI.measureCanvasText = (doc) => {
+      if (!doc || doc.__archerMeasured) return;
+      doc.__archerMeasured = true;
+      $$("#aisb-preview p, #aisb-preview .brxe-text-basic, #aisb-preview .brxe-text, #aisb-preview li", doc).forEach((el) => {
+        const px = Math.round(parseFloat(doc.defaultView.getComputedStyle(el).fontSize) || 0);
+        const n = (el.textContent || "").trim().length;
+        if (px >= 10 && px <= 24 && n > 20) tally[px] = (tally[px] || 0) + n;
+      });
+      // De meest gebruikte grootte van de lopende tekst.
+      const best = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+      if (!best || Number(best) === textPx) return;
+      const pct = pctOf(wf.canvas.scale);
+      textPx = Number(best);
+      // Nog niet zelf gezoomd: het percentage blijft hetzelfde (de beginweergave blijft 50%).
+      if (!userZoomed) {
+        const rect = wb.getBoundingClientRect();
+        const prev = wf.canvas.scale;
+        const next = scaleOf(pct);
+        const cx = 24;
+        const cy = 24;
+        wf.canvas.tx = cx - ((cx - wf.canvas.tx) / prev) * next;
+        wf.canvas.ty = cy - ((cy - wf.canvas.ty) / prev) * next;
+        wf.canvas.scale = next;
+        inner.style.transform = `translate(${wf.canvas.tx}px, ${wf.canvas.ty}px) scale(${wf.canvas.scale})`;
+        void rect;
+      }
+      showZoom();
+    };
     const origApply = wf.applyCanvasTransform;
     if (origApply) {
       wf.applyCanvasTransform = function () {
@@ -1006,8 +1085,28 @@
         return r;
       };
     }
-    // Ctrl + scroll zoomt via canvas.js; het percentage volgt mee.
-    wb.addEventListener("wheel", () => requestAnimationFrame(showZoom), { passive: true });
+    // Ctrl + scroll (of knijpen) zoomt hier, met de grenzen van deze schaal (canvas.js stopt bij 200% van de oude schaal).
+    wb.addEventListener(
+      "wheel",
+      (e) => {
+        if (!e.ctrlKey) return requestAnimationFrame(showZoom);
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        userZoomed = true;
+        const rect = wb.getBoundingClientRect();
+        const prev = wf.canvas.scale;
+        const want = Math.min(scaleOf(ZOOM_MAX), Math.max(scaleOf(ZOOM_MIN), prev * Math.exp(-e.deltaY * 0.0025)));
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const wx = (cx - wf.canvas.tx) / prev;
+        const wy = (cy - wf.canvas.ty) / prev;
+        wf.canvas.scale = want;
+        wf.canvas.tx = cx - wx * want;
+        wf.canvas.ty = cy - wy * want;
+        setTransform();
+      },
+      { passive: false, capture: true },
+    );
     const setTransform = () => {
       inner.style.transform = `translate(${wf.canvas.tx}px, ${wf.canvas.ty}px) scale(${wf.canvas.scale})`;
       showZoom();
@@ -1017,7 +1116,10 @@
       const cx = rect.width / 2;
       const cy = Math.min(rect.height / 2, 200);
       const prev = wf.canvas.scale;
-      const next = Math.max(0.2, Math.min(1.5, prev * factor));
+      // Naar de volgende stap (50%, 67%, 75%, 100% …), zoals in Relume.
+      const cur = pctOf(prev);
+      const pct = factor > 1 ? ZOOM_STEPS.find((x) => x > cur + 0.5) || ZOOM_MAX : ZOOM_STEPS.slice().reverse().find((x) => x < cur - 0.5) || ZOOM_MIN;
+      const next = scaleOf(pct);
       const wx = (cx - wf.canvas.tx) / prev;
       const wy = (cy - wf.canvas.ty) / prev;
       wf.canvas.scale = next;
@@ -1029,6 +1131,7 @@
       const b = e.target.closest("[data-archer-zoom]");
       if (!b) return;
       const z = b.getAttribute("data-archer-zoom");
+      userZoomed = true;
       if (z === "in") zoomBy(1.2);
       else if (z === "out") zoomBy(1 / 1.2);
       else wf.fitToView();
@@ -1036,6 +1139,7 @@
 
     // Passend: zo veel mogelijk kolommen in de breedte, bovenaan beginnen.
     let fitPending = false;
+    let startView = true; // de eerste keer: 50%, links bovenaan (zoals Relume)
     wf.fitToView = function () {
       const rect = wb.getBoundingClientRect();
       const cols = $$(".archer-cv-col", inner);
@@ -1053,7 +1157,11 @@
       });
       const pad = 24;
       const w = maxX - minX;
-      const scale = Math.max(0.35, Math.min(1, (rect.width - pad * 2) / w));
+      let scale = Math.max(scaleOf(ZOOM_MIN), Math.min(scaleOf(100), (rect.width - pad * 2) / w));
+      if (startView) {
+        startView = false;
+        scale = scaleOf(50);
+      }
       wf.canvas.scale = scale;
       wf.canvas.tx = w * scale < rect.width ? (rect.width - w * scale) / 2 - minX * scale : pad - minX * scale;
       wf.canvas.ty = pad - (cols[0].offsetTop - 0) * scale + 8;
@@ -1198,7 +1306,7 @@
     const chromePost = wf.post.bind(wf);
     wf.post = async function (action, data) {
       const out = await chromePost(action, data);
-      if ((action === "aisb_shuffle_section_layout" || action === "aisb_replace_section_type") && out && out.success && data && data.page_slug) {
+      if ((action === "aisb_shuffle_section_layout" || action === "aisb_replace_section_type" || action === "aisb_archer_section_pick") && out && out.success && data && data.page_slug) {
         const w = out.data && out.data.wireframe;
         const sec = w && (w.sections || []).find((x) => x && x.uuid === data.uuid);
         if (sec && ["header", "footer"].includes(String(sec.type || "").toLowerCase())) {
@@ -1234,7 +1342,7 @@
       if (!btn) {
         // Klik op een sectie: bewerken in het zijpaneel.
         const sec = e.target.closest(".archer-cv-sec");
-        if (sec && !e.target.closest("button")) editor.open(slug, sec.getAttribute("data-archer-cv-uuid"));
+        if (sec && !e.target.closest("button")) editor.open(slug, sec.getAttribute("data-archer-cv-uuid"), { x: e.clientX, y: e.clientY });
         return;
       }
       if (btn.disabled) return;
@@ -1247,6 +1355,10 @@
       if (idx < 0) return;
       const act = btn.getAttribute("data-archer-cv-act");
 
+      if (act === "add") {
+        if (libApi) libApi.openFor(slug, uuid);
+        return;
+      }
       if (act === "up" || act === "down") {
         const step = act === "up" ? -1 : 1;
         const to = idx + step;
@@ -1448,7 +1560,7 @@
       }
 
       // Opmaak zoals in de server (AISB_Archer_Generate::clean_markup): geen kleuren, spans of style.
-      const ALLOWED = { basic: ["STRONG", "EM", "BR"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A"] };
+      const ALLOWED = { title: ["STRONG", "EM", "SUP", "SUB", "A"], basic: ["STRONG", "EM", "BR", "SUP", "SUB", "A"], rich: ["P", "BR", "STRONG", "EM", "UL", "OL", "LI", "A", "SUP", "SUB"] };
       function cleanHtml(html, mode) {
         const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
         if (mode === "inline") {
@@ -1456,6 +1568,8 @@
           return doc.body.textContent.replace(/\s+/g, " ").trim();
         }
         const allowed = ALLOWED[mode] || ALLOWED.basic;
+        // Titel: één regel (regeleinden worden spaties), wel vet, cursief en links.
+        if (mode === "title") doc.body.querySelectorAll("br").forEach((b) => b.replaceWith(" "));
         const walk = (node) => {
           Array.from(node.childNodes).forEach((c) => {
             if (c.nodeType === 3) return;
@@ -1464,6 +1578,10 @@
             walk(c);
             let tag = c.tagName === "B" ? "STRONG" : c.tagName === "I" ? "EM" : c.tagName;
             if (/^(DIV|P)$/.test(tag)) {
+              if (mode === "title") {
+                if (c.previousSibling) c.before(" ");
+                return c.replaceWith(...c.childNodes);
+              }
               if (mode === "basic") {
                 if (c.previousSibling) c.before(doc.createElement("br"));
                 return c.replaceWith(...c.childNodes);
@@ -1479,6 +1597,7 @@
           });
         };
         walk(doc.body);
+        if (mode === "title") return doc.body.innerHTML.replace(/\s+/g, " ").trim();
         return doc.body.innerHTML.replace(/(<br>\s*){3,}/g, "<br><br>").replace(/^(\s|<br>)+|(\s|<br>)+$/g, "").trim();
       }
       const plainLen = (html) => {
@@ -1488,7 +1607,7 @@
       const countText = (len, max) => (max ? `${len} / ${max}` : `${len}`);
 
       function fieldHtml(n) {
-        const mode = n.mode || (n.name === "heading" || n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
+        const mode = n.mode || (n.name === "heading" ? "title" : n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
         const v = cleanHtml(n.text || "", mode);
         const len = plainLen(v);
         const lab = /tagline|eyebrow/i.test(n.label || "") ? "Tagline" : TEXT_NAMES[n.name] + (n.tag && /^h\d$/.test(n.tag) ? " (" + n.tag.toUpperCase() + ")" : "");
@@ -1538,6 +1657,8 @@
         const a = (sel.a = analyse(sel.nodes, docOf(sel.uuid)));
         let html = head;
         if (isFixed(s) && a.texts.length) html += `<p class="archer-ed-note">Wijzigingen aan de ${isHead(s) ? "header" : "footer"} gelden voor alle pagina's.</p>`;
+        // Voorbeeld: willekeurig een ander, of zelf kiezen uit de voorbeelden van hetzelfde type.
+        html += libApi ? libApi.variantsGroup(s) : "";
 
         // Layout
         const layout = [];
@@ -1580,6 +1701,7 @@
         const focusId = document.activeElement && panel.contains(document.activeElement) ? document.activeElement.id : "";
         const scroll = panel.scrollTop;
         panel.innerHTML = html;
+        if (libApi) libApi.fillVariants(panel, s, sel.slug);
         panel.scrollTop = scroll;
         if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
       }
@@ -1592,8 +1714,11 @@
         }
       };
 
-      async function open(slug, uuid) {
+      async function open(slug, uuid, point) {
         if (sel && sel.uuid === uuid) return;
+        finishInline();
+        pendingPoint = point || null;
+        $$("iframe.is-live", inner).forEach((f) => f.classList.remove("is-live"));
         await flushText();
         const s = sectionOf(slug, uuid);
         if (!s) return;
@@ -1622,10 +1747,15 @@
           sel.error = e.message || "Laden mislukt";
         }
         render();
+        const fr = $("iframe", secElOf(uuid) || document.createElement("i"));
+        if (fr && sel === mine) bindInline(fr);
       }
 
       function close() {
+        finishInline();
         flushText();
+        pendingPoint = null;
+        $$("iframe.is-live", inner).forEach((f) => f.classList.remove("is-live"));
         sel = null;
         panel.hidden = true;
         panel.innerHTML = "";
@@ -1795,6 +1925,7 @@
 
       panel.addEventListener("click", async (e) => {
         if (e.target.closest("[data-ed-close]")) return close();
+        if (libApi && sel && libApi.onPanelClick(e, sel.slug, sel.uuid)) return;
         if (!sel || !sel.a || busy) return;
         const a = sel.a;
         let b;
@@ -1844,7 +1975,7 @@
         const f = e.target.closest && e.target.closest("[data-ed-text]");
         if (!f || e.key !== "Enter") return;
         const mode = f.getAttribute("data-ed-mode");
-        if (mode === "inline") {
+        if (mode === "inline" || mode === "title") {
           e.preventDefault(); // titels en knoppen: één regel
         } else if (mode === "basic") {
           e.preventDefault();
@@ -1857,11 +1988,361 @@
         e.preventDefault();
         const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
         const f = e.target.closest("[data-ed-text]");
-        document.execCommand("insertText", false, f.getAttribute("data-ed-mode") === "inline" ? t.replace(/\s+/g, " ") : t);
+        document.execCommand("insertText", false, /^(inline|title)$/.test(f.getAttribute("data-ed-mode") || "") ? t.replace(/\s+/g, " ") : t);
       });
       panel.addEventListener("wheel", (e) => e.stopPropagation());
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && sel && !(e.target.closest && e.target.closest("input, textarea"))) close();
+      });
+
+
+      /* ── Tekst rechtstreeks in het voorbeeld aanpassen (zoals Relume) ── */
+      const tb = document.createElement("div");
+      tb.className = "archer-ie-tb";
+      tb.hidden = true;
+      tb.setAttribute("role", "toolbar");
+      tb.setAttribute("aria-label", "Opmaak");
+      tb.innerHTML =
+        '<div class="archer-ie-btns">' +
+        '<button type="button" data-ie-cmd="link" title="Link" aria-label="Link"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg></button>' +
+        '<button type="button" data-ie-cmd="bold" title="Vet" aria-label="Vet"><strong>B</strong></button>' +
+        '<button type="button" data-ie-cmd="italic" title="Cursief" aria-label="Cursief"><em>I</em></button>' +
+        '<button type="button" data-ie-cmd="superscript" title="Superscript" aria-label="Superscript">x<sup>2</sup></button>' +
+        '<button type="button" data-ie-cmd="subscript" title="Subscript" aria-label="Subscript">x<sub>2</sub></button>' +
+        "</div>" +
+        '<form class="archer-ie-link" hidden>' +
+        '<select data-ie-page aria-label="Link naar"></select>' +
+        '<input type="text" inputmode="url" data-ie-url placeholder="https://, mailto: of tel:" aria-label="Adres van de link">' +
+        '<button type="submit" class="is-ok">OK</button>' +
+        '<button type="button" data-ie-unlink title="Link weghalen" aria-label="Link weghalen">✕</button>' +
+        "</form>";
+      document.body.appendChild(tb);
+      let live = null; // { id, key, mode, el, doc, iframe }
+      let pendingPoint = null; // klik op het canvas: daar meteen beginnen met typen
+      let savedRange = null;
+      let rafId = 0;
+      const modeOf = (n) => n.mode || (n.name === "heading" ? "title" : n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
+      const frameOf = (doc) => (doc && doc.defaultView ? doc.defaultView.frameElement : null);
+      const scaleOfFrame = (f) => {
+        const r = f.getBoundingClientRect();
+        return { r, s: r.width / (f.offsetWidth || 1200) };
+      };
+
+      function positionTb() {
+        if (!live || tb.hidden) return;
+        if (!live.el.isConnected || !live.iframe.isConnected) return finishInline();
+        const { r: ir, s } = scaleOfFrame(live.iframe);
+        const r = live.el.getBoundingClientRect();
+        const x = ir.left + (r.left + r.width / 2) * s;
+        const top = ir.top + r.top * s;
+        const below = top < 70;
+        tb.style.left = Math.max(8, Math.min(window.innerWidth - 8, x)) + "px";
+        tb.style.top = (below ? ir.top + r.bottom * s + 10 : top - 10) + "px";
+        tb.classList.toggle("is-below", below);
+      }
+      const loop = () => {
+        positionTb();
+        if (live) rafId = requestAnimationFrame(loop);
+      };
+
+      function startInline(el, point) {
+        if (!sel || !sel.a) return;
+        if (live && live.el === el) return;
+        finishInline();
+        const id = el.getAttribute("data-archer-edit");
+        const n = sel.a.byId[id];
+        if (!n) return;
+        const doc = el.ownerDocument;
+        const iframe = frameOf(doc);
+        if (!iframe) return;
+        const mode = modeOf(n);
+        live = { id, key: n.key || "text", mode, el, doc, iframe };
+        el.setAttribute("contenteditable", mode === "inline" ? "plaintext-only" : "true");
+        el.setAttribute("data-archer-editing", "");
+        el.setAttribute("spellcheck", "true");
+        el.focus();
+        if (point && doc.caretRangeFromPoint) {
+          const rg = doc.caretRangeFromPoint(point.x, point.y);
+          if (rg && el.contains(rg.startContainer)) {
+            const s = doc.getSelection();
+            s.removeAllRanges();
+            s.addRange(rg);
+          }
+        }
+        tb.hidden = mode === "inline";
+        $(".archer-ie-link", tb).hidden = true;
+        $(".archer-ie-btns", tb).hidden = false;
+        cancelAnimationFrame(rafId);
+        loop();
+        updateActive();
+        // Het veld in het paneel rechts zichtbaar maken.
+        const f = $(`[data-ed-text="${CSS.escape(id)}"]`, panel);
+        if (f) f.closest(".archer-ed-field")?.classList.add("is-live");
+      }
+
+      function finishInline() {
+        if (!live) return;
+        const l = live;
+        live = null;
+        cancelAnimationFrame(rafId);
+        tb.hidden = true;
+        l.el.removeAttribute("contenteditable");
+        l.el.removeAttribute("data-archer-editing");
+        $$(".archer-ed-field.is-live", panel).forEach((x) => x.classList.remove("is-live"));
+        flushText();
+      }
+
+      function onInlineInput() {
+        if (!live) return;
+        const raw = live.mode === "inline" ? esc(live.el.textContent) : live.el.innerHTML;
+        const value = cleanHtml(raw, live.mode);
+        textQueue[live.id] = { key: live.key, value };
+        const n = sel && sel.a && sel.a.byId[live.id];
+        if (n) n.text = value;
+        // Het veld in het paneel volgt mee.
+        const f = $(`[data-ed-text="${CSS.escape(live.id)}"]`, panel);
+        if (f && document.activeElement !== f) {
+          if (live.mode === "inline") f.textContent = live.el.textContent.replace(/\s+/g, " ").trim();
+          else f.innerHTML = value;
+        }
+        const max = f ? Number(f.getAttribute("data-ed-max")) || 0 : 0;
+        const lenEl = $(`[data-ed-len="${CSS.escape(live.id)}"]`, panel);
+        if (lenEl) {
+          const len = plainLen(live.mode === "inline" ? esc(value) : value);
+          lenEl.textContent = countText(len, max);
+          lenEl.classList.toggle("is-over", !!max && len > max);
+        }
+        measureIframe(live.iframe);
+        setStatus("");
+        clearTimeout(textTimer);
+        textTimer = setTimeout(flushText, 800);
+      }
+
+      function bindInline(iframe) {
+        if (!sel || !sel.a || !iframe) return;
+        const secEl = secElOf(sel.uuid);
+        if (!secEl || !secEl.contains(iframe)) return;
+        let doc;
+        try {
+          doc = iframe.contentDocument;
+        } catch (e) {
+          return;
+        }
+        if (!doc || !doc.getElementById("aisb-preview")) return;
+        $$("iframe.is-live", inner).forEach((f) => f !== iframe && f.classList.remove("is-live"));
+        iframe.classList.add("is-live");
+        sel.a.texts.forEach((t) => {
+          const d = domOf(doc, t.n.id);
+          if (d) d.setAttribute("data-archer-edit", t.n.id);
+        });
+        if (!doc.__archerInline) {
+          doc.__archerInline = true;
+          const st = doc.createElement("style");
+          st.textContent =
+            // Het voorbeeld zet klikken uit (pointer-events: none); teksten moeten ze wel krijgen.
+            "[data-archer-edit],[data-archer-edit] *{cursor:text;pointer-events:auto!important}" +
+            "[data-archer-edit]:hover{outline:2px solid rgba(27,90,91,.55);outline-offset:3px}" +
+            "[data-archer-editing]{outline:2px solid #1B5A5B!important;outline-offset:3px;cursor:text}" +
+            "[data-archer-edit] strong,[data-archer-edit] b{font-weight:700}[data-archer-edit] em,[data-archer-edit] i{font-style:italic}" +
+            "[data-archer-edit] a{text-decoration:underline}";
+          doc.head.appendChild(st);
+          doc.addEventListener("click", (e) => {
+            if (e.target.closest && e.target.closest("a")) e.preventDefault(); // knoppen en links: niet volgen
+            const t = e.target.closest && e.target.closest("[data-archer-edit]");
+            if (t) startInline(t, { x: e.clientX, y: e.clientY });
+          }, true);
+          doc.addEventListener("input", (e) => live && e.target === live.el && onInlineInput());
+          doc.addEventListener("selectionchange", () => live && live.doc === doc && updateActive());
+          doc.addEventListener("keydown", (e) => {
+            if (!live) return;
+            if (e.key === "Escape") { e.preventDefault(); live.el.blur(); return finishInline(); }
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            if (live.mode === "inline" || live.mode === "title") return; // titels en knoppen: één regel
+            if (live.mode === "basic") doc.execCommand("insertLineBreak");
+            else doc.execCommand("insertParagraph");
+          });
+          doc.addEventListener("paste", (e) => {
+            if (!live) return;
+            e.preventDefault();
+            const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+            doc.execCommand("insertText", false, live.mode === "inline" || live.mode === "title" ? t.replace(/\s+/g, " ") : t);
+          });
+          doc.addEventListener("focusout", () => {
+            setTimeout(() => {
+              if (live && live.doc === doc && doc.activeElement !== live.el && !tb.contains(document.activeElement) && $(".archer-ie-link", tb).hidden) finishInline();
+            }, 150);
+          });
+          // Scrollen en zoomen boven het voorbeeld werkt zoals op de rest van het canvas.
+          doc.addEventListener("wheel", (e) => {
+            const f = frameOf(doc);
+            if (!f) return;
+            e.preventDefault();
+            const { r, s } = scaleOfFrame(f);
+            wb.dispatchEvent(new WheelEvent("wheel", {
+              deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, ctrlKey: e.ctrlKey, metaKey: e.metaKey,
+              clientX: r.left + e.clientX * s, clientY: r.top + e.clientY * s, bubbles: true, cancelable: true,
+            }));
+          }, { passive: false });
+        }
+        if (pendingPoint) {
+          const { r, s } = scaleOfFrame(iframe);
+          const x = (pendingPoint.x - r.left) / s;
+          const y = (pendingPoint.y - r.top) / s;
+          pendingPoint = null;
+          const hit = doc.elementFromPoint(x, y);
+          const t = hit && hit.closest && hit.closest("[data-archer-edit]");
+          if (t) startInline(t, { x, y });
+        }
+      }
+
+      // Ergens anders klikken (paneel, canvas): klaar met deze tekst.
+      document.addEventListener("mousedown", (e) => {
+        if (live && !tb.contains(e.target)) finishInline();
+      }, true);
+      tb.addEventListener("mousedown", (e) => {
+        if (!e.target.closest("input, select")) e.preventDefault(); // de selectie in het voorbeeld behouden
+      });
+      // Vet, cursief, superscript en subscript: echte <strong>, <em>, <sup> en <sub> (geen <b> of stijlen).
+      const TAGS = { bold: ["STRONG", "B"], italic: ["EM", "I"], superscript: ["SUP"], subscript: ["SUB"] };
+      const tagIn = (node, tags) => {
+        for (let n = node; n && live && n !== live.el; n = n.parentNode) if (n.nodeType === 1 && tags.includes(n.tagName)) return n;
+        return null;
+      };
+      function toggleTag(cmd) {
+        const tags = TAGS[cmd];
+        const doc = live.doc;
+        const s = doc.getSelection();
+        if (!s || !s.rangeCount) return;
+        const rg = s.getRangeAt(0);
+        if (!live.el.contains(rg.commonAncestorContainer)) return;
+        const found = tagIn(rg.commonAncestorContainer, tags) || (rg.startContainer === rg.endContainer ? null : tagIn(rg.startContainer, tags));
+        if (found) {
+          // Al vet (of cursief …): weghalen, de tekst blijft geselecteerd.
+          const first = found.firstChild;
+          const last = found.lastChild;
+          found.replaceWith(...found.childNodes);
+          if (first && last) {
+            const nr = doc.createRange();
+            nr.setStartBefore(first);
+            nr.setEndAfter(last);
+            s.removeAllRanges();
+            s.addRange(nr);
+          }
+        } else {
+          if (rg.collapsed) return;
+          const w = doc.createElement(tags[0].toLowerCase());
+          w.appendChild(rg.extractContents());
+          $$(tags.join(","), w).forEach((x) => x.replaceWith(...x.childNodes));
+          // Superscript en subscript sluiten elkaar uit.
+          if (cmd === "superscript" || cmd === "subscript") $$(cmd === "superscript" ? "sub" : "sup", w).forEach((x) => x.replaceWith(...x.childNodes));
+          rg.insertNode(w);
+          const nr = doc.createRange();
+          nr.selectNodeContents(w);
+          s.removeAllRanges();
+          s.addRange(nr);
+        }
+        live.el.normalize();
+        onInlineInput();
+        updateActive();
+      }
+      function updateActive() {
+        if (!live || tb.hidden) return;
+        const s = live.doc.getSelection();
+        const node = s && s.rangeCount ? s.getRangeAt(0).commonAncestorContainer : null;
+        $$("[data-ie-cmd]", tb).forEach((b) => {
+          const cmd = b.getAttribute("data-ie-cmd");
+          const on = !!(node && (cmd === "link" ? tagIn(node, ["A"]) : tagIn(node, TAGS[cmd])));
+          b.classList.toggle("is-on", on);
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      }
+      const pagePath = (slug) => (slug === "home" ? "/" : "/" + slug + "/");
+      function openLinkForm() {
+        const s = live.doc.getSelection();
+        savedRange = s && s.rangeCount ? s.getRangeAt(0).cloneRange() : null;
+        const a = savedRange ? tagIn(savedRange.commonAncestorContainer, ["A"]) || tagIn(savedRange.startContainer, ["A"]) : null;
+        const href = a ? a.getAttribute("href") || "" : "";
+        const form = $(".archer-ie-link", tb);
+        const pages = (wf.state.pages || []).filter((p) => p.slug);
+        const match = pages.find((p) => pagePath(p.slug) === href);
+        $("[data-ie-page]", form).innerHTML =
+          `<option value="">Eigen adres…</option>` +
+          `<optgroup label="Pagina van de site">${pages.map((p) => `<option value="${esc(pagePath(p.slug))}"${match && match.slug === p.slug ? " selected" : ""}>${esc(p.title || p.slug)}</option>`).join("")}</optgroup>`;
+        const url = $("[data-ie-url]", form);
+        url.value = match ? "" : href;
+        url.hidden = !!match;
+        $("[data-ie-unlink]", form).hidden = !a;
+        $(".archer-ie-btns", tb).hidden = true;
+        form.hidden = false;
+        (match ? $("[data-ie-page]", form) : url).focus();
+      }
+      function closeLinkForm() {
+        $(".archer-ie-link", tb).hidden = true;
+        $(".archer-ie-btns", tb).hidden = false;
+        if (live) live.el.focus();
+      }
+      function restoreRange() {
+        live.el.focus();
+        const s = live.doc.getSelection();
+        if (savedRange) {
+          s.removeAllRanges();
+          s.addRange(savedRange);
+        }
+        return s;
+      }
+      function applyLink(href) {
+        if (!live) return;
+        const s = restoreRange();
+        const rg = s.rangeCount ? s.getRangeAt(0) : null;
+        const a = rg ? tagIn(rg.commonAncestorContainer, ["A"]) || tagIn(rg.startContainer, ["A"]) : null;
+        if (!href) {
+          if (a) a.replaceWith(...a.childNodes);
+        } else if (a) {
+          a.setAttribute("href", href);
+        } else if (rg && !rg.collapsed) {
+          const w = live.doc.createElement("a");
+          w.setAttribute("href", href);
+          w.appendChild(rg.extractContents());
+          $$("a", w).forEach((x) => x.replaceWith(...x.childNodes));
+          rg.insertNode(w);
+        }
+        live.el.normalize();
+        closeLinkForm();
+        onInlineInput();
+        updateActive();
+      }
+      tb.addEventListener("click", (e) => {
+        if (!live) return;
+        if (e.target.closest("[data-ie-unlink]")) return applyLink("");
+        const b = e.target.closest("[data-ie-cmd]");
+        if (!b) return;
+        const cmd = b.getAttribute("data-ie-cmd");
+        if (cmd === "link") return openLinkForm();
+        toggleTag(cmd);
+      });
+      tb.addEventListener("change", (e) => {
+        if (!e.target.matches("[data-ie-page]")) return;
+        const url = $("[data-ie-url]", tb);
+        url.hidden = !!e.target.value;
+        if (!e.target.value) url.focus();
+      });
+      $(".archer-ie-link", tb).addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (!live) return;
+        const page = $("[data-ie-page]", tb).value;
+        let url = page || $("[data-ie-url]", tb).value.trim();
+        if (url && !page) {
+          if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(url)) url = "mailto:" + url;
+          else if (/^\+?[\d\s()./-]{8,}$/.test(url)) url = "tel:" + url.replace(/[^\d+]/g, "");
+          else if (!/^(https?:|mailto:|tel:|\/|#)/i.test(url)) url = "https://" + url.replace(/^\/+/, "");
+        }
+        applyLink(url);
+      });
+      tb.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape" || $(".archer-ie-link", tb).hidden) return;
+        e.preventDefault();
+        closeLinkForm();
       });
 
       // Ander voorbeeld, verwijderen of een nieuwe wireframe: het paneel volgt of sluit.
@@ -1879,9 +2360,378 @@
         }
       };
 
-      return { open, close, flush: flushText, afterRender: syncAfterRender, isOpen: () => !!sel };
+      return { open, close, flush: flushText, afterRender: syncAfterRender, isOpen: () => !!sel, current: () => (sel ? { slug: sel.slug, uuid: sel.uuid } : null), rerender: () => sel && render(), bindInline };
     })();
     editorApi = editor;
+
+    // Breedte van de schuifbalk, zodat het canvas over de volle breedte geen horizontale schuifbalk geeft.
+    const setSbw = () => document.documentElement.style.setProperty("--ar-sbw", Math.max(0, window.innerWidth - document.documentElement.clientWidth) + "px");
+    setSbw();
+    window.addEventListener("resize", setSbw);
+
+    // Werkruimte zoals Relume: zolang het canvas zichtbaar is, geen paginatitel en geen voettekst,
+    // en het canvas vult het scherm onder de werkbalk.
+    const nextLink = $('[data-archer-step-footer="wireframes"] [data-archer-next]');
+    const wfCard = wb.closest(".archer-wf-card") || document;
+    const actions = $(".archer-toolbar-actions", wfCard);
+    const backLink = $('[data-archer-step-footer="wireframes"] .archer-link-back');
+    if (backLink && actions && !$(".archer-cv-back", actions)) {
+      const b = backLink.cloneNode(true);
+      b.className = "archer-btn archer-btn-ghost archer-cv-next archer-cv-back archer-ws-back";
+      b.textContent = "← Terug";
+      b.title = backLink.textContent.replace(/^←\s*/, "").trim();
+      actions.appendChild(b);
+    }
+    if (nextLink && actions && !$(".archer-cv-next:not(.archer-cv-back)", actions)) {
+      const a = nextLink.cloneNode(true);
+      a.classList.add("archer-cv-next");
+      actions.appendChild(a);
+    }
+    const layoutCv = () => {
+      const on = !isOpen();
+      document.body.classList.toggle("archer-cv-mode", on);
+      document.body.classList.toggle("archer-ws-mode", on);
+      $$(".archer-cv-next").forEach((nx) => { nx.hidden = !on; });
+      if (!on) return;
+      const shellEl = wb.parentNode;
+      const top = shellEl.getBoundingClientRect().top + window.scrollY;
+      document.documentElement.style.setProperty("--ar-cv-top", Math.round(top) + "px");
+    };
+    // Stapnamen als tooltip (op smalle schermen staat enkel het nummer).
+    $$(".archer-stepbar .archer-step").forEach((st) => {
+      const l = $(".archer-step-label", st);
+      if (l && !st.title) st.title = l.textContent.trim();
+    });
+    layoutCv();
+    requestAnimationFrame(() => { layoutCv(); window.scrollTo(0, 0); });
+    window.addEventListener("resize", layoutCv);
+    const origOpenCv = wf.openExpandedPage;
+    wf.openExpandedPage = function () {
+      const r = origOpenCv.apply(this, arguments);
+      setTimeout(layoutCv, 0);
+      return r;
+    };
+    const origCloseCv = wf.closeExpandedPage;
+    wf.closeExpandedPage = function () {
+      const r = origCloseCv.apply(this, arguments);
+      setTimeout(layoutCv, 0);
+      return r;
+    };
+
+    /* ── Sectiebibliotheek: links toevoegen per type, rechts een ander voorbeeld kiezen (zoals Relume) ── */
+
+    libApi = (() => {
+      const shell = wb.parentNode; // .archer-cv-shell
+      const side = document.createElement("aside");
+      side.className = "archer-smap-panel archer-cv-insert";
+      side.hidden = true;
+      side.setAttribute("aria-label", "Sectie toevoegen");
+      shell.insertBefore(side, wb);
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "archer-cv-addbtn";
+      openBtn.innerHTML = '<span aria-hidden="true">+</span> Sectie toevoegen';
+      wb.appendChild(openBtn);
+      openBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+
+      let types = null; // [{ type, label, desc, count, sample }]
+      const variants = {}; // type => [{ id, title, thumb }]
+      const loading = {};
+      let view = { type: "", q: "" }; // "" = categorieën
+      let target = { slug: "", after: "" };
+      let busy = false;
+
+      const post = (action, data) => wf.post(action, Object.assign({ project_id: wf.state.projectId }, data || {}));
+      const labelOf = (type) => (types || []).find((t) => t.type === type)?.label || WF_TYPES[type] || type;
+
+      async function loadTypes() {
+        if (types) return types;
+        const out = await post("aisb_archer_section_types");
+        if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Laden mislukt");
+        types = out.data.types || [];
+        return types;
+      }
+      function loadVariants(type) {
+        if (variants[type]) return Promise.resolve(variants[type]);
+        if (!loading[type]) {
+          loading[type] = post("aisb_archer_section_variants", { type }).then((out) => {
+            if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Laden mislukt");
+            variants[type] = out.data.variants || [];
+            return variants[type];
+          }).finally(() => delete loading[type]);
+        }
+        return loading[type];
+      }
+
+      // Voorbeeldbeeld: de schermafbeelding, of het voorbeeld zelf (iframe) zolang die er niet is.
+      const io = "IntersectionObserver" in window ? new IntersectionObserver((list) => {
+        list.forEach((en) => {
+          if (!en.isIntersecting) return;
+          const box = en.target;
+          io.unobserve(box);
+          if (box.querySelector("iframe")) return;
+          const f = document.createElement("iframe");
+          f.src = PREVIEW + box.getAttribute("data-lib-frame");
+          f.loading = "lazy";
+          f.tabIndex = -1;
+          f.setAttribute("aria-hidden", "true");
+          f.scrolling = "no";
+          box.appendChild(f);
+          const fit = () => box.style.setProperty("--lib-scale", ((box.offsetWidth || 240) / 1200).toFixed(4));
+          fit();
+          f.addEventListener("load", fit);
+        });
+      }, { rootMargin: "200px" }) : null;
+      const thumbHtml = (c, alt) =>
+        c && c.thumb
+          ? `<img class="archer-lib-img" src="${esc(c.thumb)}" alt="${esc(alt || "")}" loading="lazy" decoding="async">`
+          : c ? `<span class="archer-lib-frame" data-lib-frame="${Number(c.id)}" aria-hidden="true"></span>` : "";
+      const wireFrames = (root) => $$("[data-lib-frame]", root).forEach((b) => (io ? io.observe(b) : null));
+
+      /* Rechterpaneel: groep "Voorbeeld" */
+      const typeOf = (s) => String((s && s.type) || "").toLowerCase();
+      function variantsGroup(s) {
+        if (!s || !s.bricks_template_id) return "";
+        const locked = !!s.locked;
+        return (
+          `<div class="archer-ed-group archer-lib-group"><div class="archer-ed-title">Voorbeeld</div>` +
+          `<div class="archer-lib-top"><span>${esc(labelOf(typeOf(s)))}</span>` +
+          `<button type="button" class="archer-btn archer-btn-outline archer-lib-shuffle" data-lib-shuffle${locked ? " disabled" : ""}>Ander voorbeeld</button></div>` +
+          (locked ? `<p class="archer-muted archer-lib-note">Deze sectie staat vast. Maak ze los om een ander voorbeeld te kiezen.</p>` : "") +
+          `<div class="archer-lib-grid is-compact" data-lib-variants${locked ? ' aria-disabled="true"' : ""}><p class="archer-muted">Voorbeelden laden…</p></div></div>`
+        );
+      }
+      function fillVariants(panel, s) {
+        const box = $("[data-lib-variants]", panel);
+        if (!box || !s) return;
+        const type = typeOf(s);
+        const draw = (list) => {
+          if (!box.isConnected) return;
+          const cur = Number(s.bricks_template_id);
+          const all = list.length;
+          const open = box.getAttribute("data-lib-all") === "1";
+          // Het huidige voorbeeld eerst, dan de rest.
+          const sorted = list.slice().sort((a, b) => (a.id === cur ? -1 : b.id === cur ? 1 : 0));
+          const shown = open ? sorted : sorted.slice(0, 8);
+          box.innerHTML =
+            shown.map((c, i) =>
+              `<button type="button" class="archer-lib-card${c.id === cur ? " is-current" : ""}" data-lib-pick="${c.id}"${s.locked ? " disabled" : ""} aria-label="Voorbeeld ${i + 1}${c.id === cur ? " (huidig)" : ""}">` +
+              thumbHtml(c) + (c.id === cur ? '<span class="archer-lib-badge">Huidig</span>' : "") + "</button>").join("") +
+            (all > shown.length ? `<button type="button" class="archer-link-btn archer-lib-more" data-lib-more>Alle ${all} voorbeelden tonen</button>` : "");
+          wireFrames(box);
+        };
+        if (variants[type]) return draw(variants[type]);
+        loadTypes().catch(() => {});
+        loadVariants(type).then(draw).catch((e) => { if (box.isConnected) box.innerHTML = `<p class="archer-danger-text">${esc(e.message)}</p>`; });
+      }
+
+      /** Model van de server overnemen (zoals na "Ander voorbeeld"). */
+      function adopt(slug, w) {
+        normalizeOrder(w);
+        wf.state.pageModels[slug] = w;
+        if (wf.state.pageSlug === slug) wf.state.model = w;
+        lastSaved[slug] = JSON.stringify(w);
+      }
+
+      async function pick(slug, uuid, id) {
+        if (busy) return;
+        busy = true;
+        const panel = $(".archer-cv-panel");
+        const box = panel && $("[data-lib-variants]", panel);
+        if (box) box.classList.add("is-busy");
+        const st = panel && $("[data-ed-status]", panel);
+        if (st) st.textContent = "Voorbeeld wisselen. AI schrijft de teksten…";
+        await flushWf();
+        try {
+          const out = await post("aisb_archer_section_pick", { sitemap_version_id: wf.state.sitemapId, page_slug: slug, uuid, template_id: id });
+          if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Wisselen mislukt");
+          adopt(slug, out.data.wireframe);
+          const el = $(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(uuid)}"]`, inner);
+          if (el) el.remove(); // het voorbeeld opnieuw laden
+          redrawPage(slug);
+          wf.setStatus("Ander voorbeeld gekozen.", "ok");
+        } catch (e) {
+          if (st) { st.textContent = e.message || "Wisselen mislukt"; st.classList.add("archer-danger-text"); }
+        }
+        busy = false;
+        if (box) box.classList.remove("is-busy");
+      }
+
+      function onPanelClick(e, slug, uuid) {
+        let b;
+        if ((b = e.target.closest("[data-lib-shuffle]"))) {
+          if (b.disabled) return true;
+          const t = $(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(uuid)}"] [data-archer-cv-act="shuffle"]`, inner);
+          if (t && !t.disabled) t.click();
+          return true;
+        }
+        if ((b = e.target.closest("[data-lib-more]"))) {
+          const box = b.closest("[data-lib-variants]");
+          box.setAttribute("data-lib-all", "1");
+          const s = (modelOf(slug)?.sections || []).find((x) => x.uuid === uuid);
+          fillVariants(box.parentNode, s);
+          return true;
+        }
+        if ((b = e.target.closest("[data-lib-pick]"))) {
+          const s = (modelOf(slug)?.sections || []).find((x) => x.uuid === uuid);
+          const id = Number(b.getAttribute("data-lib-pick"));
+          if (!b.disabled && s && id !== Number(s.bricks_template_id)) pick(slug, uuid, id);
+          return true;
+        }
+        return false;
+      }
+
+      /* Linkerpaneel: sectie toevoegen */
+      const pagesWithModel = () => wf.state.pages.filter((p) => (modelOf(p.slug)?.sections || []).length);
+      function targetText() {
+        const m = modelOf(target.slug);
+        const s = target.after && (m?.sections || []).find((x) => x.uuid === target.after);
+        return s && !isHead(s) ? `na “${nameOf(s) || typeLabelOf(s)}”` : s && isHead(s) ? "bovenaan, onder de header" : "onderaan, boven de footer";
+      }
+      function render() {
+        const pages = pagesWithModel();
+        if (!target.slug || !pages.some((p) => p.slug === target.slug)) target = { slug: pages[0] ? pages[0].slug : "", after: "" };
+        let html =
+          `<div class="archer-smap-panel-head"><div><span class="archer-smap-panel-eyebrow">Toevoegen</span><h3>${view.type ? esc(labelOf(view.type)) : "Sectie toevoegen"}</h3></div>` +
+          `<button type="button" class="archer-sec-tool" data-lib-close aria-label="Sluiten">✕</button></div>`;
+        if (!pages.length) {
+          side.innerHTML = html + `<p class="archer-muted">Maak eerst de wireframes, daarna kan je secties toevoegen.</p>`;
+          return;
+        }
+        html +=
+          `<label class="aisb-label" for="archer-lib-page">Op pagina</label>` +
+          `<select id="archer-lib-page" data-lib-page>${pages.map((p) => `<option value="${esc(p.slug)}"${p.slug === target.slug ? " selected" : ""}>${esc(p.title || p.slug)}</option>`).join("")}</select>` +
+          `<p class="archer-lib-where">Komt ${esc(targetText())}.${target.after ? ' <button type="button" class="archer-link-btn" data-lib-bottom>Onderaan</button>' : ""}</p>`;
+        if (!view.type) {
+          html += `<input type="search" class="archer-lib-search" data-lib-search placeholder="Zoek een type sectie" value="${esc(view.q)}" aria-label="Zoek een type sectie">`;
+          if (!types) {
+            html += `<p class="archer-muted" data-lib-wait>Types laden…</p>`;
+          } else {
+            const q = view.q.trim().toLowerCase();
+            const list = types.filter((t) => !q || (t.label + " " + t.desc + " " + t.type).toLowerCase().includes(q));
+            html += `<div class="archer-lib-cats">` + (list.length
+              ? list.map((t) =>
+                `<button type="button" class="archer-lib-cat" data-lib-type="${esc(t.type)}">` +
+                `<span class="archer-lib-cat-img">${thumbHtml(t.sample, "")}</span>` +
+                `<span class="archer-lib-cat-text"><strong>${esc(t.label)}</strong><span>${esc(t.desc)}</span><em>${t.count} voorbeelden</em></span></button>`).join("")
+              : `<p class="archer-muted">Geen type gevonden.</p>`) + `</div>`;
+          }
+        } else {
+          const t = (types || []).find((x) => x.type === view.type);
+          html +=
+            `<button type="button" class="archer-link-btn archer-lib-back" data-lib-back>← Alle types</button>` +
+            (t && t.desc ? `<p class="archer-lib-desc">${esc(t.desc)}</p>` : "") +
+            `<button type="button" class="archer-btn archer-btn-primary archer-lib-random" data-lib-add="0"${busy ? " disabled" : ""}>Laat AI een voorbeeld kiezen</button>` +
+            `<p class="archer-lib-or">of kies zelf:</p>` +
+            `<div class="archer-lib-grid" data-lib-addgrid>${variants[view.type] ? "" : '<p class="archer-muted">Voorbeelden laden…</p>'}</div>`;
+        }
+        html += `<p class="archer-ed-status" data-lib-status aria-live="polite"></p>`;
+        const scroll = side.scrollTop;
+        side.innerHTML = html;
+        side.scrollTop = scroll;
+        wireFrames(side);
+        if (!types) loadTypes().then(() => !side.hidden && render()).catch((e) => setStatus(e.message, true));
+        if (view.type) {
+          const grid = $("[data-lib-addgrid]", side);
+          loadVariants(view.type).then((list) => {
+            if (!grid.isConnected) return;
+            grid.innerHTML = list.map((c, i) =>
+              `<button type="button" class="archer-lib-card" data-lib-add="${c.id}"${busy ? " disabled" : ""} aria-label="${esc(labelOf(view.type))}, voorbeeld ${i + 1}">${thumbHtml(c)}</button>`).join("");
+            wireFrames(grid);
+          }).catch((e) => setStatus(e.message, true));
+        }
+      }
+      const setStatus = (t, err) => {
+        const el = $("[data-lib-status]", side);
+        if (el) { el.textContent = t || ""; el.classList.toggle("archer-danger-text", !!err); }
+      };
+
+      function show(slug, after) {
+        if (slug) target = { slug, after: after || "" };
+        else {
+          const cur = editorApi && editorApi.current();
+          if (cur) target = { slug: cur.slug, after: cur.uuid };
+        }
+        side.hidden = false;
+        shell.classList.add("has-insert");
+        render();
+      }
+      function hide() {
+        side.hidden = true;
+        shell.classList.remove("has-insert");
+      }
+
+      async function add(id) {
+        if (busy || !view.type || !target.slug) return;
+        busy = true;
+        render();
+        setStatus("Sectie toevoegen. AI schrijft de teksten…");
+        await flushWf();
+        const slug = target.slug;
+        try {
+          const out = await post("aisb_archer_section_add", {
+            sitemap_version_id: wf.state.sitemapId, page_slug: slug, type: view.type, template_id: id || 0, after_uuid: target.after || "",
+          });
+          if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Toevoegen mislukt");
+          adopt(slug, out.data.wireframe);
+          redrawPage(slug);
+          busy = false;
+          target = { slug, after: out.data.uuid };
+          view = { type: "", q: "" };
+          render();
+          setStatus("Sectie toegevoegd.");
+          // De nieuwe sectie tonen en meteen openen in het paneel rechts.
+          const el = $(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(out.data.uuid)}"]`, inner);
+          if (el) {
+            el.classList.add("is-new");
+            setTimeout(() => el.classList.remove("is-new"), 2500);
+          }
+          if (editorApi) editorApi.open(slug, out.data.uuid);
+          wf.setStatus("Sectie toegevoegd.", "ok");
+        } catch (e) {
+          busy = false;
+          render();
+          setStatus(e.message || "Toevoegen mislukt", true);
+        }
+      }
+
+      openBtn.addEventListener("click", () => (side.hidden ? show() : hide()));
+      side.addEventListener("mousedown", (e) => e.stopPropagation());
+      side.addEventListener("wheel", (e) => e.stopPropagation());
+      side.addEventListener("input", (e) => {
+        if (!e.target.matches("[data-lib-search]")) return;
+        view.q = e.target.value;
+        const pos = e.target.selectionStart;
+        render();
+        const f = $("[data-lib-search]", side);
+        if (f) { f.focus(); f.setSelectionRange(pos, pos); }
+      });
+      side.addEventListener("change", (e) => {
+        if (!e.target.matches("[data-lib-page]")) return;
+        target = { slug: e.target.value, after: "" };
+        render();
+      });
+      side.addEventListener("click", (e) => {
+        let b;
+        if (e.target.closest("[data-lib-close]")) return hide();
+        if (e.target.closest("[data-lib-back]")) { view.type = ""; return render(); }
+        if (e.target.closest("[data-lib-bottom]")) { target.after = ""; return render(); }
+        if ((b = e.target.closest("[data-lib-type]"))) { view.type = b.getAttribute("data-lib-type"); side.scrollTop = 0; return render(); }
+        if ((b = e.target.closest("[data-lib-add]")) && !b.disabled) return add(Number(b.getAttribute("data-lib-add")));
+      });
+      // Een andere sectie geselecteerd: nieuwe secties komen daarna.
+      inner.addEventListener("click", (e) => {
+        if (side.hidden || e.target.closest("button")) return;
+        const sec = e.target.closest(".archer-cv-sec");
+        const col = sec && sec.closest(".archer-cv-col");
+        if (!sec || !col || busy) return;
+        target = { slug: col.getAttribute("data-archer-cv-page"), after: sec.getAttribute("data-archer-cv-uuid") };
+        render();
+      });
+
+      return { variantsGroup, fillVariants, onPanelClick, openFor: (slug, uuid) => show(slug, uuid), hide };
+    })();
     const origOpenExpanded = wf.openExpandedPage;
     wf.openExpandedPage = function () {
       editor.close();
@@ -2151,11 +3001,21 @@
           need: idx.length, exclude: JSON.stringify(exclude.slice(-150)),
         });
         if (!out || !out.success) throw new Error((out && out.data && out.data.message) || "Geen stockfoto's gevonden.");
-        // Foto's die intussen al op een andere pagina staan, overslaan (de pagina's lopen tegelijk).
-        const taken = new Set(imgs.filter((x) => !isEmpty(x)).map((x) => x.full));
-        const found = (out.data.images || []).filter((x) => x && x.full && !taken.has(x.full));
+        // Foto's die intussen al op een andere pagina staan, overslaan (de pagina's lopen tegelijk). Vergelijken
+        // op de foto zelf: Unsplash geeft dezelfde foto met andere parameters terug.
+        const pkey = (u) => { const m = String(u || "").match(/photo-[0-9a-f]+-[0-9a-f]+|photos\/\d+/i); return m ? m[0].toLowerCase() : String(u || ""); };
+        const taken = new Set(imgs.filter((x, j) => !isEmpty(x) && !idx.includes(j)).map((x) => pkey(x.full)));
+        const found = (out.data.images || []).filter((x) => x && x.full && !taken.has(pkey(x.full)));
         let n = 0;
-        idx.forEach((i, k) => { if (found[k]) { imgs[i] = found[k]; n++; } });
+        let f = 0;
+        idx.forEach((i) => {
+          while (found[f] && taken.has(pkey(found[f].full))) f++;
+          const pick = found[f++];
+          if (!pick) return;
+          taken.add(pkey(pick.full));
+          imgs[i] = pick;
+          n++;
+        });
         return n;
       };
       const done = () => {
@@ -2201,6 +3061,18 @@
             }
           };
           await Promise.all([worker(), worker(), worker()]);
+          // Pagina's lopen tegelijk en dubbele foto's vallen af: dan blijven er soms vakken leeg (Garage De
+          // Kaproen: 3 van 67). Die pagina's nog eens, na elkaar, zodat ze de foto's van de rest al kennen.
+          for (let round = 0; round < 2; round++) {
+            const imgs = padImages();
+            const empty = list.filter((pg) => imgs.slice(pg.start, pg.start + pg.count).some((x) => isEmpty(x)));
+            if (!empty.length) break;
+            status.textContent = `Lege fotovakken aanvullen op ${empty.length} pagina${empty.length === 1 ? "" : "'s"}…`;
+            for (const pg of empty) {
+              try { await fill(pg, false); } catch (e) { console.warn("[Archer] stockfoto's", pg.slug, e); }
+            }
+            if (SG.applyImagesToAllIframes) SG.applyImagesToAllIframes();
+          }
           done();
         } finally { busy(false); }
       });
@@ -2478,6 +3350,32 @@
             '<span class="archer-muted">De stijl blijft; de knoppen en accenten krijgen de kleur van het logo.</span>'
           : "";
       }
+      // Nieuw logo in de header: de merkkleur komt daaruit. Staan de kleuren nog zoals de stijl ze meebracht,
+      // dan meteen toepassen (dat verwacht wie een logo oplaadt); anders de knop tonen.
+      let lastLogo = (SG.guide && !Array.isArray(SG.guide) && SG.guide.logoUrl) || "";
+      setInterval(() => {
+        const g = SG.guide && !Array.isArray(SG.guide) ? SG.guide : null;
+        const now = (g && g.logoUrl) || "";
+        if (!g || now === lastLogo) return;
+        lastLogo = now;
+        if (!now || (g.brand && g.brand.source !== "logo")) return renderBrand();
+        g.brand = null;
+        UI.ensureBrand().then(() => {
+          if (g.brand) g.brand.source = "logo";
+          const st = styleById(styleNow());
+          const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : g.colours) || [];
+          const prim = ((cols.find((c) => c && c.name === "Primary") || {}).hex || "").toLowerCase();
+          const def = st && st.guide ? ((st.guide.colours || []).find((c) => c.name === "Primary") || {}).hex || "" : "";
+          if (g.brand && g.brand.primary && st && prim === def.toLowerCase()) {
+            setColours(UI.brandColours(st.guide.colours));
+            SG.applyOverridesToAllIframes();
+            renderStyles();
+            $("[data-style-status]", sbox).textContent = "Kleuren uit je logo toegepast op stijl " + st.name + ".";
+            SG.saveDraft && SG.saveDraft();
+          }
+          renderBrand();
+        });
+      }, 1000);
       sbox.addEventListener("click", (e) => {
         if (!e.target.closest("[data-style-brand-apply]")) return;
         const cols = (SG.extractedColours && SG.extractedColours.length ? SG.extractedColours : (SG.guide && SG.guide.colours) || []);
@@ -2797,7 +3695,7 @@
           const t = toHsl(c.hex);
           if (t.s < 0.06) return { name: c.name, hex: c.hex };
           // Tekstkleur bijna neutraal (anders bruine of groene tekst), gronden zacht getint.
-          return { name: c.name, hex: fromHsl({ h: bh, s: Math.min(t.s, c.name === "Dark" ? 0.12 : 0.35), l: t.l }) };
+          return { name: c.name, hex: fromHsl({ h: bh, s: Math.min(t.s, c.name === "Dark" ? 0.12 : 0.22), l: t.l }) };
         });
       };
       /** Nog geen merkkleur, wel een logo in de header: de merkkleur daaruit halen. */
@@ -2809,7 +3707,7 @@
         img.crossOrigin = "anonymous";
         const done = () => { clearTimeout(t); res(); };
         const t = setTimeout(done, 3000);
-        img.onload = () => { try { new ColorThief().getPalette(img, 6); } catch (e) {} done(); };
+        img.onload = () => { try { new ColorThief().getPalette(img, 6); if (g.brand) g.brand.source = "logo"; } catch (e) {} done(); };
         img.onerror = done;
         img.src = g.logoUrl;
       });
@@ -3771,7 +4669,7 @@
       } catch (err) {
         clearInterval(timer);
         console.error("[Archer] publiceren", err);
-        state.error = (err && err.message) || "Er ging iets mis.";
+        state.error = UI.nlError(err && err.message);
         render(state);
         pub.textContent = "Publiceren";
       } finally {
@@ -3841,11 +4739,115 @@
 
   /* ── Start ──────────────────────────────────────────────── */
 
+  /**
+   * Werkruimte zoals Relume voor sitemap, stijl, foto's en publiceren (de wireframes hebben hun eigen):
+   * geen paginatitel en voettekst, een compacte balk met titel, acties en terug/verder,
+   * en daaronder een werkvlak dat het scherm vult.
+   */
+  function initWorkspace() {
+    const st = Number(CFG.step);
+    const key = st === 1 ? "sitemap" : st === 3 ? (CFG.view === "photos" ? "photos" : "style") : st === 4 ? "publish" : "";
+    if (!key) return;
+    const visible = (el) => !!(el && el.getClientRects().length);
+    const footer = $(`[data-archer-step-footer="${key}"]`);
+    const panel = (footer && footer.closest(".aisb-step-panel")) || $$(".archer-main > .aisb-step-panel").find(visible);
+    if (!panel) return;
+    const sel = { sitemap: ".archer-smap-viewport", style: ".aisb-sg-split", photos: ".aisb-sg-split", publish: ".aisb-design-wrap" }[key];
+    let area = $(sel, panel);
+    // Het sitemapcanvas wordt pas na deze stap opgebouwd (archer-sitemap.js): even wachten.
+    if (!area || !visible(area)) {
+      const tries = (initWorkspace.tries = (initWorkspace.tries || 0) + 1);
+      if (tries < 40) setTimeout(initWorkspace, 150);
+      return;
+    }
+    if (initWorkspace.done) return;
+    initWorkspace.done = true;
+    const head = $(".archer-page-head", panel);
+
+    const bar = document.createElement("div");
+    bar.className = "archer-ws-bar";
+    const h1 = head && $(".archer-h1", head);
+    bar.innerHTML =
+      `<div class="archer-ws-bar-title"><strong>${esc(h1 ? h1.textContent.trim() : "")}</strong></div>` +
+      `<div class="archer-ws-bar-tools"></div><div class="archer-ws-bar-nav"></div>`;
+    const tools = $(".archer-ws-bar-tools", bar);
+    const nav = $(".archer-ws-bar-nav", bar);
+    const aside = head && $("[data-archer-head-aside]", head);
+    if (aside) $(".archer-ws-bar-title", bar).appendChild(aside);
+    if (footer) {
+      const back = $(".archer-link-back", footer);
+      if (back) {
+        const b = back.cloneNode(true);
+        b.className = "archer-btn archer-btn-ghost archer-ws-back";
+        b.textContent = "← Terug";
+        b.title = back.textContent.replace(/^←\s*/, "").trim();
+        nav.appendChild(b);
+      }
+      const next = $("[data-archer-next]", footer);
+      if (next) {
+        const n = next.cloneNode(true);
+        n.classList.add("archer-ws-next");
+        nav.appendChild(n);
+      }
+    }
+
+    if (key === "sitemap") {
+      const card = area.closest(".archer-sitemap-card") || panel;
+      const acts = $(".archer-sitemap-card > .archer-toolbar .archer-toolbar-actions", panel);
+      if (acts) tools.appendChild(acts);
+      card.insertBefore(bar, $(".archer-toolbar", card) || card.firstChild);
+    } else if (key === "publish") {
+      const acts = $(".aisb-design-toolbar-actions", area);
+      if (acts) tools.appendChild(acts);
+      const pubCard = area.closest(".archer-publish-card") || area;
+      const shell = document.createElement("div");
+      shell.className = "archer-ws-pub";
+      pubCard.parentNode.insertBefore(shell, pubCard);
+      const side = document.createElement("aside");
+      side.className = "archer-ws-side";
+      side.setAttribute("aria-label", "Overzicht");
+      side.innerHTML = '<span class="archer-smap-panel-eyebrow">Overzicht</span>';
+      [$(".archer-summary-grid", panel), $(".archer-checks", panel)].forEach((n) => n && side.appendChild(n));
+      shell.appendChild(side);
+      shell.appendChild(pubCard);
+      // Het bewerkpaneel van de volledige preview rechts in de werkruimte, zoals bij de wireframes.
+      const D = window.AISB_Design;
+      if (D && D.initEditorPanel && !document.getElementById("aisb-editor-panel")) D.initEditorPanel();
+      const ep = document.getElementById("aisb-editor-panel");
+      if (ep) {
+        shell.appendChild(ep);
+        const sync = () => shell.classList.toggle("has-panel", ep.classList.contains("is-open"));
+        new MutationObserver(sync).observe(ep, { attributes: true, attributeFilter: ["class"] });
+        sync();
+      }
+      shell.parentNode.insertBefore(bar, shell);
+      area = shell;
+    } else {
+      const card = area.closest(".archer-sg-card") || area;
+      card.parentNode.insertBefore(bar, card);
+    }
+
+    const layout = () => {
+      document.body.classList.add("archer-ws-mode", "archer-ws-" + key);
+      const top = area.getBoundingClientRect().top + window.scrollY;
+      document.documentElement.style.setProperty("--ar-ws-top", Math.round(top) + "px");
+    };
+    $$(".archer-stepbar .archer-step").forEach((st) => {
+      const l = $(".archer-step-label", st);
+      if (l && !st.title) st.title = l.textContent.trim();
+    });
+    layout();
+    requestAnimationFrame(() => { layout(); window.scrollTo(0, 0); window.dispatchEvent(new Event("resize")); });
+    window.addEventListener("resize", () => requestAnimationFrame(layout));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     try { initStart(); } catch (e) { console.error("[Archer] start", e); }
     try { initWireframes(); } catch (e) { console.error("[Archer] wireframes", e); }
     try { initStyleGuide(); } catch (e) { console.error("[Archer] stijl", e); }
     try { initPublish(); } catch (e) { console.error("[Archer] publiceren", e); }
+    try { initWorkspace(); } catch (e) { console.error("[Archer] werkruimte", e); }
 
     // De volledige preview (stap Publiceren) verving elk menu door een platte lijst van alle pagina's.
     // De menu's komen al juist van de server (hoofdmenu met submenu's, footergroepen, juridisch).

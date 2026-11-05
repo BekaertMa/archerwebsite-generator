@@ -111,14 +111,22 @@ class AISB_Archer_Stock {
     return ['images' => $out, 'total_pages' => max(1, (int) ceil($total / $per))];
   }
 
+  /**
+   * Sleutel van een foto: Unsplash geeft dezelfde foto met andere parameters terug (ixid, crop),
+   * dus vergelijken op "photo-…" of Pexels "photos/123", niet op het hele adres.
+   */
+  public static function pkey(string $url): string {
+    return preg_match('#photo-[0-9a-f]+-[0-9a-f]+|photos/\d+#i', $url, $m) ? strtolower($m[0]) : $url;
+  }
+
   /** Om en om uit beide lijsten, zonder dubbele foto's. */
   private static function mix(array $a, array $b, int $max): array {
     $out = [];
     $seen = [];
     for ($i = 0; count($out) < $max && ($i < count($a) || $i < count($b)); $i++) {
       foreach ([$a[$i] ?? null, $b[$i] ?? null] as $img) {
-        if (!$img || empty($img['full']) || isset($seen[$img['full']])) continue;
-        $seen[$img['full']] = 1;
+        if (!$img || empty($img['full']) || isset($seen[self::pkey($img['full'])])) continue;
+        $seen[self::pkey($img['full'])] = 1;
         $out[] = $img;
         if (count($out) >= $max) break;
       }
@@ -182,7 +190,7 @@ class AISB_Archer_Stock {
     $sections = sanitize_text_field(wp_unslash($_POST['sections'] ?? ''));
     $need = max(1, min(40, (int) ($_POST['need'] ?? 1)));
     $exclude = json_decode((string) wp_unslash($_POST['exclude'] ?? '[]'), true);
-    $skip = array_flip(array_filter(array_map('strval', is_array($exclude) ? $exclude : [])));
+    $skip = array_flip(array_map([self::class, 'pkey'], array_filter(array_map('strval', is_array($exclude) ? $exclude : []))));
     $kw = self::page_keyword($pid, $slug, $title, $sections);
     $want = $need + count($skip) + 4;
     $u = [];
@@ -191,7 +199,7 @@ class AISB_Archer_Stock {
     if (!is_wp_error($ur)) $u = $ur['images'];
     $xr = self::pexels($kw, min(80, $want), 1);
     if (!is_wp_error($xr)) $x = $xr['images'];
-    $pool = array_values(array_filter(self::mix($u, $x, $want + 10), fn($img) => !isset($skip[$img['full']])));
+    $pool = array_values(array_filter(self::mix($u, $x, $want + 10), fn($img) => !isset($skip[self::pkey($img['full'])])));
     // Te weinig voor dit zoekwoord: aanvullen met het algemene zoekwoord van het project.
     if (count($pool) < $need) {
       $kw2 = self::keyword($pid);
@@ -200,8 +208,8 @@ class AISB_Archer_Stock {
       $more = self::mix(is_wp_error($u2) ? [] : $u2['images'], is_wp_error($x2) ? [] : $x2['images'], 60);
       foreach ($more as $img) {
         if (count($pool) >= $need) break;
-        if (isset($skip[$img['full']])) continue;
-        $skip[$img['full']] = 1;
+        if (isset($skip[self::pkey($img['full'])])) continue;
+        $skip[self::pkey($img['full'])] = 1;
         $pool[] = $img;
       }
     }
