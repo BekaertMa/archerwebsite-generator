@@ -115,6 +115,25 @@ class AISB_Archer_Site {
     return $ix;
   }
 
+  /** Het sociale platform van een merkicoon onder een knoop ("instagram"), of ''. */
+  private static function subtree_platform(array $nodes, array $ix, string $id): string {
+    $stack = [$id];
+    $seen = 0;
+    while ($stack && $seen < 30) {
+      $cur = array_shift($stack);
+      $seen++;
+      if (!isset($ix[$cur])) continue;
+      $n = $nodes[$ix[$cur]];
+      $icon = (string) ($n['settings']['icon']['icon'] ?? '');
+      if ($icon !== '') {
+        if (strpos($icon, 'x-twitter') !== false || strpos($icon, 'fa-twitter') !== false) return 'x';
+        foreach (['linkedin', 'facebook', 'instagram', 'youtube', 'tiktok', 'pinterest'] as $k) if (strpos($icon, $k) !== false) return $k;
+      }
+      foreach ((array) ($n['children'] ?? []) as $c) $stack[] = (string) $c;
+    }
+    return '';
+  }
+
   /** Alle tekst onder een knoop (zonder de knoop zelf als die een icoon is). */
   private static function subtree_text(array $nodes, array $ix, string $id, int $max = 240): string {
     $out = [];
@@ -481,7 +500,11 @@ class AISB_Archer_Site {
       if ($convert === '' && preg_match('/offerte|afspraak|reserv|boek|aanvra|devis|rendez|booking|quote/i', $slug . ' ' . $label)) $convert = $slug;
     }
     $cta = (string) ($chrome['menu']['cta'] ?? '');
+    $langs = json_decode((string) get_post_meta($pid, 'aisb_project_languages', true), true);
+    $first = strtolower((string) (is_array($langs) && $langs ? reset($langs) : 'Dutch'));
+    $lang = preg_match('/^(nl|dutch|nederlands)/', $first) ? 'nl' : (preg_match('/^(fr|french|fran)/', $first) ? 'fr' : (preg_match('/^(en|english|engels)/', $first) ? 'en' : ''));
     return [
+      'lang' => $lang,
       'pages' => $pages,
       'contact' => $contact !== '' ? $contact : ($cta !== '' ? $cta : 'contact'),
       'convert' => $convert,
@@ -550,12 +573,20 @@ class AISB_Archer_Site {
     $d = $ctx['data'];
     $ix = self::index($nodes);
     $remove = [];
+    $social_parents = [];
     $is_li = fn($n) => (string) ($n['settings']['tag'] ?? '') === 'li';
     foreach ($nodes as $i => $n) {
       if (!is_array($n)) continue;
       $name = (string) ($n['name'] ?? '');
       $s = is_array($n['settings'] ?? null) ? $n['settings'] : [];
       $id = (string) ($n['id'] ?? '');
+
+      // Formulieren in de taal van de site. Bij het schrijven van de teksten beslist de taal van de sectie; een
+      // sectie met bijna geen tekst bleef dan in het Engels ("Name", "Your Email", "Submit").
+      if ($name === 'form' && in_array($ctx['lang'] ?? '', ['nl', 'fr'], true) && class_exists('AISB_Archer_Generate')) {
+        $nodes[$i]['settings'] = AISB_Archer_Generate::form_labels($s, $ctx['lang']);
+        continue;
+      }
 
       // Contactplaatshouders: echte gegevens, of het lijstitem weg als ze ontbreken.
       if (in_array($name, ['text-basic', 'text', 'heading', 'button', 'text-link'], true) && isset($s['text']) && is_string($s['text'])) {
@@ -606,7 +637,9 @@ class AISB_Archer_Site {
           $nodes[$i]['settings'] = $s;
         } else {
           $li = self::ancestor($nodes, $ix, $id, $is_li, 2);
-          $remove[] = $li !== '' ? $li : $id;
+          $gone = $li !== '' ? $li : $id;
+          $remove[] = $gone;
+          $social_parents[] = (string) ($nodes[$ix[$gone]]['parent'] ?? '');
         }
         continue;
       }
@@ -625,6 +658,21 @@ class AISB_Archer_Site {
 
       // Kaarten en blokken met een lege link: naar de pagina die bij de titel past, anders geen link.
       if (array_key_exists('link', $s) && self::is_dead_link($s['link']) && in_array($name, ['block', 'div', 'container', 'image', 'heading', 'icon'], true)) {
+        // Een blok rond een sociaal icoon ("Instagram" in de footer): het adres van dat platform, of weg.
+        // Zonder dit werd het een link naar een pagina met de naam van die pagina (Garage De Kaproen).
+        $platform = in_array($name, ['block', 'div'], true) ? self::subtree_platform($nodes, $ix, $id) : '';
+        if ($platform !== '') {
+          if (in_array($region, ['header', 'footer'], true) && !empty($d['socials'][$platform])) {
+            $s['link'] = ['type' => 'external', 'url' => $d['socials'][$platform], 'newTab' => true, 'rel' => 'noopener', 'ariaLabel' => ucfirst($platform)];
+            $nodes[$i]['settings'] = $s;
+          } else {
+            $li = self::ancestor($nodes, $ix, $id, $is_li, 2);
+            $gone = $li !== '' ? $li : $id;
+            $remove[] = $gone;
+            $social_parents[] = (string) ($nodes[$ix[$gone]]['parent'] ?? '');
+          }
+          continue;
+        }
         $text = $name === 'heading' ? self::text_of($n) : self::subtree_text($nodes, $ix, $id, 120);
         // Een blok rond een adres, telefoonnummer of e-mailadres (footer, contactkaart): de echte link.
         $plain = self::plain($text);
@@ -644,6 +692,22 @@ class AISB_Archer_Site {
       }
     }
     if ($remove) $nodes = self::remove($nodes, array_unique($remove));
+    // Alle sociale items weg: hun lege lijst ook, en de kolom eromheen als daar enkel nog een titel staat.
+    if (!empty($social_parents)) {
+      $ix = self::index($nodes);
+      $drop = [];
+      foreach (array_unique(array_filter($social_parents)) as $pid) {
+        if (!isset($ix[$pid]) || !empty($nodes[$ix[$pid]]['children'])) continue;
+        $drop[] = $pid;
+        $gp = (string) ($nodes[$ix[$pid]]['parent'] ?? '');
+        if ($gp === '' || !isset($ix[$gp]) || empty($nodes[$ix[$gp]]['parent'])) continue;
+        $rest = array_filter((array) ($nodes[$ix[$gp]]['children'] ?? []), fn($c) => (string) $c !== $pid);
+        $only_titles = true;
+        foreach ($rest as $c) if (!isset($ix[(string) $c]) || !in_array($nodes[$ix[(string) $c]]['name'] ?? '', ['heading', 'text-basic', 'text'], true)) $only_titles = false;
+        if ($only_titles) $drop[] = $gp;
+      }
+      if ($drop) $nodes = self::remove($nodes, $drop);
+    }
     // Een lege lijst sociale media: de titel erboven ("Volg ons") mag ook weg.
     if ($region === 'footer') {
       $ix = self::index($nodes);
@@ -822,36 +886,99 @@ class AISB_Archer_Site {
         }
         $first = false;
       }
-      $page = self::one_h1($page);
+      if (!isset($titles)) $titles = self::seo_by_slug($pid);
+      $slug = sanitize_title((string) ($page['slug'] ?? ''));
+      $page = self::one_h1($page, (string) ($titles[$slug]['title'] ?? ''));
     }
     unset($page);
     return $pages;
   }
 
+  /** Indexen van de elementen in de volgorde waarin ze op de pagina staan (de lijst van Bricks is plat). */
+  private static function tree_order(array $nodes): array {
+    $by = [];
+    foreach ($nodes as $i => $n) if (is_array($n) && isset($n['id'])) $by[(string) $n['id']] = $i;
+    $out = [];
+    $seen = [];
+    $walk = function (string $id) use (&$walk, &$out, &$seen, $nodes, $by) {
+      if (isset($seen[$id]) || !isset($by[$id])) return;
+      $seen[$id] = true;
+      $out[] = $by[$id];
+      foreach ((array) ($nodes[$by[$id]]['children'] ?? []) as $c) $walk((string) $c);
+    };
+    foreach ($nodes as $n) {
+      if (!is_array($n) || !isset($n['id'])) continue;
+      $par = (string) ($n['parent'] ?? '0');
+      if ($par === '0' || $par === '' || !isset($by[$par])) $walk((string) $n['id']);
+    }
+    foreach ($by as $id => $i) if (!isset($seen[$id])) $out[] = $i;
+    return $out;
+  }
+
   /**
    * Precies één H1 per pagina (UI/UX Pro Max, ux-guidelines: één hoofdtitel voor Google en schermlezers).
-   * Geen H1: de eerste titel van de eerste inhoudssectie wordt H1. Meer dan één: de volgende worden H2.
+   * De H1 hoort in de hero. Heeft de hero geen titel (sommige sjablonen tonen enkel tekst en foto's), dan komt
+   * de paginatitel er als H1 boven de tekst. Anders: de eerste titel van de pagina wordt H1. Meer dan één H1:
+   * de volgende worden H2. Volgorde zoals op de pagina, niet zoals in de platte lijst van Bricks (Garage De
+   * Kaproen: een titel uit een uitklaplijst verderop werd de H1 van "Over ons").
    */
-  public static function one_h1(array $page): array {
-    $order = [];
+  public static function one_h1(array $page, string $title = ''): array {
+    $keys = static function (array $sec): array {
+      return array_values(array_filter(['bricks_elements_bricks', 'bricks_elements'], fn($k) => !empty($sec[$k]) && is_array($sec[$k])));
+    };
+    $content = [];
     foreach ((array) ($page['sections'] ?? []) as $k => $sec) {
-      if (!is_array($sec) || in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true)) continue;
-      $key = !empty($sec['bricks_elements_bricks']) ? 'bricks_elements_bricks' : (!empty($sec['bricks_elements']) ? 'bricks_elements' : '');
-      if ($key === '') continue;
-      foreach ((array) $sec[$key] as $n) {
-        if (is_array($n) && ($n['name'] ?? '') === 'heading') $order[] = [$k, (string) ($n['id'] ?? ''), strtolower((string) ($n['settings']['tag'] ?? 'h3'))];
+      if (is_array($sec) && !in_array(strtolower((string) ($sec['type'] ?? '')), ['header', 'footer'], true) && $keys($sec)) $content[] = $k;
+    }
+    if (!$content) return $page;
+
+    $headings = function (array $nodes): array {
+      $ids = [];
+      foreach (self::tree_order($nodes) as $i) {
+        $n = $nodes[$i];
+        if (($n['name'] ?? '') === 'heading') $ids[] = [(string) ($n['id'] ?? ''), strtolower((string) ($n['settings']['tag'] ?? 'h3'))];
+      }
+      return $ids;
+    };
+
+    // Hero zonder titel: de paginatitel als H1 erin zetten, voor de eerste tekst.
+    $hero = $content[0];
+    $hero_key = $keys($page['sections'][$hero])[0];
+    $title = trim($title);
+    if ($title !== '' && !$headings($page['sections'][$hero][$hero_key])) {
+      $nid = 'ah1' . substr(md5($title . $hero), 0, 3);
+      foreach ($keys($page['sections'][$hero]) as $key) {
+        $nodes = $page['sections'][$hero][$key];
+        $at = null;
+        foreach (self::tree_order($nodes) as $i) {
+          if (in_array((string) ($nodes[$i]['name'] ?? ''), ['text-basic', 'text', 'rich-text'], true)) { $at = $i; break; }
+        }
+        if ($at === null) continue;
+        $par = (string) ($nodes[$at]['parent'] ?? '0');
+        $nodes[] = ['id' => $nid, 'name' => 'heading', 'parent' => $par, 'children' => [], 'settings' => ['text' => $title, 'tag' => 'h1'], 'label' => 'Paginatitel'];
+        foreach ($nodes as $i => $n) {
+          if (is_array($n) && (string) ($n['id'] ?? '') === $par) {
+            $ch = array_values(array_map('strval', (array) ($n['children'] ?? [])));
+            $pos = array_search((string) $nodes[$at]['id'], $ch, true);
+            array_splice($ch, $pos === false ? 0 : $pos, 0, [$nid]);
+            $nodes[$i]['children'] = $ch;
+          }
+        }
+        $page['sections'][$hero][$key] = $nodes;
       }
     }
+
+    $order = [];
+    foreach ($content as $k) foreach ($headings($page['sections'][$k][$keys($page['sections'][$k])[0]]) as $h) $order[] = $h;
     if (!$order) return $page;
     $set = [];
-    $h1 = array_values(array_filter($order, fn($o) => $o[2] === 'h1'));
-    if (!$h1) $set[$order[0][1]] = 'h1';
-    else foreach (array_slice($h1, 1) as $o) $set[$o[1]] = 'h2';
+    $h1 = array_values(array_filter($order, fn($o) => $o[1] === 'h1'));
+    if (!$h1) $set[$order[0][0]] = 'h1';
+    else foreach (array_slice($h1, 1) as $o) $set[$o[0]] = 'h2';
     if (!$set) return $page;
-    foreach ($page['sections'] as $k => $sec) {
-      foreach (['bricks_elements_bricks', 'bricks_elements'] as $key) {
-        if (empty($sec[$key]) || !is_array($sec[$key])) continue;
-        foreach ($sec[$key] as $i => $n) {
+    foreach ($content as $k) {
+      foreach ($keys($page['sections'][$k]) as $key) {
+        foreach ($page['sections'][$k][$key] as $i => $n) {
           $id = is_array($n) ? (string) ($n['id'] ?? '') : '';
           if ($id !== '' && isset($set[$id]) && ($n['name'] ?? '') === 'heading') $page['sections'][$k][$key][$i]['settings']['tag'] = $set[$id];
         }
