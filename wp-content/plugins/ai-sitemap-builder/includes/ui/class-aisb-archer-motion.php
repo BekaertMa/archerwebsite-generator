@@ -85,11 +85,11 @@ class AISB_Archer_Motion {
 (function () {
   if (window.__archerMotion) return;
   window.__archerMotion = 1;
-  // Cookiemelding in de taal van de site: de knop "Cookie settings" van archer-cookie-consent heeft een vaste
-  // Engelse tekst en de melding volgt de taal van de browser. Hier volgen ze de taal van de pagina.
+  // Cookiemelding in de taal van de site. archer-cookie-consent 1.1 doet dit zelf; sites met 1.0 hebben een vaste
+  // Engelse knop en een melding in de taal van de browser. Zelfde teksten als de plugin, zodat niets verspringt.
   (function () {
     var lang = (document.documentElement.getAttribute("lang") || "").slice(0, 2).toLowerCase();
-    var labels = { nl: "Cookie-instellingen", fr: "Paramètres des cookies", de: "Cookie-Einstellungen", en: "Cookie settings" };
+    var labels = { nl: "Cookie-instellingen", fr: "Paramètres cookies", de: "Cookie-Einstellungen", en: "Cookie settings" };
     // Vaste Engelse Bricks-teksten voor schermlezers (overslaglink, "opent in nieuw tabblad", mobiel menu).
     var bricks = {
       nl: { skip: "Naar de inhoud", tab: "Opent in een nieuw tabblad", open: "Menu openen", close: "Menu sluiten" },
