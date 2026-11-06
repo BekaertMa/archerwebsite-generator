@@ -58,6 +58,7 @@ class AISB_Wireframes_AI {
     // De sitemap heeft al beslist WAT elke sectie zegt (purpose + key_content). Gaf je dat niet mee, dan koos
     // de copywriter zelf onderwerpen uit de hele brief en belandde bv. Odoo in een sectie van de Shopify-pagina.
     $section_ctx = [];
+    $section_ctx_order = [];
     $section_hints = [];
     foreach ((array) ($page_info['sections'] ?? []) as $s) {
         if (!is_array($s)) continue;
@@ -65,7 +66,11 @@ class AISB_Wireframes_AI {
         $purpose = trim((string) ($s['purpose'] ?? ''));
         $kc = array_values(array_filter(array_map('trim', array_filter((array) ($s['key_content'] ?? []), 'is_string'))));
         $uuid = (string) ($s['wf_uuid'] ?? '');
-        if ($uuid !== '') $section_ctx[$uuid] = ['name' => $name, 'purpose' => $purpose, 'key_content' => $kc];
+        $entry = ['name' => $name, 'purpose' => $purpose, 'key_content' => $kc, 'type' => (string) ($s['section_type'] ?? '')];
+        if ($uuid !== '') $section_ctx[$uuid] = $entry;
+        // wf_uuid staat niet in elke sitemap (alleen projecten die door de wireframe-werkruimte gingen).
+        // Zonder terugvaloptie viel key_content stilletjes weg en schreef de copywriter weer op gevoel.
+        $section_ctx_order[] = $entry;
         if ($name === '' && $purpose === '') continue;
         $section_hints[] = '- ' . $name . ': ' . $purpose . ($kc ? ' [' . implode(' | ', $kc) . ']' : '');
     }
@@ -200,6 +205,14 @@ class AISB_Wireframes_AI {
         if (!empty($module_data_to_translate)) {
             // Archer: doel en key_content van deze sectie uit de sitemap, gekoppeld op uuid.
             $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
+            // Geen wf_uuid in de sitemap? Dan op volgorde: wireframe en sitemap krijgen dezelfde secties in
+            // dezelfde volgorde (AISB_Archer_Generate::wireframe_types). Alleen als de aantallen kloppen en
+            // het sectietype op dezelfde soort sjabloon uitkomt, zodat we nooit de verkeerde tekst koppelen.
+            if (!$ctx && isset($section_ctx_order[$idx]) && count($section_ctx_order) === count((array) ($model['sections'] ?? []))) {
+                $cand = $section_ctx_order[$idx];
+                $want = class_exists('AISB_Archer_Structure') ? \AISB_Archer_Structure::tag_for((string) ($cand['type'] ?? '')) : '';
+                if ($want === '' || $want === (string) ($sec['type'] ?? '')) $ctx = $cand;
+            }
             $purpose = $ctx ? trim($ctx['name'] . ': ' . $ctx['purpose'], ': ') : '';
             if ($purpose === '') $purpose = (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content');
             // Rollen alleen meesturen als de kaartenrij volledig herkend is. Een half herkende structuur
