@@ -447,7 +447,9 @@ class AISB_Archer_Taste {
       . 'html body .brxe-nav-menu .brx-submenu-toggle{flex-wrap:nowrap !important;}'
       . 'html body .brxe-nav-menu .brx-submenu-toggle > button{flex:none;}'
       . 'html body .brxe-nav-menu .brx-submenu-toggle svg.menu-item-icon{max-width:1em;max-height:1em;}'
-      . 'html body .archer-header .brxe-nav-menu .bricks-nav-menu{flex-wrap:wrap;row-gap:8px;}';
+      . 'html body .archer-header .brxe-nav-menu .bricks-nav-menu{flex-wrap:wrap;row-gap:8px;}'
+      // Megamenu: het gewone uitklapmenu van datzelfde item verbergen (zie AISB_Archer_Megamenu::css).
+      . (class_exists('AISB_Archer_Megamenu') ? AISB_Archer_Megamenu::css() : '');
   }
 
   private static function house_rules($guide, bool $style): string {
