@@ -1568,3 +1568,27 @@ body.archer-app #aisb-editor-panel .aisb-ep-tpl-card { border-radius: 10px; bord
   body.archer-ws-mode .archer-ws-bar { flex-wrap: wrap; }
   .archer-ws-bar-tools { justify-content: flex-start; flex-wrap: wrap; }
 }
+
+/* ── Sitemap: "+ Sectie" tussen twee secties, zoals in de wireframes ── */
+.archer-sec { position: relative; }
+.archer-sec-addpill {
+  position: absolute; left: 50%; bottom: 0; z-index: 5; transform: translate(-50%, calc(50% + 3px));
+  display: none; align-items: center; gap: 4px; white-space: nowrap;
+  font: 700 12px/1 var(--ar-font); color: #fff; background: var(--ar-teal); border: 0; border-radius: 8px;
+  padding: 6px 11px; cursor: pointer; box-shadow: var(--ar-shadow);
+}
+.archer-sec-addpill span { font-size: 15px; line-height: 0; }
+.archer-sec-addpill:hover { background: var(--ar-navy); }
+.archer-sec:hover > .archer-sec-addpill, .archer-sec.is-selected > .archer-sec-addpill, .archer-sec-addpill:focus-visible { display: inline-flex; }
+.archer-sec:hover { z-index: 4; }
+.archer-sec-insert { list-style: none; }
+.archer-sec-insert > .archer-inline-form { margin: 2px 0; border: 1.5px solid var(--ar-teal); }
+
+/* Wireframes: secties die AI na een sitemapwijziging herschrijft */
+.archer-cv-sec.is-writing::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  background-size: 200% 100%; animation: archer-ws-writing 1.4s ease-in-out infinite;
+}
+@keyframes archer-ws-writing { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .archer-cv-sec.is-writing::after { animation: none; background: rgba(255, 255, 255, 0.5); } }

@@ -238,6 +238,7 @@ class AISB_Archer_Collections {
     $roots = self::content_roots($nodes);
     $best = null;
     foreach (array_slice($roots, 1) as $root) {
+      if (self::has_filters($nodes, $root)) continue; // zoeken en filters zijn geen kaarten
       foreach (self::order($nodes, $root) as $pid) {
         $kids = array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$pid]]['children'] ?? [])), fn($c) => isset($ix[$c])));
         if (count($kids) < 2) continue;
@@ -267,7 +268,7 @@ class AISB_Archer_Collections {
   }
 
   /** Overzicht ombouwen: de kaarten worden een query loop over $type; geeft [nodes, items]. */
-  public static function to_loop(array $nodes, string $type, int $pid, string $overview, string $singular = '', string $plural = ''): array {
+  public static function to_loop(array $nodes, string $type, int $pid, string $overview, string $singular = '', string $plural = '', array $have = []): array {
     $found = self::find_cards($nodes);
     if (!$found) return [$nodes, []];
     [$parent, $cards] = $found;
@@ -299,6 +300,7 @@ class AISB_Archer_Collections {
     $cls = trim((string) ($nodes[$ix[$first]]['settings']['_cssClasses'] ?? ''));
     $nodes[$ix[$first]]['settings']['_cssClasses'] = trim($cls . ' archer-keep archer-loop-item');
     $nodes = self::bind($nodes, $first, true);
+    $nodes = self::bind_card_fields($nodes, $first, $have);
     // Plaatshouders buiten de lijst ("[Merk en model]" als titel boven de lijst): de naam van de lijst,
     // of de tekst zonder haakjes. Een bezoeker mag geen [plaatshouder] zien.
     // Een tweede, gelijke groep kaarten naast de groep met de lijst (nog eens "[Merk en model]"-kaarten):
@@ -409,6 +411,80 @@ class AISB_Archer_Collections {
     return $drop ? self::remove($nodes, $drop) : $nodes;
   }
 
+  /**
+   * [Plaatshouders] in de kaart van de lijst worden de velden van het item ("[Prijs]" → {act_prijs},
+   * "[Merk en model]" → {act_merk} {act_model}). Een plaatshouder zonder veld verdwijnt: een bezoeker mag
+   * geen [plaatshouder] zien. Een tekst met velden staat er alleen als het item die velden heeft.
+   */
+  private static function bind_card_fields(array $nodes, string $root, array $have): array {
+    $ix = self::index($nodes);
+    $drop = [];
+    $map = function (string $ph) use ($have): ?string {
+      $k = self::key_from($ph, 40);
+      if (isset($have[$k])) return '{act_' . $have[$k] . '}';
+      $parts = preg_split('/\s+(?:en|et|and|&|\+)\s+|\s*[\/,·]\s*/u', trim($ph));
+      if (count($parts) > 1) {
+        $out = [];
+        foreach ($parts as $p) {
+          $pk = self::key_from($p, 40);
+          if (!isset($have[$pk])) return null;
+          $out[] = '{act_' . $have[$pk] . '}';
+        }
+        return implode(' ', $out);
+      }
+      return null;
+    };
+    foreach (self::order($nodes, $root) as $d) {
+      $i = $ix[$d];
+      // Een doorstreepte "oude prijs" uit een webshopkaart: geen korting op een occasie of pand.
+      if (preg_match('/scratch|old price|compare|regular price/i', (string) ($nodes[$i]['label'] ?? ''))) { $drop[] = $d; continue; }
+      $t = $nodes[$i]['settings']['text'] ?? null;
+      // Een los muntteken ("$") van een webshopkaart: het prijsveld toont zelf al "€".
+      if (is_string($t) && preg_match('/^[\s\x{00A0}]*[$€£][\s\x{00A0}]*$/u', html_entity_decode(wp_strip_all_tags($t), ENT_QUOTES, 'UTF-8'))) { $drop[] = $d; continue; }
+      if (!is_string($t) || !preg_match('/\[[^\]]{2,40}\]/u', $t)) continue;
+      $t = preg_replace_callback('/\[([^\]]{2,40})\]/u', fn($m) => $map($m[1]) ?? '', $t);
+      if (trim(wp_strip_all_tags($t)) === '') { $drop[] = $d; continue; }
+      $nodes[$i]['settings']['text'] = $t;
+      if (preg_match_all('/\{act_([a-z0-9_]+)\}/', $t, $m)) {
+        $sets = [];
+        foreach (array_unique($m[1]) as $f) $sets[] = [['id' => substr(md5($d . $f), 0, 6), 'key' => 'dynamic_data', 'compare' => 'empty_not', 'dynamic_data' => '{act_' . $f . '}']];
+        $nodes[$i]['settings']['_conditions'] = $sets;
+      }
+    }
+    $nodes = $drop ? self::remove($nodes, $drop) : $nodes;
+    // Webshopkaarten strepen de "gewone prijs" door (klasse met line-through); bij een lijst van items is er
+    // geen korting: die klasse gaat eraf als er een veld in staat, anders gaat het blok weg.
+    // (De publicatie zet klassen soms om naar instellingen van het element zelf: beide nakijken.)
+    $struck = self::struck_classes();
+    $ix = self::index($nodes);
+    $gone = [];
+    foreach (self::order($nodes, $root) as $d) {
+      $st = (array) ($nodes[$ix[$d]]['settings'] ?? []);
+      $cls = (array) ($st['_cssGlobalClasses'] ?? []);
+      $hit = array_values(array_intersect($cls, $struck));
+      $own = stripos((string) ($st['_typography']['text-decoration'] ?? ''), 'line-through') !== false;
+      if (!$hit && !$own) continue;
+      $has_field = false;
+      foreach (self::order($nodes, $d) as $sub) if (preg_match('/\{act_/', (string) ($nodes[$ix[$sub]]['settings']['text'] ?? ''))) { $has_field = true; break; }
+      if (!$has_field) { $gone[] = $d; continue; }
+      if ($hit) $st['_cssGlobalClasses'] = array_values(array_diff($cls, $hit));
+      if ($own) { unset($st['_typography']['text-decoration'], $st['_typography']['color']); }
+      $nodes[$ix[$d]]['settings'] = $st;
+    }
+    return $gone ? self::remove($nodes, $gone) : $nodes;
+  }
+
+  /** Globale Bricks-klassen met doorgestreepte tekst (oude prijs in webshopkaarten). */
+  private static function struck_classes(): array {
+    static $ids = null;
+    if ($ids !== null) return $ids;
+    $ids = [];
+    foreach ((array) get_option('bricks_global_classes', []) as $c) {
+      if (is_array($c) && stripos(wp_json_encode($c['settings'] ?? []), 'line-through') !== false) $ids[] = (string) $c['id'];
+    }
+    return $ids;
+  }
+
   /* ───────────────────────── Publiceren ───────────────────────── */
 
   /** Vóór de Bricks-injectie: overzichten ombouwen, sjablonen en items klaarzetten. */
@@ -423,9 +499,14 @@ class AISB_Archer_Collections {
       $d = $by[$pair['detail']] ?? null;
       if ($o === null || $d === null) continue;
       $orig = (array) ($injections[$o]['payload']['content'] ?? []);
-      [$content, $items] = self::to_loop($orig, $def['key'], $pid, $pair['overview'], (string) ($def['singular'] ?? ''), (string) ($def['plural'] ?? ''));
-      $injections[$o]['payload']['content'] = $content;
       $dp = (array) $injections[$d]['payload'];
+      // Eerst het sjabloon: dat voegt de velden uit de [plaatshouders] van de detailpagina toe aan het type.
+      $tpl = self::to_template_sections((array) ($dp['content'] ?? []), $def);
+      $have = [];
+      foreach ($def['fields'] as $f) { $have[$f['key']] = $f['key']; $have[self::key_from($f['label'], 40)] = $f['key']; }
+      [$content, $items] = self::to_loop($orig, $def['key'], $pid, $pair['overview'], (string) ($def['singular'] ?? ''), (string) ($def['plural'] ?? ''), $have);
+      $content = self::wire_filters($content, $def, self::lang($pid));
+      $injections[$o]['payload']['content'] = $content;
       // Voorbeelditems zonder foto: de foto uit de hero van de detailpagina (anders zakt die hero in elkaar).
       $sample = '';
       $droots = self::content_roots((array) ($dp['content'] ?? []));
@@ -438,12 +519,209 @@ class AISB_Archer_Collections {
       }
       if ($sample !== '') foreach ($items as &$it) if (empty($it['image'])) $it['image'] = $sample;
       unset($it);
-      $tpl = self::to_template_sections((array) ($dp['content'] ?? []), $def);
       $template = array_merge((array) ($dp['header'] ?? []), $tpl, (array) ($dp['footer'] ?? []));
-      self::$stash[$pid]['collections'][] = ['def' => $def, 'items' => $items, 'template' => $template, 'overview' => $pair['overview'], 'detail' => $pair['detail'], 'orig' => $orig, 'inj' => $o];
+      self::$stash[$pid]['collections'][] = ['def' => $def, 'items' => $items, 'template' => $template, 'overview' => $pair['overview'], 'detail' => $pair['detail'], 'orig' => $orig, 'inj' => $o, 'filters' => self::has_filters($content)];
       error_log('[AISB] Archer: lijst "' . $def['plural'] . '" (' . $def['key'] . ') met ' . count($items) . ' item(s) en ' . count($def['fields']) . ' velden.');
     }
+    // Zoeken en filters op een pagina zonder lijst: niets om te filteren, dus weg.
+    foreach ($injections as $k => $inj) {
+      $content = (array) ($inj['payload']['content'] ?? []);
+      if (!$content || !self::has_filters($content)) continue;
+      $loop = false;
+      foreach ($content as $n) if (is_array($n) && !empty($n['settings']['hasLoop'])) { $loop = true; break; }
+      if (!$loop) $injections[$k]['payload']['content'] = self::wire_filters($content, [], self::lang($pid));
+    }
     return $injections;
+  }
+
+  /* ───────────────────────── Zoeken en filters ───────────────────────── */
+
+  /** Voor de AI-teksten van een filtersectie in de wireframe: welke titels er boven de velden komen. */
+  public static function filter_hint(int $pid, string $slug): string {
+    foreach (self::pairs($pid) as $pair) {
+      if ($pair['overview'] !== $slug) continue;
+      $plan = self::filter_plan($pair['def'], self::lang($pid));
+      $labels = array_merge([$plan['words']['search']], array_map(fn($f) => (string) $f['label'], $plan['fields']), [$plan['words']['sort']]);
+      return 'Search and filters above the list of ' . $pair['def']['plural'] . '. The small titles above the fields are, in this order: ' . implode(', ', $labels) . '.';
+    }
+    return 'Search and filters above a list of items.';
+  }
+
+  private static function is_filter(array $n): bool {
+    return strpos((string) ($n['name'] ?? ''), 'filter-') === 0;
+  }
+
+  /** Bevat de pagina (of de sectie $root) zoek- of filterelementen? */
+  private static function has_filters(array $nodes, ?string $root = null): bool {
+    $ids = $root === null ? null : array_flip(self::order($nodes, $root));
+    foreach ($nodes as $n) {
+      if (!is_array($n) || !self::is_filter($n)) continue;
+      if ($ids === null || isset($ids[(string) ($n['id'] ?? '')])) return true;
+    }
+    return false;
+  }
+
+  private static function filter_words(string $lang): array {
+    $w = [
+      'nl' => ['search' => 'Zoeken', 'search_ph' => 'Zoek op naam of trefwoord', 'all' => 'Alle', 'sort' => 'Sorteren op', 'sort_ph' => 'Sorteren', 'new' => 'Nieuwste eerst', 'price_up' => 'Prijs: laag naar hoog', 'price_down' => 'Prijs: hoog naar laag', 'year' => 'Bouwjaar: nieuwste eerst', 'az' => 'Naam: A tot Z'],
+      'fr' => ['search' => 'Rechercher', 'search_ph' => 'Nom ou mot-clé', 'all' => 'Tous', 'sort' => 'Trier par', 'sort_ph' => 'Trier', 'new' => 'Les plus récents', 'price_up' => 'Prix croissant', 'price_down' => 'Prix décroissant', 'year' => 'Année : plus récente', 'az' => 'Nom : A à Z'],
+      'en' => ['search' => 'Search', 'search_ph' => 'Search by name or keyword', 'all' => 'All', 'sort' => 'Sort by', 'sort_ph' => 'Sort', 'new' => 'Newest first', 'price_up' => 'Price: low to high', 'price_down' => 'Price: high to low', 'year' => 'Year: newest first', 'az' => 'Name: A to Z'],
+    ];
+    return $w[$lang] ?? $w['nl'];
+  }
+
+  /**
+   * Waarop de bezoeker filtert: hooguit twee velden van het type, eerst namen (merk, gemeente, plaats),
+   * dan keuzelijsten (brandstof, EPC, contract), dan aantallen (slaapkamers, bouwjaar).
+   * Prijs, kilometers en oppervlakte zijn bereiken: daarop wordt gesorteerd, niet gefilterd.
+   */
+  public static function filter_plan(array $def, string $lang): array {
+    $fields = array_values(array_filter((array) ($def['fields'] ?? []), 'is_array'));
+    $by = [];
+    foreach ($fields as $f) $by[(string) $f['key']] = $f;
+    $pick = [];
+    $add = function (array $f) use (&$pick) {
+      if (count($pick) < 2 && !isset($pick[$f['key']])) $pick[$f['key']] = $f;
+    };
+    $names = array_values(array_filter(['merk', 'gemeente', 'locatie', 'plaats', 'klant'], fn($k) => isset($by[$k])));
+    // Eén naam (merk, gemeente ...), dan een keuzelijst (brandstof, EPC ...), dan een aantal, dan nog een naam.
+    if ($names) $add($by[$names[0]]);
+    foreach ($fields as $f) if (($f['type'] ?? '') === 'select') $add($f);
+    foreach ($fields as $f) if (($f['type'] ?? '') === 'number' && !in_array($f['key'], ['kilometerstand', 'oppervlakte', 'vermogen'], true)) $add($f);
+    foreach ($names as $k) $add($by[$k]);
+    $w = self::filter_words($lang);
+    $sort = [['optionLabel' => $w['new'], 'optionSource' => 'date', 'optionOrder' => 'DESC']];
+    if (isset($by['prijs'])) {
+      $sort[] = ['optionLabel' => $w['price_up'], 'optionSource' => 'meta_value_num', 'optionMetaKey' => 'prijs', 'optionOrder' => 'ASC'];
+      $sort[] = ['optionLabel' => $w['price_down'], 'optionSource' => 'meta_value_num', 'optionMetaKey' => 'prijs', 'optionOrder' => 'DESC'];
+    }
+    if (isset($by['bouwjaar'])) $sort[] = ['optionLabel' => $w['year'], 'optionSource' => 'meta_value_num', 'optionMetaKey' => 'bouwjaar', 'optionOrder' => 'DESC'];
+    $sort[] = ['optionLabel' => $w['az'], 'optionSource' => 'title', 'optionOrder' => 'ASC'];
+    foreach ($sort as $i => $o) $sort[$i]['id'] = substr(md5($o['optionLabel'] . $i), 0, 6);
+    return ['fields' => array_values($pick), 'sort' => $sort, 'words' => $w];
+  }
+
+  /**
+   * De zoek- en filtersectie (Brixies "Category Filters") wordt echt: alle elementen filteren de lijst
+   * (query loop) op de pagina, de keuzelijsten worden velden van het type, sorteren op datum, prijs en naam.
+   * Zonder lijst ($def leeg of geen loop) verdwijnt de sectie.
+   */
+  public static function wire_filters(array $nodes, array $def, string $lang, bool $preview = false): array {
+    $roots = array_values(array_filter($preview ? self::all_roots($nodes) : self::content_roots($nodes), fn($r) => self::has_filters($nodes, $r)));
+    if (!$roots) return $nodes;
+    $loop = '';
+    foreach ($nodes as $n) {
+      if ($preview || !is_array($n) || empty($n['settings']['hasLoop'])) continue;
+      $types = (array) ($n['settings']['query']['post_type'] ?? []);
+      if (!$def || in_array($def['key'], $types, true)) { $loop = (string) $n['id']; break; }
+    }
+    if (!$preview && ($loop === '' || !$def)) return self::remove($nodes, $roots);
+
+    $plan = self::filter_plan($def, $lang);
+    $w = $plan['words'];
+    $ix = self::index($nodes);
+    $in_root = array_flip(array_merge(...array_map(fn($r) => self::order($nodes, $r), $roots)));
+    $heading_of = function (string $id) use (&$nodes, &$ix): ?int {
+      $par = (string) ($nodes[$ix[$id]]['parent'] ?? '');
+      if (!isset($ix[$par])) return null;
+      foreach ((array) $nodes[$ix[$par]]['children'] as $c) {
+        if (isset($ix[(string) $c]) && ($nodes[$ix[(string) $c]]['name'] ?? '') === 'heading') return $ix[(string) $c];
+      }
+      return null;
+    };
+    $slots = [];
+    $drop = [];
+    foreach ($nodes as $i => $n) {
+      if (!is_array($n) || !self::is_filter($n) || !isset($in_root[(string) ($n['id'] ?? '')])) continue;
+      $s = (array) ($n['settings'] ?? []);
+      if (!$preview) $s['filterQueryId'] = $loop;
+      $name = (string) $n['name'];
+      if ($name === 'filter-search') {
+        $s['placeholder'] = $w['search_ph'];
+        if (($h = $heading_of((string) $n['id'])) !== null) $nodes[$h]['settings']['text'] = $w['search'];
+      } elseif (($s['filterAction'] ?? 'filter') === 'sort') {
+        $s['sortOptions'] = $plan['sort'];
+        $s['placeholder'] = $w['sort_ph'];
+        if (($h = $heading_of((string) $n['id'])) !== null) $nodes[$h]['settings']['text'] = $w['sort'];
+      } elseif (in_array($name, ['filter-select', 'filter-checkbox', 'filter-radio'], true)) {
+        $slots[] = $i;
+      }
+      $nodes[$i]['settings'] = $s;
+    }
+    foreach ($slots as $k => $i) {
+      $id = (string) $nodes[$i]['id'];
+      $f = $plan['fields'][$k] ?? null;
+      if (!$f) {
+        // Geen veld meer: de hele groep (titel en keuzelijst) weg.
+        $par = (string) ($nodes[$i]['parent'] ?? '');
+        $kids = isset($ix[$par]) ? (array) $nodes[$ix[$par]]['children'] : [];
+        $only = true;
+        foreach ($kids as $c) {
+          $nm = (string) ($nodes[$ix[(string) $c]]['name'] ?? '');
+          if ((string) $c !== $id && $nm !== 'heading') $only = false;
+        }
+        $drop[] = ($only && isset($ix[$par])) ? $par : $id;
+        continue;
+      }
+      $s = $nodes[$i]['settings'];
+      if (!$preview) {
+        // In de wireframe blijft de bron van Brixies (daar zijn nog geen items); op de site het veld van het type.
+        foreach (['filterTaxonomy', 'filterTermInclude', 'filterTermExclude', 'hierarchical', 'wpPostField'] as $x) unset($s[$x]);
+        $s['filterAction'] = 'filter';
+        $s['filterSource'] = 'customField';
+        $s['sourceFieldType'] = 'post';
+        $s['customFieldKey'] = (string) $f['key'];
+        $s['filterNiceName'] = (string) $f['key'];
+        $s['filterHideCount'] = true;
+        $s['filterHideEmpty'] = true;
+      }
+      if ($nodes[$i]['name'] === 'filter-select') $s['placeholder'] = $w['all'];
+      if ($nodes[$i]['name'] === 'filter-radio') $s['filterLabelAll'] = $w['all'];
+      $nodes[$i]['settings'] = $s;
+      if (($h = $heading_of($id)) !== null) $nodes[$h]['settings']['text'] = (string) $f['label'];
+    }
+    // Lege blokken in de filtersectie (het lege raster van Brixies: de lijst staat eronder).
+    foreach ($preview ? [] : $nodes as $n) {
+      if (!is_array($n) || !isset($in_root[(string) ($n['id'] ?? '')])) continue;
+      if (in_array($n['name'] ?? '', ['block', 'div'], true) && empty($n['children']) && !in_array((string) $n['id'], $roots, true)) $drop[] = (string) $n['id'];
+    }
+    if ($drop) {
+      // Het filterraster telt nu minder kolommen.
+      $grids = [];
+      foreach ($drop as $d) if (isset($ix[$d])) $grids[(string) ($nodes[$ix[$d]]['parent'] ?? '')] = true;
+      $nodes = self::remove($nodes, $drop);
+      $ix = self::index($nodes);
+      foreach (array_keys($grids) as $g) {
+        if (!isset($ix[$g])) continue;
+        $n = count((array) ($nodes[$ix[$g]]['children'] ?? []));
+        if ($n < 1 || $n > 4) continue;
+        $nodes[$ix[$g]]['settings']['_gridTemplateColumns'] = 'repeat(' . $n . ', minmax(0, 1fr))';
+        $nodes[$ix[$g]]['settings']['_gridTemplateColumns:tablet_portrait'] = 'repeat(' . min(2, $n) . ', minmax(0, 1fr))';
+        $nodes[$ix[$g]]['settings']['_gridTemplateColumns:mobile_landscape'] = 'minmax(0, 1fr)';
+      }
+    }
+    if (!$preview) error_log('[AISB] Archer: filters voor ' . $def['key'] . ': ' . implode(', ', array_map(fn($f) => $f['key'], $plan['fields'])) . ' (lijst ' . $loop . ')');
+    return $nodes;
+  }
+
+  /** Alle wortels (een sjabloon in de wireframe heeft geen header of footer). */
+  private static function all_roots(array $nodes): array {
+    $out = [];
+    foreach ($nodes as $n) if (is_array($n) && (string) ($n['parent'] ?? '0') === '0' && isset($n['id'])) $out[] = (string) $n['id'];
+    return $out;
+  }
+
+  /**
+   * Wireframe: de filtersectie toont dezelfde titels, velden en sorteeropties als straks op de site
+   * (zonder koppeling: in de wireframe is er nog geen lijst om te filteren).
+   */
+  public static function preview_filters(array $nodes, int $pid, string $slug): array {
+    if (!self::has_filters($nodes)) return $nodes;
+    $lang = self::lang($pid);
+    foreach (self::pairs($pid) as $pair) {
+      if ($pair['overview'] === $slug) return self::wire_filters($nodes, $pair['def'], $lang, true);
+    }
+    return self::wire_filters($nodes, ['key' => '', 'fields' => []], $lang, true);
   }
 
   /** Sjabloon uit de detailpagina: titel, tekst en foto dynamisch in de hero; [plaatshouders] overal velden. */
@@ -603,7 +881,7 @@ class AISB_Archer_Collections {
       [$code, $res] = self::rest($request, 'POST', $site_url . '/wp-json/archer-ct/v1/types', $cookies, $nonce, ['types' => $defs, 'replace' => true]);
       if ($code !== 200) {
         error_log('[AISB] Archer: inhoudstypes niet aangemaakt (HTTP ' . $code . '); staat Archer Content Types op de site?');
-        foreach (self::$stash[$pid]['collections'] as $c) $injections[$c['inj']]['payload']['content'] = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::unbracket($c['orig']) : $c['orig'];
+        foreach (self::$stash[$pid]['collections'] as $c) $injections[$c['inj']]['payload']['content'] = self::wire_filters(class_exists('AISB_Archer_Site') ? AISB_Archer_Site::unbracket($c['orig']) : $c['orig'], [], self::lang($pid));
         self::$stash[$pid]['collections'] = [];
       } else {
         foreach (self::$stash[$pid]['collections'] as $k => $c) {
@@ -611,7 +889,7 @@ class AISB_Archer_Collections {
           $tid = (int) ($tpl['id'] ?? 0);
           if ($code !== 200 || !$tid) {
             error_log('[AISB] Archer: sjabloon voor ' . $c['def']['key'] . ' niet aangemaakt (HTTP ' . $code . '); het overzicht houdt zijn vaste kaarten.');
-            $injections[$c['inj']]['payload']['content'] = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::unbracket($c['orig']) : $c['orig'];
+            $injections[$c['inj']]['payload']['content'] = self::wire_filters(class_exists('AISB_Archer_Site') ? AISB_Archer_Site::unbracket($c['orig']) : $c['orig'], [], self::lang($pid));
             continue;
           }
           self::$stash[$pid]['collections'][$k]['template_id'] = $tid;
@@ -654,6 +932,11 @@ class AISB_Archer_Collections {
       }
       if (!empty($ids[$c['detail']])) {
         self::rest($request, 'POST', $site_url . '/wp-json/wp/v2/pages/' . $ids[$c['detail']], $cookies, $nonce, ['status' => 'draft']);
+      }
+      // Zoeken en filters boven de lijst: Bricks-queryfilters aan en de index opbouwen (nu de items er zijn).
+      if (!empty($c['filters']) && !empty($ids[$c['overview']])) {
+        [$code, $res] = self::rest($request, 'POST', $site_url . '/wp-json/archer-ct/v1/filters', $cookies, $nonce, ['pages' => [$ids[$c['overview']]]]);
+        error_log('[AISB] Archer: filters op ' . $c['overview'] . ' → HTTP ' . $code . ' ' . wp_json_encode($res));
       }
     }
     unset(self::$stash[$pid]);

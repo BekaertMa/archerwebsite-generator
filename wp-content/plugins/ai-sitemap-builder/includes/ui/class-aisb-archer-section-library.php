@@ -15,19 +15,50 @@ class AISB_Archer_Section_Library {
   const THUMB_DIR = 'archer-thumbs';
 
   /** Volgorde en uitleg van de types die je kan toevoegen (header en footer staan er altijd al). */
-  const TYPES = [
-    'hero' => ['Hero', 'De opening van een pagina: grote titel, korte uitleg, een knop en meestal een beeld.'],
-    'features' => ['Diensten en troeven', 'Wat je aanbiedt of waarom klanten voor je kiezen, als kaarten of een lijst met iconen.'],
-    'content' => ['Tekst en beeld', 'Een verhaal of uitleg naast een foto: over ons, een dienst in detail, een aanpak.'],
-    'process' => ['Werkwijze', 'De stappen van eerste contact tot resultaat, genummerd of als tijdlijn.'],
-    'testimonials' => ['Getuigenissen', 'Wat klanten zeggen: citaten met naam, eventueel met sterren of foto.'],
-    'social_proof' => ['Logo\'s en cijfers', 'Vertrouwen in één oogopslag: logo\'s van klanten of partners, cijfers en scores.'],
-    'team' => ['Team', 'De mensen achter de zaak, met foto, naam en functie.'],
-    'pricing' => ['Prijzen', 'Pakketten of tarieven naast elkaar, met wat erin zit en een knop.'],
-    'faq' => ['Veelgestelde vragen', 'Vragen en antwoorden, meestal om open te klikken.'],
-    'cta' => ['Oproep tot actie', 'Een korte band die de bezoeker naar de volgende stap stuurt: bellen, afspraak, offerte.'],
-    'contact' => ['Contact', 'Contactgegevens, een formulier, openingsuren of een kaart.'],
+  /** Uitleg per soort sectie (dezelfde soorten als in de sitemap, zie AISB_Archer_Structure). */
+  const DESCS = [
+    'hero' => 'De opening van een pagina: grote titel, korte uitleg, een knop en meestal een beeld.',
+    'banner' => 'Een brede band met een korte boodschap en een knop, bijvoorbeeld een actie of aankondiging.',
+    'filters' => 'Zoeken en filters in een balk boven een lijst (panden, wagens, producten). Op de website filtert de bezoeker daarmee de lijst eronder.',
+    'intro' => 'Een korte inleiding bovenaan een pagina of lijst: titel en een paar zinnen, zonder grote foto.',
+    'features' => 'Wat je aanbiedt of waarom klanten voor je kiezen, als kaarten of een lijst met iconen.',
+    'content' => 'Een verhaal of uitleg naast een foto: over ons, een dienst in detail, een aanpak.',
+    'process' => 'De stappen van eerste contact tot resultaat, genummerd.',
+    'timeline' => 'Gebeurtenissen of mijlpalen op een tijdlijn, bijvoorbeeld de geschiedenis van de zaak.',
+    'testimonials' => 'Wat klanten zeggen: citaten met naam, eventueel met sterren of foto.',
+    'social_proof' => 'Vertrouwen in één oogopslag: logo\'s van klanten of partners, cijfers en scores.',
+    'team' => 'De mensen achter de zaak, met foto, naam en functie.',
+    'single_team' => 'Eén teamlid in detail: foto, functie en een korte voorstelling.',
+    'pricing' => 'Pakketten of tarieven naast elkaar, met wat erin zit en een knop.',
+    'faq' => 'Vragen en antwoorden, meestal om open te klikken.',
+    'cta' => 'Een korte band die de bezoeker naar de volgende stap stuurt: bellen, afspraak, offerte.',
+    'contact' => 'Contactgegevens, een formulier, openingsuren of een kaart.',
+    'gallery' => 'Foto\'s in een raster of slider, zonder veel tekst.',
+    'portfolio' => 'Realisaties of projecten als kaarten met foto, die elk naar hun eigen pagina leiden.',
+    'single_portfolio' => 'Eén realisatie in detail: foto\'s, de opdracht en het resultaat.',
+    'products' => 'Producten of wagens als kaarten met foto, naam en prijs.',
+    'single_product' => 'Eén product of wagen in detail: foto\'s, kenmerken, prijs en een knop.',
+    'property' => 'Panden als kaarten met foto, ligging, prijs en de belangrijkste kenmerken.',
+    'single_property' => 'Eén pand in detail: foto\'s, kenmerken, prijs en een knop om contact op te nemen.',
+    'blog' => 'Blogberichten of nieuws als kaarten met foto, titel en datum.',
+    'single_post_hero' => 'De opening van een blogbericht: titel, datum en grote foto.',
+    'single_post' => 'De tekst van een blogbericht, met tussentitels en beelden.',
+    'event' => 'Evenementen als kaarten met datum, plaats en een knop.',
+    'single_event' => 'Eén evenement in detail: datum, plaats, programma en inschrijven.',
+    'career' => 'Vacatures als lijst of kaarten, met een knop om te solliciteren.',
   ];
+
+  /** Soort => [naam, uitleg], in de volgorde en met de namen van de sitemap. */
+  public static function types(): array {
+    $labels = AISB_Archer_Structure::tag_labels();
+    $out = [];
+    foreach (AISB_Archer_Structure::available() as $st) {
+      $tag = AISB_Archer_Structure::tag_for($st);
+      if (isset($out[$tag])) continue;
+      $out[$tag] = [$labels[$tag] ?? $st, self::DESCS[$tag] ?? ''];
+    }
+    return $out;
+  }
 
   public function init(): void {
     add_action('wp_ajax_aisb_archer_section_types', [$this, 'ajax_types']);
@@ -84,28 +115,21 @@ class AISB_Archer_Section_Library {
 
   /** Label van een type in gewone taal. */
   public static function label(string $type): string {
-    if (isset(self::TYPES[$type])) return self::TYPES[$type][0];
+    $labels = AISB_Archer_Structure::tag_labels();
+    if (isset($labels[$type])) return $labels[$type];
     return ['header' => 'Header', 'footer' => 'Footer'][$type] ?? ucfirst(str_replace(['_', '-'], ' ', $type));
   }
 
   public function ajax_types(): void {
     $this->guard();
-    $all = self::by_type();
     $out = [];
-    foreach (self::TYPES as $type => [$label, $desc]) {
+    foreach (self::types() as $type => [$label, $desc]) {
       $pool = self::pool($type);
       if (!$pool) continue;
       // Voorbeeld van het type: het eerste sjabloon met een schermafbeelding.
       $sample = $pool[0];
       foreach ($pool as $t) if (self::thumb_url((int) $t['id']) !== '') { $sample = $t; break; }
       $out[] = ['type' => $type, 'label' => $label, 'desc' => $desc, 'count' => count($pool), 'sample' => self::card($sample)];
-    }
-    // Types uit de bibliotheek die (nog) niet in de lijst staan, achteraan.
-    foreach ($all as $type => $list) {
-      if (isset(self::TYPES[$type]) || in_array($type, ['header', 'footer'], true) || !$list) continue;
-      $pool = self::pool((string) $type);
-      if (!$pool) continue;
-      $out[] = ['type' => (string) $type, 'label' => self::label((string) $type), 'desc' => '', 'count' => count($pool), 'sample' => self::card($pool[0])];
     }
     wp_send_json_success(['types' => $out]);
   }
@@ -118,7 +142,7 @@ class AISB_Archer_Section_Library {
     wp_send_json_success([
       'type' => $type,
       'label' => self::label($type),
-      'desc' => self::TYPES[$type][1] ?? '',
+      'desc' => self::DESCS[$type] ?? '',
       'variants' => array_map([__CLASS__, 'card'], $pool),
     ]);
   }
@@ -194,6 +218,12 @@ class AISB_Archer_Section_Library {
   private static function write_text(array $model, int $pid, int $sid, string $slug, string $uuid): array {
     if (!class_exists('AISB_Wireframes_AI')) return $model;
     @set_time_limit(180);
+    // Zoeken en filters: de AI weet welke velden er komen (zie AISB_Archer_Collections::filter_hint).
+    foreach ($model['sections'] as $i => $s) {
+      if (is_array($s) && ($s['uuid'] ?? '') === $uuid && strtolower((string) ($s['type'] ?? '')) === 'filters' && class_exists('AISB_Archer_Collections')) {
+        AISB_Archer_Generate::set_hints($slug, [$i => AISB_Archer_Collections::filter_hint($pid, $slug)]);
+      }
+    }
     try {
       return (new AISB_Wireframes_AI())->populate_bricks_content_with_ai($model, $pid, $sid, $slug, [$uuid]);
     } catch (Throwable $e) {
@@ -209,7 +239,7 @@ class AISB_Archer_Section_Library {
     $type = isset($_POST['type']) ? sanitize_key(wp_unslash($_POST['type'])) : '';
     $tid = isset($_POST['template_id']) ? (int) $_POST['template_id'] : 0;
     $after = isset($_POST['after_uuid']) ? sanitize_text_field(wp_unslash($_POST['after_uuid'])) : '';
-    if ($type === '' || in_array($type, ['header', 'footer'], true)) wp_send_json_error(['message' => 'Kies een type sectie'], 400);
+    if ($type === '' || !isset(self::types()[$type])) wp_send_json_error(['message' => 'Kies een type sectie'], 400);
     $t = self::template($type, $tid, self::used($model));
     if (!$t) wp_send_json_error(['message' => 'Geen voorbeeld gevonden voor dit type'], 404);
 

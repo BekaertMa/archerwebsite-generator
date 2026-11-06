@@ -119,24 +119,13 @@ class AISB_Archer_Generate {
 
   /** Sectiesoort uit de sitemap → soort sjabloon in de wireframebibliotheek. */
   private static function wireframe_type(string $section_type): string {
-    $t = strtolower($section_type);
-    $map = [
-      'headers' => 'header', 'megamenu' => 'header', 'footers' => 'footer',
-      'hero' => 'hero', 'single post hero' => 'hero', 'banner' => 'hero',
-      'testimonial' => 'testimonials', 'logo' => 'social_proof',
-      'faq' => 'faq', 'pricing' => 'pricing', 'process' => 'process', 'timeline' => 'process',
-      'team' => 'team', 'single team' => 'team',
-      'cta' => 'cta', 'contact' => 'contact',
-      'feature' => 'features', 'products' => 'features', 'single product' => 'features',
-      'property' => 'features', 'single property' => 'features', 'portfolio' => 'features',
-      'single portfolio' => 'features', 'gallery' => 'features', 'blog' => 'features', 'event' => 'features',
-      'single event' => 'features', 'career' => 'features',
-      'content' => 'content', 'intro' => 'content', 'category filters' => 'content', 'single post' => 'content',
-    ];
-    foreach ($map as $k => $v) {
-      if (strpos($t, $k) === 0) return $v;
-    }
-    return 'content';
+    // Elk sectietype van de sitemap heeft zijn eigen soort sjabloon (zie AISB_Archer_Structure).
+    return AISB_Archer_Structure::tag_for($section_type);
+  }
+
+  /** Sectieomschrijvingen voor een latere AI-vraag (index in de wireframe => "naam: doel"). */
+  public static function set_hints(string $page_slug, array $hints): void {
+    self::$hints[$page_slug] = $hints;
   }
 
   /**
@@ -157,7 +146,8 @@ class AISB_Archer_Generate {
     foreach ($sections as $s) {
       $wt = self::wireframe_type((string) ($s['section_type'] ?? ''));
       $out[] = $wt;
-      $hints[count($out) - 1] = trim((string) ($s['section_name'] ?? '') . ': ' . (string) ($s['purpose'] ?? ''), ': ');
+      $hints[count($out) - 1] = trim((string) ($s['section_name'] ?? '') . ': ' . (string) ($s['purpose'] ?? ''), ': ')
+        . ($wt === 'filters' && class_exists('AISB_Archer_Collections') ? ' ' . AISB_Archer_Collections::filter_hint((int) $project_id, (string) $page_slug) : '');
     }
     self::$hints[$page_slug] = $hints;
     return $out;
@@ -949,15 +939,15 @@ JSON: {"website_name":"","website_goal":"","primary_audiences":[""],"sitemap":[{
 
 How to structure:
 - Organise pages the way visitors look for things, not the way the business is organised internally.
-- Search filters are NOT pages. If visitors filter on type, price, brand, location, size or rooms, that happens on ONE overview page with filters. Never make separate pages per filter value (no "Houses for sale" and "Apartments for sale"; no page per car brand; no page per price range).
+- Search filters are NOT pages. If visitors filter on type, price, brand, location, size or rooms, that happens on ONE overview page that lists all items. Never make separate pages per filter value (no "Houses for sale" and "Apartments for sale"; no page per car brand; no page per price range).
 - Every overview of items that change over time (listings, properties, cars, products, projects, cases, vacancies, events, blog posts, team members) gets exactly ONE detail template page as its child (for example "Pand (detailpagina)", "Wagen (detailpagina)", "Vacature (detailpagina)"). Do not invent individual items.
 - Services the business names in the brief get one child page each under a services overview (max 6). Without named services: one services page, no children.
 - Industry patterns (use when they fit; translate the titles to the requested language):
-  - Real estate: Te koop (overview with filters) > Pand te koop (detail); Te huur (overview with filters) > Pand te huur (detail); Verkopen of verhuren (for owners: valuation request); Over ons; Contact.
-  - Car dealer / garage: Occasions (overview with filters) > Wagen (detail); Onderhoud en herstellingen (with the named services as children); Afspraak maken; Over ons; Contact.
+  - Real estate: Te koop (overview of all items) > Pand te koop (detail); Te huur (overview of all items) > Pand te huur (detail); Verkopen of verhuren (for owners: valuation request); Over ons; Contact.
+  - Car dealer / garage: Occasions (overview of all items) > Wagen (detail); Onderhoud en herstellingen (with the named services as children); Afspraak maken; Over ons; Contact.
   - Restaurant / hospitality: Menukaart; Reserveren; Over ons; Contact (events or catering only if named).
   - Construction / installers: Diensten (named services as children); Realisaties > Realisatie (detail); Offerte aanvragen; Over ons; Contact.
-  - Webshop: Shop (overview with filters) > Product (detail); Over ons; Klantenservice; Contact.
+  - Webshop: Shop (overview of all items) > Product (detail); Over ons; Klantenservice; Contact.
   - Practice / healthcare / professional services: Behandelingen or Diensten (named ones as children); Team; Afspraak maken; Tarieven (only if relevant); Contact.
 - Add a conversion page when the brief's goal asks for it (appointment, quote, valuation, reservation), unless the contact page covers it.
 - Always include a Contact page. Add a Blog only when the brief mentions content, news or SEO.
@@ -1037,10 +1027,10 @@ PROMPT;
       . "Write everything in {$lang}. Never mix languages. Never invent facts (names, numbers, prices, addresses) that are not in the brief.\n"
       . "Sections:\n"
       . "- The FIRST section is always section_type \"Headers\" and the LAST section is always section_type \"Footers\".\n"
-      . "- Between them: Home 6–8 sections; overview pages 4–6 (on listing overviews include the search filters and the results grid; on other overviews a section that lists the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
+      . "- Between them: Home 6–8 sections; overview pages 4–6 (on listing overviews a Category Filters section (search and filters) right before the results grid of the items; on other overviews a section that lists the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
       . "- Order the sections the way a visitor reads the page: hero or intro right after the header, the main content next, proof and the call to action near the end.\n"
       . "- section_type MUST be one of: " . implode(' | ', $types) . " (for properties use Property or Single Property sections, for cars and products the product sections).\n"
-      . "- section_name: short and specific to this business (2–5 words).\n"
+      . "- section_name: short and specific to this business (2–5 words). Name and describe what this section type shows; never promise something the type does not have, such as a configurator, a calculator or a booking widget (a hero is a title, a text, a button and an image). Search and filters only exist as a Category Filters section, and only on a page that lists items with a detail page.\n"
       . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
       . "- key_content: 2–4 concrete items from the brief.\n"
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"

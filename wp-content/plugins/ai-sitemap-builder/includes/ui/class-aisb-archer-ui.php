@@ -17,6 +17,7 @@ require_once __DIR__ . '/class-aisb-archer-sector.php';
 require_once __DIR__ . '/class-aisb-archer-checks.php';
 require_once __DIR__ . '/class-aisb-archer-marketing.php';
 require_once __DIR__ . '/class-aisb-archer-collections.php';
+require_once __DIR__ . '/class-aisb-archer-structure.php';
 
 /**
  * Archer-interface voor de websitebouwer.
@@ -61,6 +62,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Generate())->init();
     (new AISB_Archer_Section_Edit())->init();
     (new AISB_Archer_Section_Library())->init();
+    (new AISB_Archer_Structure())->init();
     (new AISB_Archer_Taste())->init();
     (new AISB_Archer_Template_Import())->init();
     (new AISB_Archer_Chrome())->init();
@@ -137,6 +139,9 @@ class AISB_Archer_UI {
       'isStaff'   => current_user_can('manage_options') ? 1 : 0,
       'published' => (!empty($_GET['aisb_project']) && get_post_meta((int) $_GET['aisb_project'], 'aisb_published_url', true)) ? 1 : 0,
       'sectionLabels' => self::section_labels(),
+      // Sitemap en wireframes: dezelfde sectietypes, met dezelfde namen.
+      'sitemapTypes' => ($step === 1 && class_exists('AISB_Archer_Structure')) ? AISB_Archer_Structure::available() : [],
+      'tagLabels' => class_exists('AISB_Archer_Structure') ? AISB_Archer_Structure::tag_labels() : [],
     ]);
   }
 
@@ -642,6 +647,17 @@ class AISB_Archer_UI {
     $data = json_decode($raw, true);
     if (!is_array($data) || !is_array($data['sitemap'] ?? null)) wp_send_json_error(['message' => 'Ongeldige sitemap.'], 400);
 
+    // Types zonder sjablonen omzetten, en de koppeling met de wireframes (wf_uuid) onthouden.
+    foreach ($data['sitemap'] as $i => $page) {
+      foreach ((array) (is_array($page) ? ($page['sections'] ?? []) : []) as $k => $sec) {
+        if (is_array($sec) && class_exists('AISB_Archer_Structure')) {
+          $data['sitemap'][$i]['sections'][$k]['section_type'] = AISB_Archer_Structure::retire((string) ($sec['section_type'] ?? ''));
+        }
+      }
+    }
+    // De bewaarde versie: daar staat de koppeling met de wireframes in.
+    $stored = json_decode((string) get_post_meta($sitemap_id, 'aisb_sitemap_json', true), true);
+
     // Dezelfde regels als bij een gewone versie.
     if (class_exists('AISB_Enforcer') && class_exists('AISB_Prompts')) {
       $enforcer = new AISB_Enforcer(new AISB_Prompts());
@@ -649,6 +665,7 @@ class AISB_Archer_UI {
         $data = $enforcer->enforce_rules_on_data($data);
       }
     }
+    if (class_exists('AISB_Archer_Structure') && is_array($stored)) $data = AISB_Archer_Structure::keep_links($stored, $data);
 
     // Header altijd eerst, footer altijd laatst.
     if (class_exists('AISB_Archer_Sitemap_Rules')) {

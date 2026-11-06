@@ -6,6 +6,7 @@
  * - POST   /archer-ct/v1/types           add or update definitions ({types:[...], replace:false})
  * - DELETE /archer-ct/v1/types/<key>     remove a definition (the posts are kept)
  * - POST   /archer-ct/v1/template        Bricks template for one item of a type ({type, title})
+ * - POST   /archer-ct/v1/megamenu        Bricks mega menu templates for big menu items ({menu, items:[{url,title}]})
  * - POST   /archer-ct/v1/items           add or update items of one type ({type, items:[...]})
  *
  * Items carry a "uid" from the builder. Publishing again updates an item only while
@@ -86,11 +87,88 @@ class Archer_CT_Rest {
 
 		register_rest_route(
 			self::NS,
+			'/megamenu',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'save_megamenu' ),
+				'permission_callback' => array( $this, 'can_manage' ),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/items',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'save_items' ),
 				'permission_callback' => array( $this, 'can_manage' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/filters',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'index_filters' ),
+				'permission_callback' => array( $this, 'can_manage' ),
+			)
+		);
+	}
+
+	/**
+	 * POST /filters: turn on Bricks query filters and index the filter elements of the given pages.
+	 *
+	 * The Archer builder writes pages straight into the Bricks meta, so Bricks never saw their filter
+	 * elements. This registers them and builds the index from the items that exist now.
+	 *
+	 * @param WP_REST_Request $request Request with "pages" (post IDs).
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function index_filters( $request ) {
+		if ( ! class_exists( '\\Bricks\\Query_Filters' ) ) {
+			return new WP_Error( 'archer_ct_no_bricks', 'Bricks query filters are not available.', array( 'status' => 400 ) );
+		}
+		$settings = get_option( 'bricks_global_settings', array() );
+		if ( ! is_array( $settings ) ) {
+			$settings = array();
+		}
+		$turned_on = empty( $settings['enableQueryFilters'] );
+		if ( $turned_on ) {
+			$settings['enableQueryFilters'] = true;
+			update_option( 'bricks_global_settings', $settings );
+		}
+		$qf = \Bricks\Query_Filters::get_instance();
+		if ( method_exists( $qf, 'maybe_create_tables' ) ) {
+			$qf->maybe_create_tables();
+		}
+		// Private in Bricks 2.x: called the same way Bricks does after saving a page.
+		$call = static function ( $name, ...$args ) use ( $qf ) {
+			if ( ! method_exists( $qf, $name ) ) {
+				return null;
+			}
+			$method = new ReflectionMethod( $qf, $name );
+			$method->setAccessible( true );
+			return $method->invoke( $qf, ...$args );
+		};
+		$call( 'maybe_update_table_structure' );
+		$done = array();
+		foreach ( array_map( 'absint', (array) $request->get_param( 'pages' ) ) as $page_id ) {
+			if ( ! $page_id || ! get_post( $page_id ) ) {
+				continue;
+			}
+			$data = get_post_meta( $page_id, BRICKS_DB_PAGE_CONTENT, true );
+			if ( is_array( $data ) ) {
+				$call( 'maybe_update_element', $page_id, $data );
+				$done[] = $page_id;
+			}
+		}
+		$reindex = method_exists( $qf, 'reindex' ) ? $qf->reindex() : null;
+		return rest_ensure_response(
+			array(
+				'enabled' => true,
+				'turned_on' => $turned_on,
+				'pages'   => $done,
+				'reindex' => true === $reindex ? 'ok' : $reindex,
 			)
 		);
 	}
@@ -446,5 +524,78 @@ class Archer_CT_Rest {
 		}
 
 		return rest_ensure_response( array( 'type' => $type, 'items' => $out ) );
+	}
+	/**
+	 * POST /megamenu: Bricks mega menu templates for top-level items of one menu.
+	 * Body: {menu: <term id>, items: [{url, title}]}. Every earlier mega menu of that menu is cleared first,
+	 * so publishing again with a smaller menu removes it. Returns [{url, item, template}].
+	 * The builder fills each template afterwards through the normal Bricks injection.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function save_megamenu( WP_REST_Request $request ) {
+		$menu_id = absint( $request->get_param( 'menu' ) );
+		$menu    = $menu_id ? wp_get_nav_menu_object( $menu_id ) : false;
+		if ( ! $menu ) {
+			return new WP_Error( 'archer_ct_menu', 'Unknown menu.', array( 'status' => 400 ) );
+		}
+		$items = (array) wp_get_nav_menu_items( $menu->term_id, array( 'post_status' => 'any' ) );
+		foreach ( $items as $it ) {
+			$old = (int) get_post_meta( $it->ID, '_bricks_mega_menu_template_id', true );
+			if ( $old && 'archer-megamenu' === get_post_meta( $old, '_archer_ct_source', true ) ) {
+				wp_delete_post( $old, true );
+			}
+			delete_post_meta( $it->ID, '_bricks_mega_menu_template_id' );
+		}
+		// Megamenu's van menu-items die niet meer bestaan (een vorige publicatie) ook opruimen.
+		global $wpdb;
+		$used = array_map( 'intval', (array) $wpdb->get_col( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_bricks_mega_menu_template_id'" ) );
+		foreach ( get_posts( array( 'post_type' => 'bricks_template', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids', 'meta_key' => '_archer_ct_source', 'meta_value' => 'archer-megamenu' ) ) as $orphan ) {
+			if ( ! in_array( (int) $orphan, $used, true ) ) {
+				wp_delete_post( $orphan, true );
+			}
+		}
+		$norm = static function ( $u ) {
+			return untrailingslashit( (string) wp_parse_url( (string) $u, PHP_URL_PATH ) );
+		};
+		$out = array();
+		foreach ( (array) $request->get_param( 'items' ) as $want ) {
+			$want  = (array) $want;
+			$match = null;
+			foreach ( $items as $it ) {
+				if ( (int) $it->menu_item_parent !== 0 ) {
+					continue;
+				}
+				if ( $norm( $it->url ) === $norm( $want['url'] ?? '' ) || ( '' !== (string) ( $want['title'] ?? '' ) && $it->title === $want['title'] ) ) {
+					$match = $it;
+					break;
+				}
+			}
+			if ( ! $match ) {
+				continue;
+			}
+			$tid = wp_insert_post(
+				array(
+					'post_type'   => 'bricks_template',
+					'post_status' => 'publish',
+					'post_title'  => 'Megamenu: ' . $match->title,
+				),
+				true
+			);
+			if ( is_wp_error( $tid ) ) {
+				continue;
+			}
+			update_post_meta( $tid, '_bricks_template_type', 'section' );
+			update_post_meta( $tid, '_bricks_editor_mode', 'bricks' );
+			update_post_meta( $tid, '_archer_ct_source', 'archer-megamenu' );
+			update_post_meta( $match->ID, '_bricks_mega_menu_template_id', $tid );
+			$out[] = array(
+				'url'      => (string) ( $want['url'] ?? '' ),
+				'item'     => $match->ID,
+				'template' => $tid,
+			);
+		}
+		return rest_ensure_response( $out );
 	}
 }
