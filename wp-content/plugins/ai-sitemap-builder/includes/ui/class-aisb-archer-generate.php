@@ -207,15 +207,19 @@ class AISB_Archer_Generate {
       $kc = array_values(array_filter((array) ($section['key_content'] ?? []), 'is_string'));
       // key_content is een opdracht, geen tekst om terug te geven: buiten de Target JSON houden.
       $roles = (array) ($section['roles'] ?? []);
+      $item_n = 0;
+      foreach ($roles as $r) { if (preg_match('/^item (\d+)$/', (string) $r, $mm)) $item_n = max($item_n, (int) $mm[1]); }
       $target = $section;
       unset($target['key_content'], $target['roles']);
       $map = [];
       foreach ($flow as $fk => $fp) $map[] = '- ' . $fk . ($fk === (string) $key ? ' (THIS SECTION)' : '') . ': ' . ($fp !== '' ? $fp : 'section');
       $calls[(string) $key] = ['system' => $system, 'user' => $base
         . "PAGE FLOW (all sections of this page, top to bottom; [..] is the content that section covers):\n" . implode("\n", $map) . "\n"
-        . ($kc ? "MUST COVER: this section covers exactly these " . count($kc) . " points and nothing else: " . implode(' | ', $kc) . ".\n"          . "SLOT ROLES: each point gets its own repeated slot, in this order: one point per slot, never two points in one slot and never one point spread over two. Do not swap the points for other topics from the brief and do not add points of your own.\n" : '')
+        . ($kc ? "MUST COVER: this section covers exactly these " . count($kc) . " points and nothing else: " . implode(' | ', $kc) . ".\n"          . "SLOT ROLES: each point gets its own repeated slot, in this order: one point per slot, never two points in one slot and never one point spread over two. Do not swap the points for other topics from the brief and do not add points of your own.\n"
+          . "NAMES: the brief also contains names that are not the subject of this section: owners and staff, partner and supplier brands, tool and product names. Use such a name only when one of the points above names it. Never attach a person's name to a service, a price or a treatment, and never use a brand name as a heading or a card title unless a point says so.\n" : '')
         . ($roles ? "MODULE ROLES (which part of the design each module id is): " . wp_json_encode($roles) . "\n"
-          . "A module marked \"section\" is the section's own tagline, heading or intro: it names what the whole section is about and is NEVER one of the MUST COVER points. A module marked \"item N\" belongs to repeated slot N and carries MUST COVER point N and nothing else. If there are more repeated slots than points, leave the extra slot's text general instead of inventing an extra point.\n" : '')
+          . "A module marked \"section\" is the section's own tagline, heading or intro: it names what the whole section is about and is NEVER one of the MUST COVER points. A module marked \"item N\" belongs to repeated slot N and carries MUST COVER point N and nothing else.\n" : '')
+        . ($roles && $kc && $item_n > count($kc) ? "SURPLUS SLOTS: the design has " . $item_n . " repeated slots but this section has only " . count($kc) . " points. Items 1 to " . count($kc) . " carry the points, in order. Each slot after that gets a short line that supports the same subject (a benefit, a reassurance, a next step) and must NOT introduce a new topic, and must NOT borrow a topic that another section of this page covers.\n" : '')
         . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
         . "You write ONLY " . $key . ". The page reads as one story from top to bottom: this section covers its own purpose and nothing else. Do not repeat what another section of this page covers: no second introduction of the business, no restating the hero claim, no list of the same services or the same benefits again, no same examples or sentences. Use fresh wording; a reader who scrolls must learn something new in every section.\n"
         . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
