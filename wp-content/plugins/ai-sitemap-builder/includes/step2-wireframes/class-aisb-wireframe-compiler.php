@@ -56,10 +56,14 @@ class AISB_Wireframe_Compiler {
       // --- Prioriteit B: Bricks template post (uit de Bricks template bibliotheek) ---
       $bricks_post_id = isset($sec['bricks_template_id']) ? (int) $sec['bricks_template_id'] : 0;
       if ($bricks_post_id > 0) {
-        // Archer: Bricks stores templates in _bricks_page_content_2; _bricks_data is a legacy key.
-        $bricks_data = get_post_meta($bricks_post_id, '_bricks_page_content_2', true);
-        if (!is_array($bricks_data) || empty($bricks_data)) {
-          $bricks_data = get_post_meta($bricks_post_id, '_bricks_data', true);
+        // Archer: Bricks bewaart een sjabloon per zone: de inhoud in _bricks_page_content_2, een header in
+        // _bricks_page_header_2 en een footer in _bricks_page_footer_2 (_bricks_data is de oude sleutel).
+        // Alleen de inhoudssleutel lezen liet een header- of footersjabloon uit de bibliotheek leeg, waardoor
+        // de sectie hieronder stil werd overgeslagen.
+        $bricks_data = null;
+        foreach (['_bricks_page_content_2', '_bricks_page_header_2', '_bricks_page_footer_2', '_bricks_data'] as $bricks_meta_key) {
+          $bricks_candidate = get_post_meta($bricks_post_id, $bricks_meta_key, true);
+          if (is_array($bricks_candidate) && !empty($bricks_candidate)) { $bricks_data = $bricks_candidate; break; }
         }
         if (is_array($bricks_data) && !empty($bricks_data)) {
           $tpl_content = array_values(array_filter($bricks_data, function($n) {
