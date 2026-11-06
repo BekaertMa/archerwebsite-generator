@@ -147,16 +147,25 @@ class AISB_Wireframes_AI {
             $aisb_roles[$id] = $role;
             foreach ((array) ($aisb_by_id[$id]['children'] ?? []) as $ch) $aisb_mark((string) $ch, $role);
         };
+        // Eén reeks per sectie: de grootste groep zusjes met dezelfde vorm is de kaartenrij. Nummeren we
+        // elke groep apart, dan bestaat 'item 2' twee keer en spreken de rollen elkaar tegen.
+        $aisb_best = [];
         foreach ($bricks_data as $aisb_n) {
             $kids = array_map('strval', (array) ($aisb_n['children'] ?? []));
             if (count($kids) < 2) continue;
             $groups = [];
             foreach ($kids as $ch) $groups[$aisb_shape($ch)][] = $ch;
-            foreach ($groups as $members) {
+            foreach ($groups as $sig => $members) {
                 if (count($members) < 2) continue;
-                $nr = 0;
-                foreach ($members as $ch) { $nr++; $aisb_mark($ch, 'item ' . $nr); }
+                // Een kaartenrij heeft tekst: een rij lege blokjes of iconen telt niet mee.
+                if (!preg_match('/heading|text|button|icon-box|list/i', (string) $sig)) continue;
+                $score = count($members) * 100 + substr_count((string) $sig, 'heading') + substr_count((string) $sig, 'text');
+                if (!$aisb_best || $score > $aisb_best['score']) $aisb_best = ['score' => $score, 'members' => $members];
             }
+        }
+        if ($aisb_best) {
+            $nr = 0;
+            foreach ($aisb_best['members'] as $ch) { $nr++; $aisb_mark($ch, 'item ' . $nr); }
         }
         $role_map = [];
 
@@ -193,10 +202,19 @@ class AISB_Wireframes_AI {
             $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
             $purpose = $ctx ? trim($ctx['name'] . ': ' . $ctx['purpose'], ': ') : '';
             if ($purpose === '') $purpose = (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content');
+            // Rollen alleen meesturen als de kaartenrij volledig herkend is. Een half herkende structuur
+            // (een paar kaarten als 'item', de rest als 'section') stuurt het model de verkeerde kant op;
+            // dan liever niets zeggen en het aan de tekst zelf overlaten.
+            $aisb_kc_count = count((array) ($ctx['key_content'] ?? []));
+            $aisb_items = 0;
+            foreach ($role_map as $aisb_r) {
+                if (preg_match('/^item (\d+)$/', (string) $aisb_r, $aisb_mm)) $aisb_items = max($aisb_items, (int) $aisb_mm[1]);
+            }
+            $aisb_send_roles = $aisb_items >= 2 && ($aisb_kc_count === 0 || $aisb_items >= $aisb_kc_count);
             $to_translate["section_{$idx}"] = [
                 'purpose' => $purpose,
                 'key_content' => $ctx['key_content'] ?? [],
-                'roles' => $role_map,
+                'roles' => $aisb_send_roles ? $role_map : [],
                 'modules' => $module_data_to_translate
             ];
         }
