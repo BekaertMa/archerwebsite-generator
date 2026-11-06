@@ -1419,6 +1419,26 @@ class AISB_InstaWP {
       }
     }
 
+    // Archer: een megamenu in de header voor hoofdmenu-items met veel subpagina's (zie AISB_Archer_Megamenu).
+    if (class_exists('AISB_Archer_Megamenu') && $project instanceof WP_Post && !empty($bricks_injections) && !empty($archer_menu_ids)) {
+      $archer_mm_login = $this->remote_wordpress_login($site);
+      if (!is_wp_error($archer_mm_login)) {
+        $archer_mm_url = untrailingslashit((string) $site['site_url']);
+        $archer_mm_nonce = $this->fetch_wp_rest_nonce($archer_mm_url, $archer_mm_login['cookies'], $timeout);
+        $archer_mm = AISB_Archer_Megamenu::apply((int) $project->ID, $published_pages, $archer_menu_ids, $bricks_injections, $archer_mm_url, $archer_mm_login['cookies'], $archer_mm_nonce, function (string $url, array $args) {
+          return $this->remote_request($url, $args);
+        });
+        if (!empty($archer_mm['classes'])) {
+          $archer_have = [];
+          foreach ($global_classes as $archer_gc) if (is_array($archer_gc) && isset($archer_gc['id'])) $archer_have[(string) $archer_gc['id']] = true;
+          foreach ($this->normalise_global_classes_for_target($archer_mm['classes']) as $archer_gc) {
+            if (is_array($archer_gc) && isset($archer_gc['id']) && !isset($archer_have[(string) $archer_gc['id']])) $global_classes[] = $archer_gc;
+          }
+        }
+        if (!empty($archer_mm['made'])) error_log('[AISB] Archer: ' . (int) $archer_mm['made'] . ' megamenu(s) in de header.');
+      }
+    }
+
     // The Bricks page-builder data lives in protected `_bricks_*` post meta.
     // XML-RPC `set_custom_fields` silently refuses to write protected meta on a
     // vanilla WordPress + Bricks clone (our plugin is not installed there), so
@@ -2200,10 +2220,9 @@ class AISB_InstaWP {
     $postmeta_table           = $prefix . 'postmeta';
     $term_relationships_table = $prefix . 'term_relationships';
 
-    // Check if the menu already exists (by slug or name). If it does, delete its items first.
     $term_id = 0;
     $term_taxonomy_id = 0;
-    // stmt voor bestrijding sql injection
+
     $stmt = $connection->prepare("SELECT t.term_id, tt.term_taxonomy_id FROM {$terms_table} t INNER JOIN {$term_taxonomy_table} tt ON tt.term_id=t.term_id WHERE tt.taxonomy='nav_menu' AND (t.slug=? OR t.name=?) ORDER BY t.term_id ASC LIMIT 1");
     if ($stmt) {
       $stmt->bind_param('ss', $menu_slug, $menu_name);

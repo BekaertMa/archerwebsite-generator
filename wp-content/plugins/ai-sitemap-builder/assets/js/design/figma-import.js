@@ -1,4 +1,4 @@
-﻿/**
+/**
  * design/figma-import.js - Importeert Figma-gegenereerde Brixies JSON in het designcanvas.
  *
  * Matchingstrategie op basis van positie:
@@ -995,10 +995,23 @@
       }
 
       if (!iframe) {
+        console.log(
+          "[AISB import] tpl:" +
+            tplId +
+            (sectionUuid ? " uuid:" + sectionUuid : "") +
+            " (pos " +
+            (iframeQueuePos[tplId] || 0) +
+            ") → geen iframe in queue",
+        );
         notMatched++;
         return;
       }
       if (!iframe._loaded) {
+        console.log(
+          "[AISB import] tpl:" +
+            tplId +
+            " → iframe gevonden maar nog niet geladen",
+        );
         notMatched++;
         return;
       }
@@ -1038,6 +1051,16 @@
       var usedDomLeaves = {};
       var domCursor = 0;
 
+      console.log(
+        "[AISB import] tpl:" +
+          tplId +
+          " (iframe " +
+          iframe._sectionPostId +
+          ") | Figma:",
+        figmaTexts.length,
+        "DOM:",
+        domLeaves.length,
+      );
 
       figmaTexts.forEach(function (figEl, i) {
         var sLookup = figEl.settings || {};
@@ -1059,6 +1082,14 @@
         }
         if (!domEl) {
           textMismatched++;
+          console.log(
+            "[AISB import]   pos " +
+              i +
+              (bricksId ? " id:" + bricksId : "") +
+              ": geen DOM-element (figma: " +
+              ((figEl.settings && figEl.settings.text) || "").slice(0, 30) +
+              ")",
+          );
           return;
         }
 
@@ -1071,6 +1102,14 @@
         var newText =
           s.text !== undefined && s.text !== null ? String(s.text) : null;
 
+        console.log(
+          "[AISB import]   pos " +
+            i +
+            ": DOM='" +
+            (domEl.innerText || "").slice(0, 30) +
+            "'" +
+            (newText ? " → '" + newText.slice(0, 30) + "'" : ""),
+        );
 
         if (newText !== null) {
           if (typeof D._applyTextPatch === "function") {
