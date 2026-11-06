@@ -31,9 +31,18 @@ class AISB_Wireframes_AI {
     
     // 1. Pagina-info zoeken in de sitemap (titel, secties)
     $page_info = ['page_title' => $page_slug, 'sections' => []];
-    $sitemap_array = array_merge($sitemap_data['sitemap'] ?? [], $sitemap_data['pages'] ?? []);
-    foreach($sitemap_array as $p) {
-        if (!is_array($p)) continue;
+    // Archer: ook subpagina's meenemen (een dienstpagina hangt onder 'diensten'), anders vindt de
+    // copywriter geen page_purpose of sectiecontext en schrijft hij op gevoel verder.
+    $aisb_flat = [];
+    $aisb_walk = function ($nodes) use (&$aisb_walk, &$aisb_flat) {
+        foreach ((array) $nodes as $n) {
+            if (!is_array($n)) continue;
+            $aisb_flat[] = $n;
+            if (!empty($n['children'])) $aisb_walk($n['children']);
+        }
+    };
+    $aisb_walk(array_merge($sitemap_data['sitemap'] ?? [], $sitemap_data['pages'] ?? []));
+    foreach ($aisb_flat as $p) {
         $slug = $this->normalize_slug((string)($p['slug'] ?? $p['page_slug'] ?? ''));
         if ($slug === $this->normalize_slug($page_slug)) {
             $page_info = $p;
@@ -45,16 +54,30 @@ class AISB_Wireframes_AI {
     $page_purpose = $page_info['page_purpose'] ?? '';
     $page_type = $page_info['page_type'] ?? '';
 
-    // Sectie-context uit de sitemap ophalen (purpose + key_content per sectie)
+    // Sectie-context uit de sitemap, op wf_uuid (niet op volgnummer: dat schuift als er een sectie bijkomt).
+    // De sitemap heeft al beslist WAT elke sectie zegt (purpose + key_content). Gaf je dat niet mee, dan koos
+    // de copywriter zelf onderwerpen uit de hele brief en belandde bv. Odoo in een sectie van de Shopify-pagina.
+    $section_ctx = [];
     $section_hints = [];
-    if (!empty($page_info['sections']) && is_array($page_info['sections'])) {
-        foreach ($page_info['sections'] as $s) {
-            $name = $s['section_name'] ?? $s['section_type'] ?? '';
-            $purpose = $s['purpose'] ?? '';
-            if ($name && $purpose) {
-                $section_hints[] = "- {$name}: {$purpose}";
-            }
-        }
+    foreach ((array) ($page_info['sections'] ?? []) as $s) {
+        if (!is_array($s)) continue;
+        $name = trim((string) ($s['section_name'] ?? $s['section_type'] ?? ''));
+        $purpose = trim((string) ($s['purpose'] ?? ''));
+        $kc = array_values(array_filter(array_map('trim', array_filter((array) ($s['key_content'] ?? []), 'is_string'))));
+        $uuid = (string) ($s['wf_uuid'] ?? '');
+        if ($uuid !== '') $section_ctx[$uuid] = ['name' => $name, 'purpose' => $purpose, 'key_content' => $kc];
+        if ($name === '' && $purpose === '') continue;
+        $section_hints[] = '- ' . $name . ': ' . $purpose . ($kc ? ' [' . implode(' | ', $kc) . ']' : '');
+    }
+
+    // Paginascope: waar deze pagina over gaat en welke onderwerpen een andere pagina al behandelt.
+    $page_scope = [];
+    foreach ($aisb_flat as $p) {
+        $slug = $this->normalize_slug((string) ($p['slug'] ?? $p['page_slug'] ?? ''));
+        if ($slug === '' || $slug === $this->normalize_slug($page_slug)) continue;
+        $t = trim((string) ($p['page_title'] ?? $p['nav_label'] ?? $slug));
+        $pp = trim((string) ($p['page_purpose'] ?? ''));
+        if ($t !== '') $page_scope[] = '- ' . $t . ($pp !== '' ? ': ' . $pp : '');
     }
 
     // Bricks settings-keys die tekst bevatten
@@ -106,6 +129,37 @@ class AISB_Wireframes_AI {
               'meta_key' => $target_meta_key
           ];
 
+        // Archer: welke modules horen bij een herhaald vak (kaart, rij, kolom) en welke staan op sectieniveau?
+        // Zonder dat onderscheid zet de copywriter het eerste punt in de sectietitel en verzint hij een extra
+        // punt voor het vak dat dan overblijft.
+        $aisb_by_id = [];
+        foreach ($bricks_data as $aisb_n) $aisb_by_id[(string) ($aisb_n['id'] ?? '')] = $aisb_n;
+        $aisb_shape = function (string $id) use (&$aisb_shape, $aisb_by_id) {
+            $n = $aisb_by_id[$id] ?? null;
+            if (!$n) return '';
+            $kids = [];
+            foreach ((array) ($n['children'] ?? []) as $ch) $kids[] = $aisb_shape((string) $ch);
+            return ($n['name'] ?? '?') . ($kids ? '(' . implode(',', $kids) . ')' : '');
+        };
+        $aisb_roles = [];
+        $aisb_mark = function (string $id, string $role) use (&$aisb_mark, $aisb_by_id, &$aisb_roles) {
+            if (isset($aisb_roles[$id])) return;
+            $aisb_roles[$id] = $role;
+            foreach ((array) ($aisb_by_id[$id]['children'] ?? []) as $ch) $aisb_mark((string) $ch, $role);
+        };
+        foreach ($bricks_data as $aisb_n) {
+            $kids = array_map('strval', (array) ($aisb_n['children'] ?? []));
+            if (count($kids) < 2) continue;
+            $groups = [];
+            foreach ($kids as $ch) $groups[$aisb_shape($ch)][] = $ch;
+            foreach ($groups as $members) {
+                if (count($members) < 2) continue;
+                $nr = 0;
+                foreach ($members as $ch) { $nr++; $aisb_mark($ch, 'item ' . $nr); }
+            }
+        }
+        $role_map = [];
+
         foreach ($bricks_data as $node) {
             if (empty($node['settings'])) continue;
             
@@ -127,6 +181,7 @@ class AISB_Wireframes_AI {
                     'type' => $node['name'] ?? 'block',
                     'settings' => $extracted
                 ];
+                $role_map[(string) $node['id']] = $aisb_roles[(string) $node['id']] ?? 'section';
                 error_log('[AISB] DEBUG extracted for ' . $node['id'] . ': ' . wp_json_encode($extracted));
             } else {
                 error_log('[AISB] DEBUG NOTHING extracted for ' . $node['id'] . ' (' . ($node['name'] ?? '?') . ')');
@@ -134,9 +189,14 @@ class AISB_Wireframes_AI {
         }
 
         if (!empty($module_data_to_translate)) {
+            // Archer: doel en key_content van deze sectie uit de sitemap, gekoppeld op uuid.
+            $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
+            $purpose = $ctx ? trim($ctx['name'] . ': ' . $ctx['purpose'], ': ') : '';
+            if ($purpose === '') $purpose = (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content');
             $to_translate["section_{$idx}"] = [
-                // Archer: de sectieomschrijving uit de sitemap, als die er is.
-                'purpose' => (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content'),
+                'purpose' => $purpose,
+                'key_content' => $ctx['key_content'] ?? [],
+                'roles' => $role_map,
                 'modules' => $module_data_to_translate
             ];
         }
@@ -174,7 +234,14 @@ class AISB_Wireframes_AI {
         $prompt .= "Page purpose: {$page_purpose}\n";
     }
     if (!empty($section_hints)) {
-        $prompt .= "Section context:\n" . implode("\n", $section_hints) . "\n";
+        $prompt .= "Section context (what each section of THIS page covers; [..] is the content it must cover):\n" . implode("\n", $section_hints) . "\n";
+    }
+    // Archer: de brief beschrijft het hele bedrijf. Zonder deze afbakening haalt elke pagina er alles bij,
+    // en komt een onderwerp van een andere pagina (bv. Odoo) in een sectie van deze pagina terecht.
+    if (!empty($page_scope)) {
+        $prompt .= "\nPAGE SCOPE: this page is about \"{$page_title}\"" . ($page_purpose ? ": {$page_purpose}" : '') . ".\n";
+        $prompt .= "The website has other pages, each with its own subject:\n" . implode("\n", $page_scope) . "\n";
+        $prompt .= "Write only about this page's subject. A subject that belongs to another page may be mentioned in at most one short sentence, and only to point the reader there; never explain it or list its features here.\n";
     }
     $prompt .= "\nIMPORTANT: Write copy that is specific to the page you're on. Do NOT use generic welcome/landing page text unless this is actually the Home page.Look very good on wich page you're on so you only generate texts that are relevant to the current page. Dont generate de same text for different sections!\n";
     // Archer: guardrails against invented facts and leftover placeholder text.
