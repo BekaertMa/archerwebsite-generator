@@ -19,6 +19,7 @@ class AISB_Archer_Structure {
     'Megamenu Sections - part of header section' => 'header',
     'Footers'                    => 'footer',
     'Hero Sections'              => 'hero',
+    'Category Filters'           => 'filters',
     'Banner Section'             => 'banner',
     'Intro Sections'             => 'intro',
     'Feature Sections'           => 'features',
@@ -48,10 +49,8 @@ class AISB_Archer_Structure {
     'Career Sections'            => 'career',
   ];
 
-  /** Types die de sitemap niet meer aanbiedt (geen sjablonen) => waar ze naartoe gaan. */
-  const RETIRED = [
-    'Category Filters' => 'Intro Sections',
-  ];
+  /** Types die de sitemap niet meer aanbiedt (geen sjablonen) => waar ze naartoe gaan. Nu geen. */
+  const RETIRED = [];
 
   public function init(): void {
     add_filter('aisb_section_types', [__CLASS__, 'filter_section_types']);
@@ -63,6 +62,32 @@ class AISB_Archer_Structure {
     }
     // In de wireframes alleen de types die ook in de sitemap bestaan.
     add_action('wp_ajax_aisb_get_bricks_section_types', [$this, 'ajax_wf_types'], 1);
+    // Sjablonen die op een Archer-site niets tonen (webshopelementen, lussen over producten of categorieën) niet kiezen.
+    add_filter('aisb_bricks_template_pool', [__CLASS__, 'static_pool'], 5, 3);
+  }
+
+  /**
+   * Waarom een sjabloon niet bruikbaar is op een Archer-site: 'shop' (SureCart- of WooCommerce-elementen),
+   * 'loop' (een lus over berichten, producten of categorieën: in de wireframe leeg of vreemde inhoud, en de
+   * lijst van een inhoudstype wordt op de site uit gewone kaarten gemaakt), of '' (bruikbaar).
+   */
+  public static function template_issue(int $id): string {
+    static $cache = [];
+    if (isset($cache[$id])) return $cache[$id];
+    $data = get_post_meta($id, '_bricks_page_content_2', true);
+    $why = '';
+    foreach (is_array($data) ? $data : [] as $n) {
+      $name = (string) ($n['name'] ?? '');
+      if (strpos($name, 'surecart') === 0 || strpos($name, 'woocommerce') === 0) { $why = 'shop'; break; }
+      if (!empty($n['settings']['hasLoop'])) $why = 'loop';
+    }
+    return $cache[$id] = $why;
+  }
+
+  public static function static_pool($pool, $type = '', $used = []) {
+    if (!is_array($pool) || in_array($type, ['header', 'footer', 'megamenu'], true)) return $pool;
+    $keep = array_values(array_filter($pool, fn($t) => self::template_issue((int) ($t['id'] ?? 0)) === ''));
+    return $keep ?: $pool;
   }
 
   /* ───────────────────────── Types ───────────────────────── */
@@ -340,6 +365,7 @@ class AISB_Archer_Structure {
     // Pas na het antwoord van de plugin: dan staat het model in de database.
     register_shutdown_function(function () use ($pid, $sid, $slug, $action) {
       try {
+        self::label_filters($pid, $sid, $slug);
         self::push_to_sitemap($pid, $sid, $slug, $action === 'aisb_generate_wireframe_page');
       } catch (\Throwable $e) {
         error_log('[Archer] sitemap volgen mislukt: ' . $e->getMessage());
@@ -531,7 +557,12 @@ class AISB_Archer_Structure {
       }
     }
     $hints = [];
-    foreach ($model['sections'] as $i => $w) if (is_array($w) && isset($hint_by_uuid[(string) ($w['uuid'] ?? '')])) $hints[$i] = $hint_by_uuid[$w['uuid']];
+    foreach ($model['sections'] as $i => $w) {
+      if (!is_array($w)) continue;
+      $h = $hint_by_uuid[(string) ($w['uuid'] ?? '')] ?? '';
+      if (strtolower((string) ($w['type'] ?? '')) === 'filters' && class_exists('AISB_Archer_Collections')) $h = trim($h . ' ' . AISB_Archer_Collections::filter_hint($pid, $slug));
+      if ($h !== '') $hints[$i] = $h;
+    }
     if (class_exists('AISB_Archer_Generate')) AISB_Archer_Generate::set_hints($slug, $hints);
     @set_time_limit(240);
     try {
@@ -541,7 +572,22 @@ class AISB_Archer_Structure {
       return $model;
     }
     self::save_model($pid, $sid, $slug, $model);
+    self::label_filters($pid, $sid, $slug);
     return $model;
+  }
+
+  /** Filtersecties in de wireframe: titels en keuzes zoals op de site (zie AISB_Archer_Collections). */
+  public static function label_filters(int $pid, int $sid, string $slug): void {
+    if (!class_exists('AISB_Archer_Collections')) return;
+    $model = self::load_model($pid, $sid, $slug);
+    foreach ((array) ($model['sections'] ?? []) as $w) {
+      if (!is_array($w) || strtolower((string) ($w['type'] ?? '')) !== 'filters' || empty($w['ai_wireframe_id'])) continue;
+      $post = (int) $w['ai_wireframe_id'];
+      $data = get_post_meta($post, '_bricks_page_content_2', true);
+      if (!is_array($data) || !$data) continue;
+      $new = AISB_Archer_Collections::preview_filters($data, $pid, $slug);
+      if (wp_json_encode($new) !== wp_json_encode($data)) update_post_meta($post, '_bricks_page_content_2', wp_slash($new));
+    }
   }
 
   /* ───────────────────────── AJAX ───────────────────────── */

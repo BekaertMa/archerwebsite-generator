@@ -19,6 +19,7 @@ class AISB_Archer_Section_Library {
   const DESCS = [
     'hero' => 'De opening van een pagina: grote titel, korte uitleg, een knop en meestal een beeld.',
     'banner' => 'Een brede band met een korte boodschap en een knop, bijvoorbeeld een actie of aankondiging.',
+    'filters' => 'Zoeken en filters in een balk boven een lijst (panden, wagens, producten). Op de website filtert de bezoeker daarmee de lijst eronder.',
     'intro' => 'Een korte inleiding bovenaan een pagina of lijst: titel en een paar zinnen, zonder grote foto.',
     'features' => 'Wat je aanbiedt of waarom klanten voor je kiezen, als kaarten of een lijst met iconen.',
     'content' => 'Een verhaal of uitleg naast een foto: over ons, een dienst in detail, een aanpak.',
@@ -217,6 +218,12 @@ class AISB_Archer_Section_Library {
   private static function write_text(array $model, int $pid, int $sid, string $slug, string $uuid): array {
     if (!class_exists('AISB_Wireframes_AI')) return $model;
     @set_time_limit(180);
+    // Zoeken en filters: de AI weet welke velden er komen (zie AISB_Archer_Collections::filter_hint).
+    foreach ($model['sections'] as $i => $s) {
+      if (is_array($s) && ($s['uuid'] ?? '') === $uuid && strtolower((string) ($s['type'] ?? '')) === 'filters' && class_exists('AISB_Archer_Collections')) {
+        AISB_Archer_Generate::set_hints($slug, [$i => AISB_Archer_Collections::filter_hint($pid, $slug)]);
+      }
+    }
     try {
       return (new AISB_Wireframes_AI())->populate_bricks_content_with_ai($model, $pid, $sid, $slug, [$uuid]);
     } catch (Throwable $e) {

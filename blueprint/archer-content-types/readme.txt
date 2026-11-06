@@ -3,7 +3,7 @@ Contributors: archerwebsites
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 
 Custom content types without code: realisaties, projecten, referenties, wagens, vacatures or anything else.
@@ -44,6 +44,12 @@ Items are matched on "uid". Publishing again updates an item only while nobody c
 * archer_ct_presets (filter) — the examples on the settings screen.
 
 == Changelog ==
+
+= 1.3.0 =
+* POST /archer-ct/v1/filters: turns on Bricks query filters and indexes the filter elements of the given pages (search and filters above a list of items).
+
+= 1.2.0 =
+* POST /archer-ct/v1/megamenu: Bricks mega menu templates for the top-level items of a menu.
 
 = 1.1.0 =
 * POST /archer-ct/v1/template: a Bricks content template per type (condition: post type), used by the Archer builder for the page of one item.

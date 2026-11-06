@@ -146,7 +146,8 @@ class AISB_Archer_Generate {
     foreach ($sections as $s) {
       $wt = self::wireframe_type((string) ($s['section_type'] ?? ''));
       $out[] = $wt;
-      $hints[count($out) - 1] = trim((string) ($s['section_name'] ?? '') . ': ' . (string) ($s['purpose'] ?? ''), ': ');
+      $hints[count($out) - 1] = trim((string) ($s['section_name'] ?? '') . ': ' . (string) ($s['purpose'] ?? ''), ': ')
+        . ($wt === 'filters' && class_exists('AISB_Archer_Collections') ? ' ' . AISB_Archer_Collections::filter_hint((int) $project_id, (string) $page_slug) : '');
     }
     self::$hints[$page_slug] = $hints;
     return $out;
@@ -1026,10 +1027,10 @@ PROMPT;
       . "Write everything in {$lang}. Never mix languages. Never invent facts (names, numbers, prices, addresses) that are not in the brief.\n"
       . "Sections:\n"
       . "- The FIRST section is always section_type \"Headers\" and the LAST section is always section_type \"Footers\".\n"
-      . "- Between them: Home 6–8 sections; overview pages 4–6 (on listing overviews the results grid of the items; on other overviews a section that lists the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
+      . "- Between them: Home 6–8 sections; overview pages 4–6 (on listing overviews a Category Filters section (search and filters) right before the results grid of the items; on other overviews a section that lists the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
       . "- Order the sections the way a visitor reads the page: hero or intro right after the header, the main content next, proof and the call to action near the end.\n"
       . "- section_type MUST be one of: " . implode(' | ', $types) . " (for properties use Property or Single Property sections, for cars and products the product sections).\n"
-      . "- section_name: short and specific to this business (2–5 words). Name and describe what this section type shows; never promise something the type does not have, such as a search, filters, a configurator, a calculator or a booking widget (a hero is a title, a text, a button and an image).\n"
+      . "- section_name: short and specific to this business (2–5 words). Name and describe what this section type shows; never promise something the type does not have, such as a configurator, a calculator or a booking widget (a hero is a title, a text, a button and an image). Search and filters only exist as a Category Filters section, and only on a page that lists items with a detail page.\n"
       . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
       . "- key_content: 2–4 concrete items from the brief.\n"
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
