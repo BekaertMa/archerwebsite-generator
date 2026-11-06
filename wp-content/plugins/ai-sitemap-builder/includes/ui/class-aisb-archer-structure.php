@@ -353,6 +353,31 @@ class AISB_Archer_Structure {
     $page['sections'] = array_values($secs);
   }
 
+  /**
+   * Zorgt dat de sitemapsecties van deze pagina een wf_uuid hebben, en schrijft alleen die koppeling:
+   * namen, doelen en key_content blijven ongemoeid. push_to_sitemap koppelt enkel na een nieuwe
+   * wireframe; kwam een pagina langs een andere weg tot stand, dan bleef de sitemap zonder wf_uuid
+   * achter en viel de sectiecontext in de copystap stil weg.
+   *
+   * @return int -1 als er al een koppeling was, anders het aantal gekoppelde secties (0 = niets kunnen koppelen).
+   */
+  public static function ensure_links(int $pid, int $sid, string $slug): int {
+    $model = self::load_model($pid, $sid, $slug);
+    $data = self::load_sitemap($sid);
+    if (!$model || !$data || !is_array($model['sections'] ?? null)) return 0;
+    $pi = self::page_index($data, $slug);
+    if ($pi < 0) return 0;
+    $page = $data['sitemap'][$pi];
+    if (self::has_links($page, $model)) return -1;
+    self::link($page, $model);
+    if (!self::has_links($page, $model)) return 0;
+    $data['sitemap'][$pi] = $page;
+    self::save_sitemap($pid, $sid, $data);
+    $n = 0;
+    foreach ((array) ($page['sections'] ?? []) as $s) if (is_array($s) && !empty($s['wf_uuid'])) $n++;
+    return $n;
+  }
+
   /* ───────────────────────── Wireframes => sitemap ───────────────────────── */
 
   /** Na elke bewaring in de wireframes: de pagina in de sitemap volgt (als de koppeling er al is). */

@@ -20,6 +20,13 @@ class AISB_Wireframes_AI {
   public function populate_bricks_content_with_ai(array $model, int $project_id, int $sitemap_version_id, string $page_slug, array $only_uuids = []): array {
     // Project brief en sitemap ophalen voor context aan OpenAI
     $brief = (string) get_post_meta($project_id, 'aisb_project_brief', true);
+    // Archer: eerst de koppeling sitemap <-> wireframe vastleggen (wf_uuid), zodat de sectiecontext
+    // hieronder op uuid kan koppelen in plaats van op volgorde. Lukt dat niet, dan valt de koppeling
+    // verderop terug op de volgorde.
+    if (class_exists('AISB_Archer_Structure')) {
+        try { \AISB_Archer_Structure::ensure_links($project_id, $sitemap_version_id, $page_slug); }
+        catch (\Throwable $e) { error_log('[AISB] wf_uuid koppelen mislukt: ' . $e->getMessage()); }
+    }
     $sitemap_json = get_post_meta($sitemap_version_id, 'aisb_sitemap_json', true);
     $sitemap_data = json_decode((string)$sitemap_json, true) ?: [];
 
