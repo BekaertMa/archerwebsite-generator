@@ -426,14 +426,15 @@
     const pagerEl = $("[data-archer-wf-pager]");
     const labels = CFG.sectionLabels || {};
 
-    const WF_TYPES = {
+    // Dezelfde namen als de sectietypes in de sitemap (CFG.tagLabels komt van de server).
+    const WF_TYPES = Object.assign({
       header: "Header", footer: "Footer", hero: "Hero", features: "Diensten en troeven",
-      social_proof: "Getuigenissen", testimonials: "Getuigenissen", content: "Tekst en beeld",
+      social_proof: "Logo's", testimonials: "Getuigenissen", content: "Tekst en beeld",
       cta: "Oproep tot actie", process: "Werkwijze", team: "Team", pricing: "Prijzen",
       faq: "Veelgestelde vragen", contact: "Contact", logo: "Logo's", logos: "Logo's",
       gallery: "Galerij", blog: "Blog", portfolio: "Realisaties", stats: "Cijfers",
       intro: "Intro", banner: "Banner", timeline: "Tijdlijn", generic: "Sectie",
-    };
+    }, CFG.tagLabels || {});
     const pageIndex = () => wf.state.pages.findIndex((p) => p.slug === wf.state.pageSlug);
     const isOpen = () => wf.el.expanded && wf.el.expanded.classList.contains("is-open");
 
@@ -644,10 +645,93 @@
     const origLoadAll = wf.loadAllPageModels;
     if (typeof origLoadAll === "function") {
       wf.loadAllPageModels = async function () {
+        // Eerst de wireframes de sitemap laten volgen (zelfde secties, types en volgorde), dan laden.
+        await syncPromise;
+        loadedAfterSync = true;
         const r = await origLoadAll.apply(this, arguments);
         modelsLoaded = true;
         return r;
       };
+    }
+
+    /** Sitemap => wireframes, zonder AI. Start meteen; de modellen worden pas daarna geladen. */
+    let loadedAfterSync = false;
+    async function syncWithSitemap() {
+      const pid = wf.state.projectId || CFG.projectId;
+      const sid = wf.state.sitemapId || CFG.sitemapId;
+      if (!pid || !sid) return [];
+      try {
+        const out = await wf.post("aisb_archer_sync_structure", { project_id: pid, sitemap_version_id: sid });
+        return ((out && out.success && out.data && out.data.pages) || []).filter((p) => p && p.slug && p.wireframe);
+      } catch (e) {
+        console.warn("[Archer] wireframes volgen de sitemap", e);
+        return [];
+      }
+    }
+    const syncPromise = syncWithSitemap();
+    syncPromise.then(async (pages) => {
+      if (!pages.length) return;
+      // Werden de modellen al geladen vóór de synchronisatie: de nieuwe overnemen.
+      if (!loadedAfterSync) {
+        pages.forEach((p) => {
+          normalizeOrder(p.wireframe);
+          wf.state.pageModels[p.slug] = p.wireframe;
+          if (wf.state.pageSlug === p.slug) wf.state.model = p.wireframe;
+          lastSaved[p.slug] = JSON.stringify(p.wireframe);
+          if (wf.state.pages.length) redrawPage(p.slug);
+        });
+      }
+      const pending = pages.filter((p) => Array.isArray(p.pending) && p.pending.length);
+      if (!pending.length) return;
+      // Wachten tot het canvas er staat.
+      for (let i = 0; i < 40 && !modelsLoaded && !document.querySelector(".archer-cv-col"); i++) await new Promise((r) => setTimeout(r, 250));
+      writePendingText(pending);
+    });
+
+    /** AI-tekst voor de secties die er door de sitemap bij kwamen of van type veranderden. */
+    async function writePendingText(pages) {
+      const n = pages.reduce((a, p) => a + p.pending.length, 0);
+      const say = (t, k) => wf.setStatus && wf.setStatus(t, k);
+      say(`De wireframes volgen de sitemap. AI schrijft de teksten van ${n} ${n === 1 ? "sectie" : "secties"}…`);
+      const busy = new Set(pages.map((p) => p.slug));
+      const mark = () => {
+        busy.forEach((slug) => pages.find((p) => p.slug === slug)?.pending.forEach((u) => {
+          const el = document.querySelector(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(u)}"]`);
+          if (el) el.classList.add("is-writing");
+        }));
+      };
+      mark();
+      setTimeout(mark, 1500);
+      let failed = 0;
+      const queue = pages.slice();
+      const worker = async () => {
+        while (queue.length) {
+          const p = queue.shift();
+          try {
+            const out = await wf.post("aisb_archer_sync_text", {
+              project_id: wf.state.projectId, sitemap_version_id: wf.state.sitemapId,
+              page_slug: p.slug, uuids: JSON.stringify(p.pending),
+            });
+            const w = out && out.success && out.data && out.data.wireframe;
+            if (!w) throw new Error("geen antwoord");
+            normalizeOrder(w);
+            wf.state.pageModels[p.slug] = w;
+            if (wf.state.pageSlug === p.slug) wf.state.model = w;
+            lastSaved[p.slug] = JSON.stringify(w);
+            p.pending.forEach((u) => {
+              const el = document.querySelector(`.archer-cv-sec[data-archer-cv-uuid="${CSS.escape(u)}"]`);
+              if (el) el.remove(); // opnieuw laden met de nieuwe tekst
+            });
+            redrawPage(p.slug);
+          } catch (e) {
+            failed++;
+          }
+          busy.delete(p.slug);
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      document.querySelectorAll(".archer-cv-sec.is-writing").forEach((el) => el.classList.remove("is-writing"));
+      say(failed ? "Niet alle teksten konden geschreven worden. Kies bij die secties “Ander voorbeeld”." : "De wireframes volgen de sitemap.", failed ? "err" : "ok");
     }
     const genPending = new Set(); // pagina's waarvan de wireframe gemaakt wordt
     const genFailed = new Set();

@@ -29,7 +29,8 @@ class AISB_Wireframes_Bricks {
     $posts = get_posts([
       'post_type'      => 'bricks_template',
       'post_status'    => 'publish',
-      'posts_per_page' => 500,
+      // Archer: alle sjablonen (er zijn er meer dan 500; anders vielen hele types weg, zoals panden).
+      'posts_per_page' => -1,
       'orderby'        => 'title',
       'order'          => 'ASC',
       'no_found_rows'  => true,

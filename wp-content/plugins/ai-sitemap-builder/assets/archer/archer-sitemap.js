@@ -460,7 +460,7 @@
     };
 
     const typeOptions = (current) => {
-      const list = TYPES.slice();
+      const list = (AVAILABLE || TYPES).slice();
       if (current && !list.includes(current)) list.unshift(current);
       return list.map((t) => `<option value="${esc(t)}"${t === current ? " selected" : ""}>${esc(typeLabel(t))}</option>`).join("");
     };
@@ -801,8 +801,10 @@
       return out;
     };
 
+    // Alleen de types waarvoor de wireframes een sjabloon hebben: zo komen sitemap en wireframes overeen.
+    const AVAILABLE = Array.isArray(CFG.sitemapTypes) && CFG.sitemapTypes.length ? CFG.sitemapTypes : null;
     const sectionOptions = () =>
-      TYPES.filter((t) => !GLOBAL_TYPES.includes(t))
+      (AVAILABLE || TYPES).filter((t) => !GLOBAL_TYPES.includes(t))
         .map((t) => `<option value="${esc(t)}">${esc(typeLabel(t))}</option>`)
         .join("");
 
@@ -849,6 +851,20 @@
       const firstMovable = movable.length ? movable[0].i : -1;
       const lastMovable = movable.length ? movable[movable.length - 1].i : -1;
 
+      const formHere = !!(openForm && openForm.kind === "section" && openForm.slug === slug);
+      const sectionFormHtml = (at) =>
+        `<form class="archer-inline-form" data-form="section" data-slug="${esc(slug)}"${at !== undefined ? ` data-at="${at}"` : ""}>
+               <label class="aisb-label" for="archer-sec-type-${esc(slug)}">Soort sectie</label>
+               <select id="archer-sec-type-${esc(slug)}" name="type">${sectionOptions()}</select>
+               <label class="aisb-label" for="archer-sec-name-${esc(slug)}">Naam <span class="archer-muted">(optioneel)</span></label>
+               <input type="text" id="archer-sec-name-${esc(slug)}" name="name" placeholder="Bijvoorbeeld: Onze diensten">
+               <div class="archer-form-row">
+                 <button type="submit" class="archer-btn archer-btn-primary">Sectie toevoegen</button>
+                 <button type="button" class="archer-btn archer-btn-ghost" data-act="cancel">Annuleren</button>
+               </div>
+               <span class="archer-muted archer-small">De teksten komen in de stap Wireframes.</span>
+             </form>`;
+
       const secHtml = sections
         .map((s, i) => {
           const g = isGlobal(s);
@@ -860,32 +876,26 @@
                  <button type="button" class="archer-sec-tool is-danger" data-act="sec-del" data-slug="${esc(slug)}" data-idx="${i}" aria-label="${esc(s.section_name)} verwijderen">${icon.x}</button>
                </div>`;
           const selected = sel && sel.kind === "section" && sel.slug === slug && sel.idx === i;
+          // "+ Sectie" op de rand onder elke sectie (behalve de footer), zoals in de wireframes.
+          const pill = s.section_type === "Footers" || formHere
+            ? ""
+            : `<button type="button" class="archer-sec-addpill" data-act="open-section" data-slug="${esc(slug)}" data-at="${i + 1}" aria-label="Sectie toevoegen onder ${esc(s.section_name || "deze sectie")}"><span aria-hidden="true">+</span> Sectie</button>`;
+          const insertForm = formHere && openForm.at === i + 1 ? `<li class="archer-sec-insert">${sectionFormHtml(i + 1)}</li>` : "";
           return `<li class="archer-sec${g ? " is-global" : ""}${selected ? " is-selected" : ""}" data-sel-slug="${esc(slug)}" data-sel-idx="${i}" tabindex="0" aria-label="Sectie ${esc(s.section_name || "")} bewerken">
               <div class="archer-sec-body">
                 <div class="archer-sec-type">${esc(typeLabel(s.section_type))}${g ? " · op elke pagina" : ""}</div>
                 <div class="archer-sec-name">${esc(s.section_name || "Sectie")}</div>
                 ${!g && s.purpose ? `<div class="archer-sec-desc">${esc(s.purpose)}</div>` : ""}
               </div>
-              ${tools}
-            </li>`;
+              ${tools}${pill}
+            </li>${insertForm}`;
         })
         .join("");
 
       const sectionForm =
-        openForm && openForm.kind === "section" && openForm.slug === slug
-          ? `<form class="archer-inline-form" data-form="section" data-slug="${esc(slug)}">
-               <label class="aisb-label" for="archer-sec-type-${esc(slug)}">Soort sectie</label>
-               <select id="archer-sec-type-${esc(slug)}" name="type">${sectionOptions()}</select>
-               <label class="aisb-label" for="archer-sec-name-${esc(slug)}">Naam <span class="archer-muted">(optioneel)</span></label>
-               <input type="text" id="archer-sec-name-${esc(slug)}" name="name" placeholder="Bijvoorbeeld: Onze diensten">
-               <div class="archer-form-row">
-                 <button type="submit" class="archer-btn archer-btn-primary">Sectie toevoegen</button>
-                 <button type="button" class="archer-btn archer-btn-ghost" data-act="cancel">Annuleren</button>
-               </div>
-               <span class="archer-muted archer-small">De teksten komen in de stap Wireframes.</span>
-             </form>`
+        formHere && openForm.at === undefined
+          ? sectionFormHtml()
           : "";
-
       const childForm =
         openForm && openForm.kind === "child" && openForm.slug === slug
           ? `<form class="archer-inline-form" data-form="child" data-slug="${esc(slug)}">
@@ -1045,7 +1055,15 @@
         render();
         return;
       }
-      if (act === "open-section") { openForm = { kind: "section", slug }; confirmDelete = null; render(); return; }
+      if (act === "open-section") {
+        const at = parseInt(btn.getAttribute("data-at") || "", 10);
+        openForm = { kind: "section", slug, at: Number.isFinite(at) ? at : undefined };
+        confirmDelete = null;
+        render();
+        const f = listEl.querySelector(`form[data-form="section"][data-slug="${CSS.escape(slug)}"] select`);
+        if (f) f.focus({ preventScroll: true });
+        return;
+      }
       if (act === "open-child") { openForm = { kind: "child", slug }; confirmDelete = null; render(); return; }
       if (act === "open-page") { openForm = { kind: "page" }; confirmDelete = null; render(); return; }
 
@@ -1104,13 +1122,18 @@
         const type = form.elements.type.value;
         const name = (form.elements.name.value || "").trim() || typeLabel(type);
         const sections = Array.isArray(page.sections) ? page.sections.slice() : [];
-        // Voor de footer invoegen, zodat die onderaan blijft.
-        let at = sections.length;
+        // Op de gekozen plaats (onder een sectie), anders vóór de footer, zodat die onderaan blijft.
+        let footAt = sections.length;
         for (let i = sections.length - 1; i >= 0; i--) {
-          if (sections[i].section_type === "Footers") { at = i; break; }
+          if (sections[i].section_type === "Footers") { footAt = i; break; }
         }
+        const want = parseInt(form.getAttribute("data-at") || "", 10);
+        let at = Number.isFinite(want) ? Math.min(Math.max(want, 0), footAt) : footAt;
+        // Nooit boven de header.
+        if (at === 0 && sections[0] && /^(Headers|Megamenu)/.test(sections[0].section_type || "")) at = 1;
         sections.splice(at, 0, { section_name: name, section_type: type, purpose: "", key_content: [] });
         page.sections = sections;
+        if (sel && sel.slug === slug) { sel = null; renderPanel(); }
         syncPage(slug);
         openForm = null;
         afterChange();
