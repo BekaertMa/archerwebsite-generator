@@ -473,7 +473,7 @@
         `<span class="archer-wf-pager-pos">Pagina <strong>${esc(cur ? cur.title || cur.slug : "")}</strong> · ${i + 1} van ${pages.length}</span>` +
         (next
           ? `<button type="button" class="archer-btn archer-btn-primary" data-archer-wf-page="${esc(next.slug)}">Volgende pagina: ${esc(next.title || next.slug)} →</button>`
-          : `<a class="archer-btn archer-btn-primary" data-archer-nav href="${esc($("[data-archer-step-footer] [data-archer-next]")?.getAttribute("href") || "#")}">Verder naar stijl →</a>`);
+          : `<a class="archer-btn archer-btn-primary" data-archer-nav href="${esc($("[data-archer-step-footer] [data-archer-next]")?.getAttribute("href") || "#")}">Verder naar publiceren →</a>`);
     }
 
     document.addEventListener("click", (e) => {
@@ -1002,6 +1002,10 @@
     let genTotal = 0;
     let genDone = 0;
     const setGenProgress = () => {
+      // Voor het scherm Ontwerp (archer-design.js): voortgang van de wireframes.
+      try {
+        document.dispatchEvent(new CustomEvent("archer:wf-progress", { detail: { total: genTotal, done: genDone, pending: genPending.size, failed: Array.from(genFailed) } }));
+      } catch (e) { /* oude browser */ }
       if (!genTotal) { progress.hidden = true; return; }
       progress.hidden = false;
       const left = genTotal - genDone;
@@ -1084,6 +1088,7 @@
       return genRunning;
     }
     UI.generateWireframes = generatePages;
+    UI.wfGenState = () => ({ total: genTotal, done: genDone, pending: genPending.size, failed: Array.from(genFailed), running: genRunning });
 
     // De knoppen van de module gebruiken nu deze generatie.
     if (wf.btn.generateAll) {
@@ -2455,10 +2460,10 @@
 
     // Werkruimte zoals Relume: zolang het canvas zichtbaar is, geen paginatitel en geen voettekst,
     // en het canvas vult het scherm onder de werkbalk.
-    const nextLink = $('[data-archer-step-footer="wireframes"] [data-archer-next]');
+    const nextLink = $('[data-archer-step-footer="design"] [data-archer-next]');
     const wfCard = wb.closest(".archer-wf-card") || document;
     const actions = $(".archer-toolbar-actions", wfCard);
-    const backLink = $('[data-archer-step-footer="wireframes"] .archer-link-back');
+    const backLink = $('[data-archer-step-footer="design"] .archer-link-back');
     if (backLink && actions && !$(".archer-cv-back", actions)) {
       const b = backLink.cloneNode(true);
       b.className = "archer-btn archer-btn-ghost archer-cv-next archer-cv-back archer-ws-back";
@@ -4939,7 +4944,8 @@
 
     // De website op InstaWP al klonen zodra de klant aan de stijl begint: publiceren slaat
     // het klonen dan over (de server antwoordt meteen en kloont op de achtergrond verder).
-    if (CFG.projectId && CFG.step >= 3 && !Number(CFG.published)) {
+    // Het scherm Ontwerp (stap 2) bevat nu ook de stijl.
+    if (Number(CFG.projectId) && Number(CFG.step) >= 2 && !Number(CFG.published)) {
       UI.post("aisb_archer_prewarm", { project_id: CFG.projectId }).catch((err) => console.warn("[Archer] site klaarzetten", err));
     }
 

@@ -439,7 +439,19 @@ class AISB_Assets {
 
         <?php if ($step === 2) : ?>
         <div class="aisb-step-panel" data-aisb-step-panel="2">
-          <?php echo AISB_Archer_UI::render_page_head('wireframes'); ?>
+          <?php echo AISB_Archer_UI::render_page_head('design'); ?>
+          <?php $panel = isset($_GET['aisb_panel']) ? sanitize_key(wp_unslash($_GET['aisb_panel'])) : ''; ?>
+          <!-- Ontwerp: pagina's (links), canvas (midden), stijl en foto's (rechts). archer-design.js vult de zijbalken. -->
+          <div class="archer-design" data-archer-design
+               data-project-id="<?php echo esc_attr($project_id); ?>"
+               data-sitemap-id="<?php echo esc_attr($sitemap_id); ?>"
+               data-panel="<?php echo esc_attr($panel); ?>"
+               data-build="<?php echo !empty($_GET['aisb_build']) ? '1' : ''; ?>"
+               data-sitemap-url="<?php echo esc_url(AISB_Archer_UI::step_url(AISB_Archer_UI::step('sitemap'), $project_id, $sitemap_id)); ?>"
+               data-style-url="<?php echo esc_url(AISB_Archer_UI::step_url(AISB_Archer_UI::step('style'), $project_id, $sitemap_id)); ?>"
+               data-photos-url="<?php echo esc_url(AISB_Archer_UI::step_url(AISB_Archer_UI::step('photos'), $project_id, $sitemap_id)); ?>">
+          <aside class="archer-design-rail archer-design-left" data-archer-design-pages aria-label="Pagina's"></aside>
+          <div class="archer-design-main">
           <div class="aisb-card aisb-wireframes-card archer-wf-card" data-aisb-wireframes
                data-project-id="<?php echo esc_attr($project_id); ?>"
                data-sitemap-id="<?php echo esc_attr($sitemap_id); ?>">
@@ -533,7 +545,10 @@ class AISB_Assets {
 
             <?php endif; ?>
           </div>
-          <?php if ($project_id && $sitemap_id) echo AISB_Archer_UI::render_step_footer('wireframes', $project_id, $sitemap_id, 'Tevreden over de opbouw? Kies nu kleuren en lettertypes.'); ?>
+          </div><!-- /.archer-design-main -->
+          <aside class="archer-design-rail archer-design-right" data-archer-design-side aria-label="Stijl en foto's"></aside>
+          </div><!-- /.archer-design -->
+          <?php if ($project_id && $sitemap_id) echo AISB_Archer_UI::render_step_footer('design', $project_id, $sitemap_id, 'Tevreden over pagina\'s, stijl en foto\'s? Dan kan de website online.'); ?>
         </div><!-- /Stap 2-paneel -->
         <?php endif; ?>
 

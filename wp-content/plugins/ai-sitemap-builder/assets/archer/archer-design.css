@@ -1,0 +1,136 @@
+/* Scherm Ontwerp (archer-design.js): pagina's links, canvas in het midden, stijl en foto's rechts. */
+
+body.archer-design-mode .archer-main { padding-left: 0 !important; padding-right: 0 !important; }
+.archer-design {
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr) 300px;
+  align-items: start;
+  min-height: calc(100vh - var(--ar-design-top, 200px));
+  background: var(--ar-bg);
+  border-top: 1px solid var(--ar-line);
+}
+.archer-design-main { min-width: 0; }
+.archer-design-rail {
+  position: sticky; top: var(--ar-admin-bar);
+  height: calc(100vh - var(--ar-admin-bar));
+  max-height: calc(100vh - var(--ar-admin-bar));
+  overflow: auto; box-sizing: border-box;
+  background: #fff; padding: 14px; font-family: var(--ar-font); color: var(--ar-ink);
+  scrollbar-width: thin;
+}
+.archer-design-left { border-right: 1px solid var(--ar-line); }
+.archer-design-right { border-left: 1px solid var(--ar-line); }
+
+/* Het canvas zit nu in de middenkolom: de werkbalk niet meer over de volle breedte, geen paginatabs. */
+body.archer-cv-mode .archer-design .archer-wf-card > .aisb-wf-toolbar { width: auto; margin: 0; padding: 8px 12px; }
+.archer-design .archer-wf-card > .aisb-wf-toolbar .archer-wf-tabs { visibility: hidden; height: 0; overflow: hidden; flex: 1 1 auto; }
+.archer-design .archer-wf-card { border-radius: 0; border: 0; box-shadow: none; }
+body.archer-cv-mode .archer-design .archer-cv-shell { height: calc(100vh - var(--ar-cv-top, 250px)); }
+/* Het canvas vult de middenkolom, niet het hele venster (archer.css zet het op 100vw). */
+.archer-design .archer-cv-shell { width: auto; margin-left: 0; margin-right: 0; }
+.archer-cv-col.is-flash { outline: 3px solid var(--ar-teal); outline-offset: 6px; transition: outline-color 1s; }
+
+/* ── Pagina's ── */
+.archer-dp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.archer-dp-head h2, .archer-ds-sec h3 { font: 700 15px/1.2 var(--ar-display); color: var(--ar-navy); margin: 0; }
+.archer-dp-head h2 span, .archer-ds-sec h3 span, .archer-ds-tab span { font: 500 11px var(--ar-font); color: var(--ar-muted-2); margin-left: 4px; }
+.archer-dp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.archer-dp-page { position: relative; display: flex; align-items: center; gap: 4px; border-radius: 10px; padding-left: calc(var(--d, 0) * 14px); }
+.archer-dp-page:hover, .archer-dp-page.is-current { background: var(--ar-bg); }
+.archer-dp-page.is-current { box-shadow: inset 3px 0 0 var(--ar-teal); }
+.archer-dp-go { all: unset; box-sizing: border-box; cursor: pointer; flex: 1; min-width: 0; padding: 7px 8px; display: flex; flex-direction: column; gap: 1px; }
+.archer-dp-go:focus-visible { outline: 2px solid var(--ar-teal); border-radius: 8px; }
+.archer-dp-title { font-size: 13.5px; font-weight: 600; color: var(--ar-navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archer-dp-meta { font-size: 11px; color: var(--ar-muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archer-dp-meta.is-busy { color: var(--ar-teal); }
+.archer-dp-meta.is-err { color: var(--ar-danger); }
+.archer-dp-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; padding-right: 4px; }
+.archer-dp-page:hover .archer-dp-acts, .archer-dp-page:focus-within .archer-dp-acts { opacity: 1; }
+.archer-dp-act { all: unset; cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--ar-muted); }
+.archer-dp-act:hover, .archer-dp-act:focus-visible { background: #fff; color: var(--ar-navy); box-shadow: 0 0 0 1px var(--ar-line-2); }
+.archer-dp-act.is-danger:hover { color: var(--ar-danger); }
+.archer-dp-rename { flex: 1; display: flex; gap: 4px; padding: 4px; }
+.archer-dp-rename .archer-input { min-height: 32px; padding: 4px 8px !important; font-size: 13px; }
+.archer-dp-add { display: flex; flex-direction: column; gap: 6px; padding: 10px; margin-bottom: 10px; background: var(--ar-bg); border-radius: 12px; }
+.archer-dp-add[hidden] { display: none; }
+.archer-dp-add .archer-input { min-height: 34px; padding: 6px 10px !important; font-size: 13px; }
+.archer-dp-add-row { display: flex; align-items: center; gap: 8px; }
+.archer-dp-small { font-size: 11.5px; color: var(--ar-muted-2); margin: 0; }
+.archer-dp-small:empty { display: none; }
+.archer-dp-more { display: block; margin-top: 16px; font-size: 12.5px; font-weight: 600; color: var(--ar-teal); text-decoration: none; }
+.archer-dp-more:hover { text-decoration: underline; }
+
+/* ── Stijl en foto's ── */
+.archer-ds-tabs { display: flex; gap: 4px; padding: 3px; background: var(--ar-bg); border-radius: 12px; margin-bottom: 12px; }
+.archer-ds-tab { all: unset; cursor: pointer; flex: 1; text-align: center; padding: 7px 8px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--ar-muted); }
+.archer-ds-tab.is-on { background: #fff; color: var(--ar-navy); box-shadow: 0 1px 3px rgba(9, 9, 48, 0.1); }
+.archer-ds-tab:focus-visible { outline: 2px solid var(--ar-teal); }
+.archer-ds-sec { padding: 12px 0; border-bottom: 1px solid var(--ar-line); }
+.archer-ds-sec:first-child { padding-top: 0; }
+.archer-ds-sec h3 { margin-bottom: 10px; }
+.archer-ds-note { font-size: 12.5px; color: var(--ar-muted); margin: 8px 0 0; }
+.archer-ds-note:empty { display: none; }
+.archer-ds-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.archer-ds-styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.archer-ds-style { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 5px; border: 1.5px solid var(--ar-line); border-radius: 12px; }
+.archer-ds-style:hover, .archer-ds-style:focus-visible { border-color: var(--ar-navy); }
+.archer-ds-style.is-on { border-color: var(--ar-teal); box-shadow: 0 0 0 3px var(--ar-teal-bg); }
+.archer-ds-style-demo { position: relative; height: 54px; border-radius: 8px; padding: 6px 8px; box-sizing: border-box; border: 1px solid rgba(0, 0, 0, 0.06); display: flex; align-items: flex-end; gap: 3px; }
+.archer-ds-style-demo span { position: absolute; left: 8px; top: 4px; font-size: 24px; line-height: 1; }
+.archer-ds-style-demo i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.1); margin-left: auto; }
+.archer-ds-style-demo i + i { margin-left: 0; }
+.archer-ds-style-name { font-size: 12.5px; font-weight: 600; color: var(--ar-navy); padding: 0 2px; }
+.archer-ds-style-name em { font-style: normal; font-size: 10px; color: var(--ar-teal); background: var(--ar-teal-bg); padding: 1px 5px; border-radius: 999px; }
+.archer-ds-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.archer-ds-swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; background: var(--sw); box-shadow: 0 0 0 1px var(--ar-line-2); cursor: pointer; padding: 0; position: relative; }
+.archer-ds-swatch.is-on, .archer-ds-swatch:hover { box-shadow: 0 0 0 2px var(--ar-navy); }
+.archer-ds-swatch.is-custom { background: conic-gradient(#e11d48, #f59e0b, #10b981, #3b82f6, #8b5cf6, #e11d48); overflow: hidden; }
+.archer-ds-swatch.is-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.archer-ds-logo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.archer-ds-logo-img { flex: 1 1 100%; display: grid; place-items: center; min-height: 56px; padding: 8px; border-radius: 10px; background: var(--ar-bg); }
+.archer-ds-logo-img img { max-height: 48px; max-width: 100%; object-fit: contain; }
+.archer-ds-logo-img.is-empty { font-size: 12px; color: var(--ar-muted-2); text-align: center; }
+.archer-ds-logo label { cursor: pointer; }
+.archer-ds-drop { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 14px; border: 1.5px dashed var(--ar-line-2); border-radius: 12px; background: var(--ar-bg); cursor: pointer; font-size: 12px; color: var(--ar-muted); }
+.archer-ds-drop strong { color: var(--ar-navy); font-size: 13px; }
+.archer-ds-drop:hover, .archer-ds-drop.is-over { border-color: var(--ar-teal); background: var(--ar-teal-bg); }
+.archer-ds-own { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+.archer-ds-own-item { position: relative; aspect-ratio: 1; }
+.archer-ds-own-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 7px; display: block; }
+.archer-ds-own-item button { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border: 0; border-radius: 50%; background: rgba(9, 9, 48, 0.75); color: #fff; font-size: 10px; cursor: pointer; opacity: 0; }
+.archer-ds-own-item:hover button, .archer-ds-own-item button:focus-visible { opacity: 1; }
+
+/* ── Melding en voortgang van de run ── */
+.archer-design-toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 100001; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  max-width: min(560px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 12px; background: var(--ar-navy); color: #fff;
+  font: 500 13.5px/1.4 var(--ar-font); box-shadow: var(--ar-shadow); transition: opacity 0.2s, transform 0.2s;
+}
+.archer-design-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.archer-design-toast.is-err { background: var(--ar-danger); }
+.archer-build-dock {
+  position: fixed; left: 50%; bottom: 24px; z-index: 100000; transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 16px; border-radius: 16px;
+  background: #fff; border: 1px solid var(--ar-line); box-shadow: 0 18px 40px rgba(9, 9, 48, 0.18); font-family: var(--ar-font);
+}
+.archer-build-dock-steps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.archer-build-dock-steps span { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--ar-bg); color: var(--ar-muted-2); }
+.archer-build-dock-steps span.is-done { background: var(--ar-teal-bg); color: var(--ar-teal); }
+.archer-build-dock-steps span.is-active { background: var(--ar-navy); color: #fff; }
+.archer-build-dock-text { font-size: 13.5px; color: var(--ar-ink); }
+.archer-build-dock-bar { margin-top: 10px; height: 5px; border-radius: 4px; background: var(--ar-line); overflow: hidden; }
+.archer-build-dock-bar i { display: block; height: 100%; background: var(--ar-teal); transition: width 0.6s; }
+.archer-build-dock.is-done { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.archer-build-dock-actions { flex: none; }
+
+@media (max-width: 1280px) {
+  .archer-design { grid-template-columns: 220px minmax(0, 1fr) 270px; }
+}
+@media (max-width: 1023px) {
+  .archer-design { grid-template-columns: 1fr; }
+  .archer-design-rail { position: static; height: auto; max-height: none; border: 0; border-bottom: 1px solid var(--ar-line); }
+  .archer-design-left { order: 2; }
+  .archer-design-main { order: 1; }
+  .archer-design-right { order: 3; }
+  .archer-dp-acts { opacity: 1; }
+}
