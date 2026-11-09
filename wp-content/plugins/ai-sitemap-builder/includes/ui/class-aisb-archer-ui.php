@@ -19,13 +19,16 @@ require_once __DIR__ . '/class-aisb-archer-marketing.php';
 require_once __DIR__ . '/class-aisb-archer-collections.php';
 require_once __DIR__ . '/class-aisb-archer-structure.php';
 require_once __DIR__ . '/class-aisb-archer-megamenu.php';
+require_once __DIR__ . '/class-aisb-archer-intake.php';
 
 /**
  * Archer-interface voor de websitebouwer.
  *
  * Deze klasse geeft de builder de look en flow van het Archer SaaS-prototype:
  * - app-header met projectnaam en "automatisch bewaard"-status;
- * - stappenbalk Sitemap, Wireframes, Stijl, Foto's, Publiceren;
+ * - stappenbalk Intake, Ontwerp, Publiceren; Ontwerp bundelt sitemap, wireframes,
+ *   stijl en foto's als tabs binnen één stap;
+ * - intake als gesprek met een agent (AISB_Archer_Intake) in plaats van een formulier;
  * - dashboard "Mijn websites" (stap 0) en een startscherm (stap 1 zonder project);
  * - autosave van de sitemap, ophalen van een bestaande website als brief,
  *   en het bijhouden van het gepubliceerde webadres per project.
@@ -46,6 +49,25 @@ class AISB_Archer_UI {
       ['key' => 'photos',     'label' => "Foto's",     'step' => 3, 'view' => 'photos'],
       ['key' => 'publish',    'label' => 'Publiceren', 'step' => 4, 'view' => ''],
     ];
+  }
+
+  /**
+   * Stappen zoals de klant ze ziet: intake, ontwerp, publiceren.
+   * Ontwerp bundelt de interne stappen sitemap, wireframes, stijl en foto's (tabs).
+   */
+  public static function stages(): array {
+    return [
+      ['key' => 'intake',  'label' => 'Intake',     'steps' => []],
+      ['key' => 'design',  'label' => 'Ontwerp',    'steps' => ['sitemap', 'wireframes', 'style', 'photos']],
+      ['key' => 'publish', 'label' => 'Publiceren', 'steps' => ['publish']],
+    ];
+  }
+
+  /** Stage van een interne stap. Stap 1 zonder project is de intake. */
+  public static function stage_of(string $step_key, int $project_id): string {
+    if ($step_key === 'sitemap' && !$project_id) return 'intake';
+    foreach (self::stages() as $st) if (in_array($step_key, $st['steps'], true)) return $st['key'];
+    return 'intake';
   }
 
   public function init(): void {
@@ -70,6 +92,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Stock())->init();
     (new AISB_Archer_Styles())->init();
     (new AISB_Archer_Site())->init();
+    (new AISB_Archer_Intake())->init();
   }
 
   /* ───────────────────────── Detectie en assets ───────────────────────── */
@@ -126,6 +149,11 @@ class AISB_Archer_UI {
     // In de footer, na de stapmodules: de init draait op DOMContentLoaded.
     wp_enqueue_script('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.js', [], $v('archer.js'), true);
     wp_enqueue_script('archer-sitemap', AISB_PLUGIN_URL . 'assets/archer/archer-sitemap.js', ['archer-ui'], $v('archer-sitemap.js'), true);
+    // Intake-agent: enkel op het startscherm (stap 1 zonder project).
+    if ((int) ($_GET['aisb_step'] ?? 1) === 1 && empty($_GET['aisb_project'])) {
+      wp_enqueue_style('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.css', ['archer-ui'], $v('archer-intake.css'));
+      wp_enqueue_script('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.js', ['archer-ui', 'archer-sitemap'], $v('archer-intake.js'), true);
+    }
 
     $step = isset($_GET['aisb_step']) ? (int) $_GET['aisb_step'] : 1;
     $view = isset($_GET['aisb_view']) ? sanitize_key(wp_unslash($_GET['aisb_view'])) : '';
@@ -250,35 +278,66 @@ class AISB_Archer_UI {
   public static function render_stepbar(int $step, string $view, int $project_id, int $sitemap_id): string {
     $current = self::current_step_key($step, $view);
     if ($current === 'dashboard') return '';
-    $steps = self::steps();
+    $stage = self::stage_of($current, $project_id);
+    $stages = self::stages();
     $idx = 0;
-    foreach ($steps as $i => $s) if ($s['key'] === $current) $idx = $i;
+    foreach ($stages as $i => $st) if ($st['key'] === $stage) $idx = $i;
+    $by_key = [];
+    foreach (self::steps() as $s) $by_key[$s['key']] = $s;
 
     ob_start(); ?>
-    <nav class="archer-stepbar" aria-label="Stappen" data-archer-stepbar>
-      <?php foreach ($steps as $i => $s) :
+    <nav class="archer-stepbar" aria-label="Stappen" data-archer-stepbar data-archer-stage="<?php echo esc_attr($stage); ?>">
+      <?php foreach ($stages as $i => $st) :
         $state = $i < $idx ? 'done' : ($i === $idx ? 'current' : 'open');
-        $needs_project = $s['key'] !== 'sitemap';
-        $disabled = $needs_project && (!$project_id || !$sitemap_id);
-        $url = self::step_url($s, $project_id, $sitemap_id);
+        // De intake heeft geen eigen pagina meer zodra het project bestaat; de brief staat bij het project.
+        $target = $st['steps'] ? $by_key[$st['steps'][0]] : null;
+        $disabled = !$target || (!$project_id || !$sitemap_id);
+        $url = $target ? self::step_url($target, $project_id, $sitemap_id) : '#';
+        $tag = $st['key'] === 'intake' ? 'span' : 'a';
         ?>
         <?php if ($i > 0) : ?><span class="archer-step-line" aria-hidden="true"></span><?php endif; ?>
-        <a class="archer-step is-<?php echo esc_attr($state); ?><?php echo $disabled ? ' is-disabled' : ''; ?>"
-           href="<?php echo $disabled ? '#' : esc_url($url); ?>"
-           data-archer-step="<?php echo esc_attr($s['key']); ?>"
-           data-step="<?php echo (int) $s['step']; ?>"
-           data-view="<?php echo esc_attr($s['view']); ?>"
+        <<?php echo $tag; ?> class="archer-step is-<?php echo esc_attr($state); ?><?php echo ($disabled && $tag === 'a') ? ' is-disabled' : ''; ?>"
+           <?php if ($tag === 'a') : ?>href="<?php echo $disabled ? '#' : esc_url($url); ?>"
+           data-step="<?php echo (int) $target['step']; ?>"
+           data-view="<?php echo esc_attr($target['view']); ?>"<?php endif; ?>
+           data-archer-step="<?php echo esc_attr($st['key']); ?>"
            <?php echo $state === 'current' ? 'aria-current="step"' : ''; ?>
-           <?php echo $disabled ? 'aria-disabled="true" tabindex="-1"' : ''; ?>>
+           <?php echo ($disabled && $tag === 'a') ? 'aria-disabled="true" tabindex="-1"' : ''; ?>>
           <span class="archer-step-dot" aria-hidden="true">
             <?php if ($state === 'done') : ?>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
             <?php else : echo (int) ($i + 1); endif; ?>
           </span>
+          <span class="archer-step-label"><?php echo esc_html($st['label']); ?></span>
+        </<?php echo $tag; ?>>
+        <?php if ($st['key'] === 'design' && $stage === 'design') echo self::render_design_tabs($current, $project_id, $sitemap_id); ?>
+      <?php endforeach; ?>
+    </nav>
+    <?php
+    return (string) ob_get_clean();
+  }
+
+  /** Tabs binnen de stap Ontwerp (sitemap, wireframes, stijl, foto's), in de stappenbalk zelf. */
+  public static function render_design_tabs(string $current, int $project_id, int $sitemap_id): string {
+    $design = self::stages()[1]['steps'];
+    ob_start(); ?>
+    <span class="archer-design-tabs" role="group" aria-label="Onderdelen van Ontwerp" data-archer-design-tabs>
+      <?php foreach (self::steps() as $s) :
+        if (!in_array($s['key'], $design, true)) continue;
+        $on = $s['key'] === $current;
+        $disabled = $s['key'] !== 'sitemap' && (!$project_id || !$sitemap_id);
+        ?>
+        <a class="archer-step archer-design-tab<?php echo $on ? ' is-current' : ''; ?><?php echo $disabled ? ' is-disabled' : ''; ?>"
+           href="<?php echo $disabled ? '#' : esc_url(self::step_url($s, $project_id, $sitemap_id)); ?>"
+           data-archer-step="<?php echo esc_attr($s['key']); ?>"
+           data-step="<?php echo (int) $s['step']; ?>"
+           data-view="<?php echo esc_attr($s['view']); ?>"
+           <?php echo $on ? 'aria-current="page"' : ''; ?>
+           <?php echo $disabled ? 'aria-disabled="true" tabindex="-1"' : ''; ?>>
           <span class="archer-step-label"><?php echo esc_html($s['label']); ?></span>
         </a>
       <?php endforeach; ?>
-    </nav>
+    </span>
     <?php
     return (string) ob_get_clean();
   }
@@ -294,13 +353,14 @@ class AISB_Archer_UI {
     ];
     if (!isset($heads[$key])) return '';
     [$title, $text] = $heads[$key];
-    $n = 0;
-    foreach (self::steps() as $i => $s) if ($s['key'] === $key) $n = $i + 1;
+    $stages = self::stages();
+    $n = 1; $stage_label = '';
+    foreach ($stages as $i => $st) if (in_array($key, $st['steps'], true)) { $n = $i + 1; $stage_label = $st['label']; }
 
     ob_start(); ?>
     <div class="archer-page-head">
       <div class="archer-page-head-text">
-        <span class="archer-eyebrow">Stap <?php echo (int) $n; ?> van 5</span>
+        <span class="archer-eyebrow">Stap <?php echo (int) $n; ?> van <?php echo count($stages); ?> · <?php echo esc_html($stage_label); ?></span>
         <h1 class="archer-h1"><?php echo esc_html($title); ?></h1>
         <p class="archer-lead"><?php echo esc_html($text); ?></p>
       </div>

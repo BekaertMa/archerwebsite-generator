@@ -1592,3 +1592,12 @@ body.archer-app #aisb-editor-panel .aisb-ep-tpl-card { border-radius: 10px; bord
 }
 @keyframes archer-ws-writing { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .archer-cv-sec.is-writing::after { animation: none; background: rgba(255, 255, 255, 0.5); } }
+
+/* ── Stap Ontwerp: tabs voor sitemap, wireframes, stijl en foto's, in de stappenbalk ── */
+.archer-design-tabs { display: inline-flex; gap: 2px; padding: 3px; margin-left: 2px; background: var(--ar-bg-2); border-radius: 999px; flex: none; }
+.archer-stepbar .archer-design-tab { padding: 4px 12px; font-size: 13px; }
+.archer-stepbar .archer-design-tab.is-current { background: #fff; box-shadow: 0 1px 3px rgba(9, 9, 48, 0.12); }
+body.archer-ws-mode .archer-stepbar .archer-design-tab .archer-step-label { display: inline !important; }
+body.archer-ws-mode .archer-stepbar .archer-design-tab { padding: 4px 10px !important; }
+span.archer-step { cursor: default; }
+span.archer-step:hover { background: none; }
