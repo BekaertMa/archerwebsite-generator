@@ -577,7 +577,7 @@
     function dockDone(text) {
       if (!dock) return;
       dock.classList.add("is-done");
-      dock.innerHTML = `<div class="archer-build-dock-text"><strong>${esc(text)}</strong></div><div class="archer-build-dock-actions"><button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-dock-close>Bekijk je website</button></div>`;
+      dock.innerHTML = `<div class="archer-build-dock-text"><strong>${esc(text)}</strong></div><div class="archer-build-dock-actions"><button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-dock-close>Laat zien!</button></div>`;
       $("[data-dock-close]", dock).addEventListener("click", () => { dock.remove(); dock = null; });
       setTimeout(() => { if (dock) { dock.remove(); dock = null; } }, 12000);
     }
@@ -602,7 +602,7 @@
     }
 
     async function runBuild() {
-      dockShow("wireframes", "Elke pagina krijgt secties uit de bibliotheek en eigen teksten…", 35);
+      dockShow("wireframes", "Ik zet elke pagina in elkaar en schrijf de teksten. Kijk maar mee…", 35);
       await waitCanvas();
       // Pagina's zonder wireframe (bv. na herladen tijdens de run): alsnog maken.
       const missing = wf.state.pages.filter((p) => !sectionsOf(p.slug)).map((p) => p.slug);
@@ -610,11 +610,11 @@
       if (missing.length && !st0.pending && UI.generateWireframes) UI.generateWireframes(missing);
       await sleep(400);
       const st = await waitWireframes((s) => {
-        if (s.total) dockShow("wireframes", `Pagina's opbouwen: ${s.done} van ${s.total} klaar…`, 35 + Math.round((s.done / s.total) * 40));
+        if (s.total) dockShow("wireframes", `${s.done} van ${s.total} pagina's staan er al, nog even…`, 35 + Math.round((s.done / s.total) * 40));
       });
       renderLeft();
-      dockShow("photos", "Foto's plaatsen…", 78);
-      const errors = await fillPhotos(false, (i, n, p) => dockShow("photos", `Foto's voor ${p.title} (${i} van ${n})…`, 78 + Math.round((i / n) * 20)));
+      dockShow("photos", "Nu de foto's aan de muur…", 78);
+      const errors = await fillPhotos(false, (i, n, p) => dockShow("photos", `Foto's ophangen op ${p.title} (${i} van ${n})…`, 78 + Math.round((i / n) * 20)));
       const url = new URL(window.location.href);
       url.searchParams.delete("aisb_build");
       window.history.replaceState({}, "", url.toString());
@@ -622,7 +622,7 @@
       const failed = (st && st.failed && st.failed.length) || 0;
       dockDone(failed || errors
         ? `Je website staat er. ${failed ? failed + " pagina('s) lukten niet: klik er links op en kies opnieuw proberen. " : ""}${errors ? "Niet alle foto's zijn geplaatst." : ""}`
-        : "Je website staat er. Pas aan wat je wil en publiceer.");
+        : "Tadaa, je website staat er! Schaaf bij wat je wil en zet hem online.");
     }
 
     async function runTask() {

@@ -90,14 +90,14 @@
         </div>
         <div class="archer-intake-hello" data-intake-hello>
           <div class="archer-intake-orb" aria-hidden="true"></div>
-          <h1 class="archer-intake-title">Laten we je website opzetten.</h1>
-          <p class="archer-intake-lead">Ik ben de intake-agent van Archer. Ik stel je een reeks korte vragen over je zaak, je klanten, je pagina's en je stijl. Intussen zie je je website groeien.</p>
-          <p class="archer-intake-lead archer-small">Begin met de naam van je zaak of het adres van je huidige website.</p>
+          <h1 class="archer-intake-title">Hoi! Zin in een nieuwe website?</h1>
+          <p class="archer-intake-lead">Ik ben Archer. Vertel me over je zaak, je klanten en wat je mooi vindt, en ik bouw intussen mee. Je ziet je website groeien bij elk antwoord.</p>
+          <p class="archer-intake-lead archer-small">Zullen we beginnen? Hoe heet je zaak? (Of plak het adres van je huidige website.)</p>
         </div>
         <div class="archer-intake-log" data-intake-log aria-live="polite"></div>
         <div class="archer-intake-ready" data-intake-ready hidden>
-          <span>Genoeg voor een eerste versie. Hoe meer je vertelt, hoe beter ze wordt.</span>
-          <button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-intake-go-early>Maak mijn website →</button>
+          <span>Ik kan al iets moois bouwen. Nog wat vertellen? Dan wordt het nog beter.</span>
+          <button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-intake-go-early>Bouw mijn website →</button>
         </div>
         <form class="archer-intake-composer" data-intake-form>
           <label class="archer-intake-attach" title="Logo of foto's opladen">
@@ -106,7 +106,7 @@
             <span class="archer-sr-only">Foto's opladen</span>
           </label>
           <label class="archer-sr-only" for="archer-intake-input">Bericht aan Archer</label>
-          <input id="archer-intake-input" class="archer-intake-input" autocomplete="off" placeholder="Naam van je zaak of www.jouwzaak.be" />
+          <input id="archer-intake-input" class="archer-intake-input" autocomplete="off" placeholder="Bv. Bakkerij Janssens of www.jouwzaak.be" />
           <button type="submit" class="archer-intake-send" aria-label="Versturen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           </button>
@@ -218,7 +218,7 @@
             b.setAttribute("aria-pressed", String(b.classList.contains("is-on")));
             return;
           }
-          if (/^iets anders$/i.test(o)) { el.input.focus(); el.input.placeholder = "Typ je antwoord"; return; }
+          if (/^iets anders$/i.test(o)) { el.input.focus(); el.input.placeholder = "Vertel maar…"; return; }
           m.picked = [o];
           send(o);
         }),
@@ -264,7 +264,7 @@
       }
       host.innerHTML =
         `<div class="archer-ic-style-grid">${(c.items || []).map((s) => styleTile(s, s.id === chosen)).join("")}</div>` +
-        ((c.more || []).length ? `<details class="archer-ic-more"><summary>Toon alle ${all.length} stijlen</summary><div class="archer-ic-style-grid">${c.more.map((s) => styleTile(s, s.id === chosen)).join("")}</div></details>` : "");
+        ((c.more || []).length ? `<details class="archer-ic-more"><summary>Nog meer stijlen (${all.length})</summary><div class="archer-ic-style-grid">${c.more.map((s) => styleTile(s, s.id === chosen)).join("")}</div></details>` : "");
       $$("[data-style]", host).forEach((b) => {
         const id = b.getAttribute("data-style");
         b.addEventListener("mouseenter", () => { peek = { style_id: id }; renderPreview(); });
@@ -332,8 +332,8 @@
         <div class="archer-ic-status archer-small" data-upstatus aria-live="polite"></div>
         <div class="archer-ic-row">
           ${isLogo
-            ? `<button type="button" class="archer-link-btn" data-none>Ik heb (nog) geen logo</button>`
-            : `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-done ${current.length ? "" : "hidden"}>Klaar met opladen</button>`}
+            ? `<button type="button" class="archer-link-btn" data-none>Nog geen logo, geen probleem</button>`
+            : `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-done ${current.length ? "" : "hidden"}>Dat zijn ze!</button>`}
         </div>`;
       const drop = $("[data-drop]", host);
       const file = $("[data-file]", host);
@@ -390,7 +390,7 @@
             <label><input type="checkbox" data-page="${i}" ${it.on ? "checked" : ""} ${it.fixed ? "disabled" : ""}> <span>${esc(it.title)}</span>${it.fixed ? ' <em>altijd</em>' : ""}</label></li>`).join("")}</ul>` +
           `<div class="archer-ic-row"><input type="text" class="archer-input archer-ic-add" placeholder="Andere pagina, bv. Vacatures" data-page-add-in>` +
           `<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-page-add>Toevoegen</button>` +
-          `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-pages-ok>Deze pagina's</button></div>`;
+          `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-pages-ok>Dit wordt 'm</button></div>`;
         $$("[data-page]", host).forEach((cb) => cb.addEventListener("change", () => {
           items[Number(cb.getAttribute("data-page"))].on = cb.checked;
           peek = { must_pages: items.filter((x) => x.on).map((x) => x.title) };
@@ -464,13 +464,13 @@
       d.className = "archer-intake-msg is-agent";
       d.setAttribute("data-intake-review", "");
       d.innerHTML =
-        `<div class="archer-intake-text">Dit heb je me verteld:</div>` +
+        `<div class="archer-intake-text">Kijk eens wat ik allemaal van je weet:</div>` +
         `<table class="archer-intake-review"><tbody>` +
         state.summary.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td>${esc(r.value)}</td></tr>`).join("") +
         `</tbody></table>` +
-        `<p class="archer-muted archer-small">Iets niet juist? Typ het gewoon, bijvoorbeeld "de regio is Lokeren en omstreken".</p>` +
-        `<p class="archer-small">In één keer maak ik nu je pagina's, de opbouw van elke pagina, de teksten, de stijl en de foto's. Daarna kan je alles in één scherm aanpassen.</p>` +
-        `<div class="archer-intake-actions"><button type="button" class="archer-btn archer-btn-primary" data-intake-go>Maak mijn website →</button></div>` +
+        `<p class="archer-muted archer-small">Klopt er iets niet? Zeg het gewoon, bv. "de regio is Lokeren en omstreken", en ik pas het aan.</p>` +
+        `<p class="archer-small">Druk op de knop en ik maak in één ruk je pagina's, de opbouw, de teksten, de stijl en de foto's. Daarna kan je alles naar hartenlust bijschaven.</p>` +
+        `<div class="archer-intake-actions"><button type="button" class="archer-btn archer-btn-primary" data-intake-go>Bouw mijn website →</button></div>` +
         `<div class="archer-status" data-intake-error aria-live="polite"></div>`;
       el.log.appendChild(d);
       $("[data-intake-go]", d).addEventListener("click", generate);
@@ -483,7 +483,7 @@
       renderSetup();
       renderReview();
       renderPreview();
-      el.input.placeholder = state.messages.length ? "Bericht aan Archer…" : "Naam van je zaak of www.jouwzaak.be";
+      el.input.placeholder = state.messages.length ? "Vertel maar…" : "Bv. Bakkerij Janssens of www.jouwzaak.be";
       scrollDown();
     }
 
@@ -517,7 +517,7 @@
       const services = (b.services || []).slice(0, 3);
       const photos = b.own_photos || [];
       const logo = b.logo && typeof b.logo === "object" ? b.logo.thumb || b.logo.url : "";
-      const head = b.usp && b.usp !== "-" ? b.usp : b.activity ? b.activity : "Hier komt je website";
+      const head = b.usp && b.usp !== "-" ? b.usp : b.activity ? b.activity : "Hier komt iets moois";
       const sub = [b.activity && b.usp ? b.activity : "", b.region ? "in " + b.region + (b.service_area && b.service_area !== "-" ? " (" + b.service_area + ")" : "") : ""].filter(Boolean).join(" ");
       const trust = [
         b.reviews && b.reviews !== "-" ? "★ " + b.reviews : "",
@@ -600,7 +600,7 @@
         state.summary = d.summary || [];
         state.messages.push({ role: "agent", text: d.reply || "Genoteerd.", options: d.options || [], multi: !!d.multi, card: d.card || null, ask: d.ask || "" });
       } catch (err) {
-        state.messages.push({ role: "agent", text: (err && err.message) || "Er ging iets mis. Probeer het nog eens." });
+        state.messages.push({ role: "agent", text: (err && err.message) || "Oei, daar haperde iets aan mijn kant. Probeer je het nog eens?" });
       } finally {
         typing(false);
         busy = false;
@@ -693,10 +693,10 @@
 
     /** Overlay met de stappen van de run; gedeeld met archer-design.js via sessionStorage. */
     const BUILD_STEPS = [
-      { key: "sitemap", label: "Pagina's en secties bedenken" },
-      { key: "style", label: "Stijl, logo en foto's klaarzetten" },
+      { key: "sitemap", label: "Pagina's uittekenen" },
+      { key: "style", label: "Kleuren, letters en logo klaarleggen" },
       { key: "wireframes", label: "Elke pagina opbouwen en teksten schrijven" },
-      { key: "photos", label: "Foto's plaatsen" },
+      { key: "photos", label: "Foto's ophangen" },
     ];
     function overlay(stepKey, note) {
       let o = $("[data-archer-build]");
@@ -710,8 +710,8 @@
       const idx = BUILD_STEPS.findIndex((s) => s.key === stepKey);
       o.innerHTML = `<div class="archer-build-card">
         <div class="archer-intake-orb" aria-hidden="true"></div>
-        <h2>Je website wordt gebouwd</h2>
-        <p class="archer-muted">${esc(state.brief.business_name || "")} · dit duurt een paar minuten. Je mag dit venster open laten staan.</p>
+        <h2>Mouwen opgestroopt, ik bouw!</h2>
+        <p class="archer-muted">${esc(state.brief.business_name || "")} · even geduld, dit duurt een minuutje of twee. Laat dit venster gerust open.</p>
         <ol>${BUILD_STEPS.map((s, i) => `<li class="${i < idx ? "is-done" : i === idx ? "is-active" : ""}"><span aria-hidden="true"></span>${esc(s.label)}</li>`).join("")}</ol>
         <p class="archer-small archer-muted" data-build-note>${esc(note || "")}</p>
       </div>`;
@@ -739,7 +739,7 @@
         contact: { address: c.address || "", phone: c.phone || "", email: c.email || "", socials: c.socials || "" },
       };
       $$("[data-intake-go], [data-intake-go-early]").forEach((btn) => { btn.disabled = true; });
-      overlay("sitemap", "AI bedenkt de pagina's en de secties op elke pagina.");
+      overlay("sitemap", "Ik teken welke pagina's er komen en wat er op elke pagina staat.");
       try {
         await UI.fastGenerate(opts);
         const pid = app.state && app.state.projectId;
@@ -751,7 +751,7 @@
           sessionStorage.removeItem(STORE);
           sessionStorage.setItem("archer_build_" + pid, JSON.stringify({ at: Date.now(), name: b.business_name || "" }));
         } catch (e) { /* niets */ }
-        overlay("wireframes", "Het scherm Ontwerp opent. Daar zie je elke pagina verschijnen.");
+        overlay("wireframes", "Daar gaan we: in het volgende scherm zie je elke pagina verschijnen.");
         // Ontwerp: wireframes en foto's worden daar verder gemaakt (aisb_build=1).
         const url = new URL(window.location.href);
         url.searchParams.set("aisb_step", "2");
@@ -768,7 +768,7 @@
         const target = errEl || el.ready;
         if (target) {
           target.hidden = false;
-          target.insertAdjacentHTML("beforeend", '<div class="aisb-error">Het opzetten lukte niet: ' + esc(err.message || "") + " Probeer opnieuw.</div>");
+          target.insertAdjacentHTML("beforeend", '<div class="aisb-error">Oei, dat liep mis: ' + esc(err.message || "") + " Probeer je het nog eens?</div>");
         }
       }
     }
