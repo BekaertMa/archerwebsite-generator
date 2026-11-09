@@ -51,9 +51,36 @@ class AISB_Archer_Design {
     return [
       'pages'  => self::pages($pid),
       'styles' => $styles,
+      'themes' => self::themes($guide),
+      'theme'  => self::theme_now($guide),
       'guide'  => self::guide_summary($guide),
       'photos' => self::photo_state($pid, $guide),
     ];
+  }
+
+  /**
+   * Het variabelenblok (#archer-theme in de voorbeelden) van elke stijl, zoals het zou zijn als de klant
+   * die stijl nu kiest: met de merkkleur die al gekozen is. De browser wisselt hiermee meteen van stijl,
+   * zonder de voorbeelden opnieuw te laden.
+   *
+   * @return array<string,string> stijl-id => CSS
+   */
+  public static function themes(array $g): array {
+    if (!class_exists('AISB_Archer_Styles')) return [];
+    $brand = (string) ($g['brand'] ?? '');
+    $out = [];
+    foreach (AISB_Archer_Styles::library() as $s) {
+      $g2 = array_merge($g, AISB_Archer_Styles::guide_patch($s));
+      if ($brand !== '' && preg_match('/^#[0-9A-F]{6}$/i', $brand)) $g2 = self::with_brand($g2, $brand);
+      $out[$s['id']] = AISB_Archer_Styles::theme_css($s, $g2);
+    }
+    return $out;
+  }
+
+  /** Het variabelenblok van de stijlgids zoals hij nu is (leeg zonder Archer-stijl). */
+  public static function theme_now(array $g): string {
+    $s = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::of($g) : null;
+    return $s ? AISB_Archer_Styles::theme_css($s, $g) : '';
   }
 
   /** Pagina's uit de sitemap: slug, titel, ouder. */
@@ -280,7 +307,7 @@ class AISB_Archer_Design {
       if (in_array($p, ['own', 'stock', 'mix'], true)) $g['archerPhotoPref'] = $p;
     }
     self::save_guide($pid, $g);
-    wp_send_json_success(['guide' => self::guide_summary($g)]);
+    wp_send_json_success(['guide' => self::guide_summary($g), 'theme' => self::theme_now($g), 'themes' => self::themes($g)]);
   }
 
   private static function brand_of(array $g): string {

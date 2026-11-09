@@ -435,10 +435,30 @@ class AISB_Archer_Taste {
 
   /** CSS-huisregels voor voorbeeld en gepubliceerde site: geen schaduwen op wat stil staat. */
   public static function house_css($guide = null): string {
-    // Archer-stijl gekozen: haar ontwerpsysteem komt eerst (de @import van de letters moet vooraan staan)
-    // en vervangt de algemene knop- en titelregels van system_css.
+    $parts = self::house_parts($guide);
+    return $parts['theme'] . $parts['house'];
+  }
+
+  /**
+   * De huisstijl in twee delen: 'theme' is het variabelenblok van de gekozen stijl (met de @import van de
+   * letters, die vooraan moet staan), 'house' is alles wat voor elke stijl hetzelfde is. In de voorbeelden
+   * staan ze in aparte <style>-elementen (#archer-theme en #archer-house), zodat het scherm Ontwerp een
+   * andere stijl toont door enkel #archer-theme te vervangen.
+   *
+   * @return array{theme: string, house: string, styled: bool}
+   */
+  public static function house_parts($guide = null): array {
+    // Archer-stijl gekozen: haar ontwerpsysteem komt eerst en vervangt de algemene knop- en titelregels van system_css.
     $style = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::of($guide) : null;
-    return ($style ? AISB_Archer_Styles::css($style, $guide) : '') . self::house_rules($guide, (bool) $style)
+    return [
+      'theme' => $style ? AISB_Archer_Styles::theme_css($style, $guide) : '',
+      'house' => ($style ? AISB_Archer_Styles::base_css() : '') . self::house_rest($guide, (bool) $style),
+      'styled' => (bool) $style,
+    ];
+  }
+
+  private static function house_rest($guide, bool $style): string {
+    return self::house_rules($guide, $style)
       . (class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::css() : '')
       // Menu-items nooit over twee regels ("Over / ons"): het label blijft op één regel, het pijltje ernaast
       // houdt zijn grootte. Te veel items voor de breedte: dan schuift een heel item naar een volgende rij.
@@ -480,6 +500,8 @@ class AISB_Archer_Taste {
         $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
       }
     }
-    echo '<style id="archer-house">' . self::house_css($guide) . '</style>';
+    $parts = self::house_parts($guide);
+    echo '<style id="archer-theme">' . $parts['theme'] . '</style>';
+    echo '<style id="archer-house" data-archer-base="' . ($parts['styled'] ? '1' : '0') . '">' . $parts['house'] . '</style>';
   }
 }

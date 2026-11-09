@@ -191,7 +191,29 @@ class AISB_Archer_Styles {
     'round' => ['button' => 999, 'card' => 24, 'image' => 24, 'field' => 12],
   ];
 
+  /**
+   * Alle CSS van een stijl: het variabelenblok van de stijl (theme_css) gevolgd door het gedeelde
+   * stylesheet (base_css). Zelfde uitkomst als vroeger, maar alles wat per stijl verschilt zit nu in
+   * variabelen. Zo kan het scherm Ontwerp een andere stijl tonen door enkel het variabelenblok te
+   * wisselen, zonder de voorbeelden opnieuw te laden.
+   */
   public static function css(array $s, $guide = null): string {
+    return self::theme_css($s, $guide) . self::base_css();
+  }
+
+  /** Letters (@import) en het :root-blok met alle variabelen van deze stijl, met de aanpassingen uit de stijlgids. */
+  public static function theme_css(array $s, $guide = null): string {
+    [$v, $s] = self::tokens($s, $guide);
+    $root = '';
+    foreach ($v as $k => $val) $root .= $k . ':' . $val . ';';
+    $css = "@import url('" . self::font_url($s) . "');" . ':root{' . $root . '}';
+    // Donkere stijl: de grijze transparanten zijn daar licht, dus een foto-overlay zou de foto wit waas geven.
+    if (!empty($s['dark'])) $css .= 'html body [class*="__overlay"]:not(.brxe-button){background-color:var(--a-overlay-dark) !important;}';
+    return $css;
+  }
+
+  /** @return array{0: array<string,string>, 1: array} de variabelen en de stijl met de lettertypes uit de stijlgids */
+  private static function tokens(array $s, $guide = null): array {
     $c = $s['colours'];
     $f = $s['fonts'];
     // Wat de gebruiker na het kiezen nog aanpaste (kleuren, letters) gaat voor op de stijl.
@@ -257,11 +279,11 @@ class AISB_Archer_Styles {
       '--brxw-color-white' => $c['base'],
       '--brxw-color-neutral-25' => $c['surface'],
       '--brxw-color-neutral-50' => $c['line'],
-      '--brxw-color-primary' => $c['accent'],
+      '--brxw-color-primary' => 'var(--a-accent)',
       '--brxw-color-secondary' => $c['dark'],
       '--brxw-color-overlay' => self::mix($c['dark'], 'transparent', 55),
-      '--light' => $c['surface'], '--dark' => $c['ink'], '--primary' => $c['accent'], '--secondary' => $c['dark'],
-      '--bricks-color-primary' => $c['accent'], '--bricks-color-light' => $c['base'],
+      '--light' => $c['surface'], '--dark' => $c['ink'], '--primary' => 'var(--a-accent)', '--secondary' => $c['dark'],
+      '--bricks-color-primary' => 'var(--a-accent)', '--bricks-color-light' => $c['base'],
     ];
     foreach ([100 => 18, 200 => 30, 300 => 42, 400 => 54, 500 => 64, 600 => 74, 700 => 84, 800 => 90, 900 => 95, 950 => 100] as $step => $pct) {
       $v['--brxw-color-neutral-' . $step] = $pct >= 100 ? $c['ink'] : self::mix($c['ink'], $c['base'], $pct);
@@ -269,29 +291,48 @@ class AISB_Archer_Styles {
     foreach ([10, 20, 30, 40, 50, 60, 70, 80, 90] as $pct) {
       $v['--brxw-color-neutral-trans-' . $pct] = self::mix($c['ink'], 'transparent', $pct);
       $v['--brxw-color-white-trans-' . $pct] = self::mix($c['base'], 'transparent', $pct);
-      $v['--brxw-color-primary-trans-' . $pct] = self::mix($c['accent'], 'transparent', $pct);
-      $v['--primary-' . $pct] = self::mix($c['accent'], 'transparent', $pct);
+      $v['--brxw-color-primary-trans-' . $pct] = self::mix('var(--a-accent)', 'transparent', $pct);
+      $v['--primary-' . $pct] = self::mix('var(--a-accent)', 'transparent', $pct);
       $v['--dark-' . $pct] = self::mix($c['ink'], 'transparent', $pct);
     }
     $v['--dark-5'] = self::mix($c['ink'], 'transparent', 5);
 
-    $root = '';
-    foreach ($v as $k => $val) $root .= $k . ':' . $val . ';';
 
-    $notChrome = ':not(:is(.archer-header,.archer-footer) *)';
-    $btn = 'html body :is(.brxe-button.bricks-button.bricks-button,.brxe-form.brxe-form.brxe-form button[type=submit].bricks-button.bricks-button)';
+    // Wat per stijl verschilt in de regels zelf: ook als variabele, zodat één gedeeld stylesheet volstaat.
     $b = $s['button'];
     $card = (string) ($s['card'] ?? 'flat');
-    $cardSel = 'html body :is([class*="__card"]:not([class*="__card-"]),.brxe-block[class*="card"]:not([class*="card-"]))';
+    $v['--a-body-lh'] = (string) $f['body']['lineHeight'];
+    $v['--a-heading-weight'] = (string) (int) $f['heading']['weight'];
+    $v['--a-heading-tracking'] = (string) $f['heading']['tracking'];
+    $v['--a-heading-tracking-sm'] = self::half($f['heading']['tracking']);
+    $v['--a-heading-lh'] = (string) $f['heading']['lineHeight'];
+    $v['--a-heading-case'] = (string) $f['heading']['case'];
+    $v['--a-btn-size'] = (int) $b['size'] . 'px';
+    $v['--a-btn-weight'] = (string) (int) $b['weight'];
+    $v['--a-btn-tracking'] = (string) $b['tracking'];
+    $v['--a-btn-case'] = (string) $b['case'];
+    $v['--a-card-bg'] = $card === 'flat' ? 'var(--a-surface)' : 'transparent';
+    $v['--a-card-border'] = $card === 'hairline' ? '1px solid var(--a-line)' : '0';
+    $v['--a-card-radius'] = $card === 'none' ? '0' : 'var(--a-radius-card)';
+    $foot = (string) ($s['bands']['footer'] ?? 'ink');
+    $v['--a-footer-bg'] = $foot === 'ground' ? 'var(--a-surface)' : 'var(--a-dark)';
+    $v['--a-footer-ink'] = $foot === 'ground' ? 'var(--a-ink)' : 'var(--a-dark-ink)';
+    $v['--a-overlay-dark'] = !empty($s['dark']) ? self::mix($c['dark'], 'transparent', 55) : 'initial';
+    return [$v, $s];
+  }
 
-    $css = "@import url('" . self::font_url($s) . "');"
-      . ':root{' . $root . '}'
-      . 'html body{background-color:var(--a-base);color:var(--a-ink);font-family:var(--a-font-body);font-size:var(--a-body);line-height:' . $f['body']['lineHeight'] . ';-webkit-font-smoothing:antialiased;}'
+  /** Het gedeelde stylesheet: enkel variabelen, voor elke stijl hetzelfde. */
+  public static function base_css(): string {
+    $notChrome = ':not(:is(.archer-header,.archer-footer) *)';
+    $btn = 'html body :is(.brxe-button.bricks-button.bricks-button,.brxe-form.brxe-form.brxe-form button[type=submit].bricks-button.bricks-button)';
+    $cardSel = 'html body :is([class*="__card"]:not([class*="__card-"]),.brxe-block[class*="card"]:not([class*="card-"]))';
+    return ''
+      . 'html body{background-color:var(--a-base);color:var(--a-ink);font-family:var(--a-font-body);font-size:var(--a-body);line-height:var(--a-body-lh);-webkit-font-smoothing:antialiased;}'
       // Letters
-      . 'html body :is(h1,h2,h3,h4,h5,h6,.brxe-heading){font-family:var(--a-font-heading);font-weight:' . (int) $f['heading']['weight'] . ';letter-spacing:' . $f['heading']['tracking'] . ';line-height:' . $f['heading']['lineHeight'] . ';text-transform:' . $f['heading']['case'] . ';}'
+      . 'html body :is(h1,h2,h3,h4,h5,h6,.brxe-heading){font-family:var(--a-font-heading);font-weight:var(--a-heading-weight);letter-spacing:var(--a-heading-tracking);line-height:var(--a-heading-lh);text-transform:var(--a-heading-case);}'
       . 'html body :is(h1,h1.brxe-heading)' . $notChrome . ',html body .brxe-section[class*="hero-"] :is(h1,h2).brxe-heading{font-size:var(--a-display) !important;}'
       . 'html body :is(h2.brxe-heading,h2)' . $notChrome . ':not(.brxe-section[class*="hero-"] *){font-size:var(--a-h2);line-height:1.08;}'
-      . 'html body :is(h3.brxe-heading,h3)' . $notChrome . '{font-size:var(--a-h3);line-height:1.2;letter-spacing:' . self::half($f['heading']['tracking']) . ';}'
+      . 'html body :is(h3.brxe-heading,h3)' . $notChrome . '{font-size:var(--a-h3);line-height:1.2;letter-spacing:var(--a-heading-tracking-sm);}'
       . 'html body :is(p,li,.brxe-text,.brxe-text-basic,.brxe-rich-text){font-family:var(--a-font-body);}'
       // Secties zonder eigen achtergrond staan op de grond (in het voorbeeld is body doorzichtig).
       . 'html body .brxe-section{background-color:var(--a-base);}'
@@ -300,19 +341,17 @@ class AISB_Archer_Styles {
       // Sjablonen met een vaste breedte (540px) mogen op een smal scherm niet buiten beeld lopen.
       . 'html body .brxe-section :is(.brxe-heading,.brxe-button){max-width:100%;}'
       // Tellers: bij publiceren wordt hun kleur als vaste lichte tint ingebakken; volg de tekstkleur van het blok.
-      . 'html body .brxe-counter :is(.count,.prefix,.suffix){color:inherit !important;font-family:var(--a-font-heading);letter-spacing:' . $f['heading']['tracking'] . ';}'
+      . 'html body .brxe-counter :is(.count,.prefix,.suffix){color:inherit !important;font-family:var(--a-font-heading);letter-spacing:var(--a-heading-tracking);}'
       . 'html body a:not(.bricks-button):not(.brxe-button):not(.brxe-logo)' . $notChrome . '{color:var(--a-link);}'
       // Secties: de grond komt uit de variabelen (wit en --light) en uit sectionBg1/sectionBg2 (geen zebra meer).
       // Knoppen
-      . $btn . '{border-radius:var(--a-radius-button);font-family:var(--a-font-body);font-size:' . (int) $b['size'] . 'px;font-weight:' . (int) $b['weight'] . ';letter-spacing:' . $b['tracking'] . ';text-transform:' . $b['case'] . ';padding:1em 1.6em;line-height:1.1;min-height:44px;}'
+      . $btn . '{border-radius:var(--a-radius-button);font-family:var(--a-font-body);font-size:var(--a-btn-size);font-weight:var(--a-btn-weight);letter-spacing:var(--a-btn-tracking);text-transform:var(--a-btn-case);padding:1em 1.6em;line-height:1.1;min-height:44px;}'
       . 'html body .brxe-button.bricks-button:not(.outline):not([class*="outline"]):not([class*="link"])' . $notChrome . '{background-color:var(--a-accent);color:var(--a-accent-ink);border-color:var(--a-accent);}'
       . 'html body .brxe-button.bricks-button:is(.outline,[class*="outline"]){background-color:transparent;color:var(--a-ink);border:1px solid currentColor;}'
       // Twee knoppen naast elkaar: de tweede is de rustige (omlijnde) variant.
       . 'html body .brxe-button.bricks-button ~ .brxe-button.bricks-button:not(.archer-header *):not(.archer-footer *){background-color:transparent !important;color:var(--a-ink) !important;border:1px solid var(--a-ink) !important;}'
       // Hero: minder ruimte boven (de header staat er al), de rest van de sectie volgt het ritme.
       . 'html body .brxe-section[class*="hero-"]:not(.archer-cover){padding-top:calc(var(--brxw-section-space-vertical) * .55) !important;}'
-      // Donkere stijl: de grijze transparanten zijn daar licht, dus een foto-overlay zou de foto wit waas geven.
-      . (!empty($s['dark']) ? 'html body [class*="__overlay"]:not(.brxe-button){background-color:' . self::mix($c['dark'], 'transparent', 55) . ' !important;}' : '')
       . '@layer bricks{html body .bricks-button.circle.circle{border-radius:var(--a-radius-button) !important;}}'
       // Velden
       . 'html body .brxe-form.brxe-form :is(input:not([type=checkbox]):not([type=radio]),select,textarea){border-radius:var(--a-radius-field);border:1px solid var(--a-line);background-color:var(--a-base);color:var(--a-ink);}'
@@ -323,9 +362,7 @@ class AISB_Archer_Styles {
       . 'html body .brxe-image:not(.archer-cover *):not(.brxe-logo *),html body .brxe-image:not(.archer-cover *) img,html body figure:not(.archer-cover *) img{border-radius:var(--a-radius-image);}'
       . 'html body .brxe-image img{object-fit:cover;}'
       // Kaarten
-      . ($card === 'flat' ? $cardSel . '{background-color:var(--a-surface);border:0;border-radius:var(--a-radius-card);}' : '')
-      . ($card === 'hairline' ? $cardSel . '{background-color:transparent;border:1px solid var(--a-line);border-radius:var(--a-radius-card);}' : '')
-      . ($card === 'none' ? $cardSel . '{background-color:transparent;border:0;border-radius:0;}' : '')
+      . $cardSel . '{background-color:var(--a-card-bg);border:var(--a-card-border);border-radius:var(--a-card-radius);}'
       // Header: altijd op de grond met donkere tekst. Bij publiceren wordt --light als vaste kleur ingebakken,
       // dus de variabele alleen volstaat niet. Het uitklapmenu (offcanvas) blijft zoals het sjabloon het wil.
       . 'html body .archer-header{background-color:var(--a-base) !important;--light:var(--a-base);--brxw-color-neutral-25:var(--a-base);}'
@@ -343,10 +380,9 @@ class AISB_Archer_Styles {
       . 'html body .archer-footer :is(h1,h2,h3,h4,h5,h6,.brxe-heading,p,li,a,.brxe-text,.brxe-text-basic,.brxe-nav-menu a,.brxe-logo){color:var(--a-footer-ink) !important;}'
       . 'html body .archer-footer .archer-credit{opacity:.72;}'
       . 'html body .archer-footer :is(.brxe-nav-menu a,.bricks-nav-menu a,[class*="menu"] a){white-space:nowrap;}'
-      . 'html body .archer-footer .bricks-nav-menu{flex-wrap:wrap !important;row-gap:12px;}'
-      . ':root{--a-footer-bg:' . (($s['bands']['footer'] ?? 'ink') === 'field' ? 'var(--a-dark)' : (($s['bands']['footer'] ?? 'ink') === 'ground' ? 'var(--a-surface)' : 'var(--a-dark)')) . ';--a-footer-ink:' . (($s['bands']['footer'] ?? 'ink') === 'ground' ? 'var(--a-ink)' : 'var(--a-dark-ink)') . ';}';
-    return $css;
+      . 'html body .archer-footer .bricks-nav-menu{flex-wrap:wrap !important;row-gap:12px;}';
   }
+
 
   private static function half(string $tracking): string {
     $v = (float) $tracking;
