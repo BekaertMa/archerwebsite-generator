@@ -402,8 +402,40 @@ class AISB_Archer_Styles {
         'designMd' => self::design_md_url($s['id']),
       ];
     }
+    // De stijl die de klant in de intake koos, gaat voor op het sectoradvies.
+    $mood_ids = self::mood_styles($project_id);
+    if ($mood_ids) {
+      foreach ($out as &$o) {
+        $pos = array_search($o['id'], $mood_ids, true);
+        $o['fit'] = $pos !== false;
+        if ($pos !== false) $o['order'] = -1000 + $pos;
+      }
+      unset($o);
+    }
     usort($out, fn($a, $b) => $a['order'] <=> $b['order']);
     return ['sector' => $sector, 'styles' => $out, 'advice' => $adv ? AISB_Archer_Sector::advice($adv) : null];
+  }
+
+  /** Stijlen die passen bij de sfeer uit de intake (AISB_Archer_Intake), beste eerst. */
+  public static function mood_styles(int $project_id): array {
+    if (!class_exists('AISB_Archer_Intake')) return [];
+    $mood = mb_strtolower((string) (AISB_Archer_Intake::brief_for($project_id)['style_mood'] ?? ''));
+    if ($mood === '') return [];
+    $map = [
+      'licht'      => ['nordic', 'atelier', 'helder'],
+      'rustig'     => ['nordic', 'atelier', 'helder'],
+      'warm'       => ['ambacht', 'helder', 'fris'],
+      'ambacht'    => ['ambacht', 'helder', 'fris'],
+      'strak'      => ['raster', 'fris', 'nordic'],
+      'modern'     => ['raster', 'fris', 'nordic'],
+      'krachtig'   => ['studio', 'noir', 'raster'],
+      'uitgesproken' => ['studio', 'noir', 'raster'],
+      'donker'     => ['noir', 'studio'],
+      'exclusief'  => ['noir', 'atelier'],
+      'speels'     => ['fris', 'studio', 'helder'],
+    ];
+    foreach ($map as $word => $ids) if (strpos($mood, $word) !== false) return $ids;
+    return [];
   }
 
   public function ajax_styles(): void {

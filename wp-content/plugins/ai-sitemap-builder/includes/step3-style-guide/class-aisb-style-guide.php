@@ -761,11 +761,20 @@ class AISB_Style_Guide {
     // controleer project_id en eigenaarschap
     $project_id = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
     $this->assert_project_ownership($project_id);
+    wp_send_json_success($this->media_pages($project_id));
+  }
 
+  /**
+   * Pagina's met hun secties en het aantal fotovakken per sectie, in de volgorde van de sitemap.
+   * Dezelfde telling als de stap Foto's en het scherm Ontwerp (guide.images volgt deze volgorde).
+   *
+   * @return array{pages: array, total_media?: int, sections?: array}
+   */
+  public function media_pages(int $project_id): array {
     // Zoek de laatste sitemap voor dit project
     $sitemap_id = (int) get_post_meta($project_id, 'aisb_latest_sitemap_id', true);
     if (!$sitemap_id) {
-      wp_send_json_success(['sections' => []]);
+      return ['sections' => [], 'pages' => []];
     }
 
     // Haal de sitemap JSON op om de eerste pagina te vinden
@@ -788,7 +797,7 @@ class AISB_Style_Guide {
       if ($slug) $page_slugs[] = $slug;
     }
     if (empty($page_slugs)) {
-      wp_send_json_success(['pages' => []]);
+      return ['pages' => []];
     }
 
     // Haal alle wireframe models op uit de database
@@ -885,7 +894,7 @@ class AISB_Style_Guide {
       ];
     }
 
-    wp_send_json_success(['pages' => $result_pages, 'total_media' => $total_media]);
+    return ['pages' => $result_pages, 'total_media' => $total_media];
   }
 
   /* ------------------- Helpers ------------------- */

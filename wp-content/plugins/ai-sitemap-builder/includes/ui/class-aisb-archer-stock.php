@@ -190,7 +190,20 @@ class AISB_Archer_Stock {
     $sections = sanitize_text_field(wp_unslash($_POST['sections'] ?? ''));
     $need = max(1, min(40, (int) ($_POST['need'] ?? 1)));
     $exclude = json_decode((string) wp_unslash($_POST['exclude'] ?? '[]'), true);
-    $skip = array_flip(array_map([self::class, 'pkey'], array_filter(array_map('strval', is_array($exclude) ? $exclude : []))));
+    $r = self::for_page($pid, $slug, $title, $sections, $need, is_array($exclude) ? $exclude : []);
+    if (is_wp_error($r)) wp_send_json_error(['message' => $r->get_error_message()]);
+    wp_send_json_success($r);
+  }
+
+  /**
+   * Stockfoto's voor één pagina: een eigen zoekwoord per pagina, zonder de foto's in $exclude.
+   * Gebruikt door de knop in de stap Foto's en door het scherm Ontwerp.
+   *
+   * @return array{images: array, keyword: string, sources: array}|WP_Error
+   */
+  public static function for_page(int $pid, string $slug, string $title, string $sections, int $need, array $exclude) {
+    $need = max(1, min(40, $need));
+    $skip = array_flip(array_map([self::class, 'pkey'], array_filter(array_map('strval', $exclude))));
     $kw = self::page_keyword($pid, $slug, $title, $sections);
     $want = $need + count($skip) + 4;
     $u = [];
@@ -200,12 +213,14 @@ class AISB_Archer_Stock {
     $xr = self::pexels($kw, min(80, $want), 1);
     if (!is_wp_error($xr)) $x = $xr['images'];
     $pool = array_values(array_filter(self::mix($u, $x, $want + 10), fn($img) => !isset($skip[self::pkey($img['full'])])));
-    // Te weinig voor dit zoekwoord: aanvullen met het algemene zoekwoord van het project.
-    if (count($pool) < $need) {
-      $kw2 = self::keyword($pid);
-      $u2 = self::unsplash($kw2, 30, 1);
-      $x2 = self::pexels($kw2, 40, 1);
-      $more = self::mix(is_wp_error($u2) ? [] : $u2['images'], is_wp_error($x2) ? [] : $x2['images'], 60);
+    foreach ($pool as $img) $skip[self::pkey($img['full'])] = 1;
+    // Te weinig (veel foto's staan al op andere pagina's): volgende resultaatpagina's, dan het algemene zoekwoord.
+    $tries = [[$kw, 2], [$kw, 3], [self::keyword($pid), 1], [self::keyword($pid), 2]];
+    foreach ($tries as [$q, $pg]) {
+      if (count($pool) >= $need) break;
+      $u2 = self::unsplash($q, 30, $pg);
+      $x2 = self::pexels($q, 40, $pg);
+      $more = self::mix(is_wp_error($u2) ? [] : $u2['images'], is_wp_error($x2) ? [] : $x2['images'], 70);
       foreach ($more as $img) {
         if (count($pool) >= $need) break;
         if (isset($skip[self::pkey($img['full'])])) continue;
@@ -213,9 +228,9 @@ class AISB_Archer_Stock {
         $pool[] = $img;
       }
     }
-    if (!$pool) wp_send_json_error(['message' => 'Geen stockfoto\'s gevonden voor "' . $kw . '".']);
+    if (!$pool) return new WP_Error('no_photos', 'Geen stockfoto\'s gevonden voor "' . $kw . '".');
     // Een paar reserves: pagina's worden tegelijk gevuld, de browser slaat dubbels over.
-    wp_send_json_success(['images' => array_slice($pool, 0, $need + 8), 'keyword' => $kw, 'sources' => self::sources()]);
+    return ['images' => array_slice($pool, 0, $need + 8), 'keyword' => $kw, 'sources' => self::sources()];
   }
 
   /* ───────────────────────── AJAX ───────────────────────── */

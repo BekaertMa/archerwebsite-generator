@@ -862,7 +862,7 @@
                  <button type="submit" class="archer-btn archer-btn-primary">Sectie toevoegen</button>
                  <button type="button" class="archer-btn archer-btn-ghost" data-act="cancel">Annuleren</button>
                </div>
-               <span class="archer-muted archer-small">De teksten komen in de stap Wireframes.</span>
+               <span class="archer-muted archer-small">De teksten komen in het scherm Ontwerp.</span>
              </form>`;
 
       const secHtml = sections
