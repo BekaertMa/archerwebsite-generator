@@ -85,6 +85,7 @@
     async function loadState() {
       const d = await post("aisb_archer_design_state", { project_id: String(pid) });
       S = d;
+      if (themeNow === null && typeof d.theme === "string" && d.theme) themeNow = d.theme;
       S.photos = S.photos || { images: [], sections: {}, pages: [], own: [] };
       renderLeft();
       renderRight();
@@ -402,23 +403,116 @@
     ["dragleave", "drop"].forEach((ev) => right.addEventListener(ev, (e) => { const d = e.target.closest("[data-ds-drop]"); if (d) { e.preventDefault(); d.classList.remove("is-over"); } }));
     right.addEventListener("drop", (e) => { if (e.target.closest("[data-ds-drop]")) uploadPhotos(e.dataTransfer.files); });
 
+    /* ── Stijl meteen tonen: enkel de CSS-variabelen wisselen ──
+     * Elk voorbeeld heeft <style id="archer-theme"> (de variabelen van de stijl) en <style id="archer-house">
+     * (het gedeelde stylesheet, alleen variabelen). Een andere stijl = #archer-theme vervangen; merkkleur en
+     * hoeken = een paar variabelen in #archer-theme-live. Geen iframe laadt opnieuw. Het antwoord van de
+     * server zet daarna het exacte blok (dezelfde CSS als bij publiceren). */
+    let themeNow = null; // CSS van #archer-theme zoals ze nu getoond wordt (null: wat de server rendert)
+    let liveVars = ""; // tijdelijke variabelen tot de server antwoordt
+    const previewFrames = () => $$(".archer-cv-sec iframe, .aisb-wf-expanded iframe");
+    const docOf = (f) => { try { return f.contentDocument; } catch (e) { return null; } };
+    /** Zet thema en live-variabelen in één voorbeeld. Geeft false als dat voorbeeld opnieuw moet laden. */
+    function themeFrame(f) {
+      const doc = docOf(f);
+      if (!doc || !doc.head || doc.readyState === "loading") return true;
+      const house = doc.getElementById("archer-house");
+      const theme = doc.getElementById("archer-theme");
+      // Oud voorbeeld (zonder apart themablok) of nog zonder Archer-stijl: enkel herladen helpt.
+      if (!theme || !house || house.getAttribute("data-archer-base") !== "1") return false;
+      if (themeNow !== null && theme.textContent !== themeNow) theme.textContent = themeNow;
+      let live = doc.getElementById("archer-theme-live");
+      if (liveVars) {
+        if (!live) { live = doc.createElement("style"); live.id = "archer-theme-live"; theme.after(live); }
+        const css = ":root{" + liveVars + "}";
+        if (live.textContent !== css) live.textContent = css;
+      } else if (live) live.remove();
+      return true;
+    }
+    function applyTheme() {
+      const stale = [];
+      previewFrames().forEach((f) => { if (!themeFrame(f)) stale.push(f); });
+      stale.forEach((f) => { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; } });
+    }
+    const hexOk = (h) => /^#[0-9a-f]{6}$/i.test(String(h || ""));
+    const lum = (h) => {
+      const n = parseInt(h.slice(1), 16);
+      const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+    };
+    const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    /** Variabelen voor een merkkleur of hoeken, zoals AISB_Archer_Styles::tokens ze zou zetten. */
+    function liveFor(data) {
+      const st = (S.styles || []).find((x) => x.id === S.guide.style) || {};
+      const c = st.colours || {};
+      let v = "";
+      if (data.brand !== undefined) {
+        const hex = data.brand === "RESET" ? c.accent : String(data.brand).toUpperCase();
+        if (hexOk(hex)) {
+          const ink = c.ink || "#111111";
+          v += `--a-accent:${hex};--a-accent-ink:${contrast("#FFFFFF", hex) >= 4.5 ? "#FFFFFF" : ink};`;
+          if (hexOk(c.base)) v += `--a-link:${contrast(hex, c.base) >= 4.5 ? hex : ink};`;
+        }
+      }
+      if (data.radius !== undefined && UI.radiusVars) v += UI.radiusVars(data.radius);
+      return v;
+    }
+
     let styleBusy = Promise.resolve();
     function setStyle(data, msg) {
+      // Meteen tonen, nog voor de server antwoordt.
+      const visual = data.style !== undefined || data.radius !== undefined || data.brand !== undefined;
+      if (data.style !== undefined && S.themes && S.themes[data.style]) {
+        themeNow = S.themes[data.style];
+        liveVars = "";
+        S.guide = Object.assign({}, S.guide, { style: data.style });
+        renderRight();
+        applyTheme();
+      } else if (data.radius !== undefined || data.brand !== undefined) {
+        liveVars += liveFor(data);
+        if (data.radius !== undefined) S.guide = Object.assign({}, S.guide, { radius: data.radius });
+        if (data.brand !== undefined) S.guide = Object.assign({}, S.guide, { brand: data.brand === "RESET" ? "" : data.brand });
+        renderRight();
+        applyTheme();
+      }
       styleBusy = styleBusy.then(async () => {
         saving(true);
         try {
           const d = await post("aisb_archer_design_style", Object.assign({ project_id: String(pid) }, data));
           S.guide = d.guide;
+          if (d.themes) S.themes = d.themes;
+          if (visual && typeof d.theme === "string" && d.theme) {
+            // Het exacte blok van de server vervangt de tijdelijke variabelen.
+            themeNow = d.theme;
+            liveVars = "";
+            applyTheme();
+          }
+          if (data.logo_id !== undefined) refreshLogo();
           renderRight();
           saving(false);
-          if (data.photo_pref === undefined) reloadPreviews();
           toast(msg);
         } catch (err) {
           saving(false);
           toast(err.message, "err");
+          // Terug naar wat de server heeft.
+          loadState().then(() => { themeNow = S.theme || null; liveVars = ""; applyTheme(); }).catch(() => {});
         }
       });
       return styleBusy;
+    }
+
+    /** Logo in de headers: de afbeelding vervangen waar er een is, anders die header herladen. */
+    function refreshLogo() {
+      const url = S.guide.logoUrl ? sameScheme(S.guide.logoUrl) : "";
+      $$(".archer-cv-sec iframe, .aisb-wf-expanded iframe").forEach((f) => {
+        const doc = docOf(f);
+        if (!doc) return;
+        const imgs = doc.querySelectorAll(".brxe-logo img, img.bricks-site-logo");
+        const isHeader = !!doc.querySelector(".archer-header, .brxe-logo");
+        if (!isHeader) return;
+        if (url && imgs.length) imgs.forEach((img) => { img.src = url; img.srcset = ""; });
+        else { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; } }
+      });
     }
 
     async function uploadLogo(files) {
@@ -522,18 +616,13 @@
     // load-gebeurtenissen van iframes bubbelen niet, maar zijn wel op te vangen.
     document.addEventListener("load", (e) => {
       const f = e.target;
-      if (f && f.tagName === "IFRAME" && f.closest && f.closest(".archer-cv-sec, .aisb-wf-expanded")) setTimeout(() => inject(f), 30);
+      if (f && f.tagName === "IFRAME" && f.closest && f.closest(".archer-cv-sec, .aisb-wf-expanded")) {
+        // Een voorbeeld dat laadt terwijl de keuze nog bewaard wordt, krijgt meteen de gekozen stijl.
+        themeFrame(f);
+        setTimeout(() => inject(f), 30);
+      }
     }, true);
 
-    let reloadTimer = null;
-    function reloadPreviews() {
-      clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(() => {
-        $$(".archer-cv-sec iframe, .aisb-wf-expanded iframe").forEach((f) => {
-          try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; }
-        });
-      }, 250);
-    }
 
     /* ── Opbouw veranderd (sectie erbij, weg of verplaatst): foto's laten volgen ── */
     let layoutSig = "";
