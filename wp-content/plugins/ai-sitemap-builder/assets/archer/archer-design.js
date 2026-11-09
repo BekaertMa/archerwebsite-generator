@@ -374,7 +374,7 @@
           </label>
           <div class="archer-ds-own">${own.map((o) => `<span class="archer-ds-own-item"><img src="${esc(sameScheme(o.thumb || o.full))}" alt="" loading="lazy"><button type="button" data-ds-own-remove="${Number(o.id)}" aria-label="Foto weghalen">✕</button></span>`).join("")}</div>
         </section>
-        <a class="archer-dp-more" href="${esc(links.photos)}" data-archer-nav>Foto per foto wisselen (alle opties) →</a>`;
+        <p class="archer-ds-note">Eén foto wisselen? Klik erop in de sectie.</p>`;
     }
 
     right.addEventListener("click", async (e) => {
@@ -597,6 +597,11 @@
       if (!doc || !doc.body) return;
       const imgs = Array.from(doc.querySelectorAll("img")).filter((img) => !isLogoImg(img));
       imgs.forEach((img) => { if (!img.hasAttribute("data-archer-orig")) img.setAttribute("data-archer-orig", img.getAttribute("src") || ""); });
+      // Fotovakken klikbaar maken (archer.js opent dan de fotokiezer); de rest is deel van het sjabloon.
+      imgs.forEach((img, i) => {
+        if (range && i < range.count) img.setAttribute("data-archer-slot", String(range.start + i));
+        else img.removeAttribute("data-archer-slot");
+      });
       if (!range || !range.count) return;
       const list = (S.photos.images || []).slice(range.start, range.start + range.count);
       imgs.forEach((img, i) => {
@@ -623,6 +628,164 @@
       }
     }, true);
 
+
+    /* ── Fotokiezer: klik op een foto in een sectie ─────────────────────
+     * archer.js stuurt archer:image-click met het fotovak (data-archer-slot). Kies een stockfoto
+     * (zoeken), een eigen foto (of laad er een op), of laat het vak leeg. Meteen zichtbaar, daarna bewaard. */
+    let picker = null;
+    function closePicker() {
+      if (!picker) return;
+      picker.el.remove();
+      picker = null;
+    }
+    function pickerPos(img, iframe) {
+      const r = iframe.getBoundingClientRect();
+      const k = r.width / (iframe.offsetWidth || 1200);
+      const ir = img.getBoundingClientRect();
+      return { left: r.left + ir.left * k, top: r.top + ir.top * k, width: ir.width * k, height: ir.height * k };
+    }
+    function placePicker() {
+      if (!picker) return;
+      const box = picker.el.getBoundingClientRect();
+      const a = pickerPos(picker.img, picker.iframe);
+      let left = a.left + a.width + 12;
+      if (left + box.width > window.innerWidth - 12) left = a.left - box.width - 12;
+      if (left < 12) left = Math.max(12, Math.min(window.innerWidth - box.width - 12, a.left + a.width / 2 - box.width / 2));
+      const top = Math.max(12, Math.min(window.innerHeight - box.height - 12, a.top));
+      picker.el.style.left = left + "px";
+      picker.el.style.top = top + "px";
+    }
+    const pageOfSlot = (slot) => (S.photos.pages || []).find((p) => slot >= p.start && slot < p.start + p.count) || null;
+    function pickerGrid(list, kind) {
+      if (!list.length) return `<p class="archer-pk-empty">${kind === "own" ? "Nog geen eigen foto's. Laad er hierboven een op." : "Niets gevonden. Probeer een ander woord."}</p>`;
+      return `<div class="archer-pk-grid">${list.map((it, i) => `<button type="button" class="archer-pk-item" data-pk-${kind}="${i}" title="${esc(it.alt || it.photographer || "")}"><img src="${esc(sameScheme(it.thumb || it.full))}" alt="${esc(it.alt || "")}" loading="lazy"></button>`).join("")}</div>`;
+    }
+    function renderPicker() {
+      if (!picker) return;
+      const P = picker;
+      const cur = (S.photos.images || [])[P.slot];
+      const own = (S.photos.own || []).map((o) => ({ thumb: o.thumb, full: o.full, attachment_id: o.id }));
+      P.ownList = own;
+      P.el.innerHTML =
+        `<div class="archer-pk-head"><strong>Foto wisselen</strong>${P.page ? `<span>${esc(P.page.title)}</span>` : ""}<button type="button" class="archer-pk-x" data-pk-close aria-label="Sluiten">✕</button></div>` +
+        `<div class="archer-pk-tabs" role="tablist">` +
+        `<button type="button" role="tab" class="${P.tab === "stock" ? "is-on" : ""}" data-pk-tab="stock" aria-selected="${P.tab === "stock"}">Stockfoto's</button>` +
+        `<button type="button" role="tab" class="${P.tab === "own" ? "is-on" : ""}" data-pk-tab="own" aria-selected="${P.tab === "own"}">Eigen foto's <span>${own.length}</span></button></div>` +
+        (P.tab === "stock"
+          ? `<form class="archer-pk-search" data-pk-search><input type="search" class="archer-input" placeholder="Zoek, bv. verse croissants" value="${esc(P.q || "")}" aria-label="Zoek een foto"><button type="submit" class="archer-btn archer-btn-primary archer-btn-sm">Zoek</button></form>` +
+            (P.loading ? `<p class="archer-pk-empty">Foto's zoeken…</p>` : P.error ? `<p class="archer-pk-empty">${esc(P.error)}</p>` : pickerGrid(P.results || [], "stock")) +
+            (P.results && P.results.length && P.pageNo < (P.totalPages || 1) && !P.loading ? `<button type="button" class="archer-link-btn archer-pk-more" data-pk-more>Meer foto's</button>` : "")
+          : `<label class="archer-pk-upload"><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden data-pk-upload><span>+ Foto's opladen</span></label>` + pickerGrid(own, "own")) +
+        `<div class="archer-pk-foot">${cur && cur.full ? `<button type="button" class="archer-link-btn" data-pk-clear>Fotovak leeg laten</button>` : `<span class="archer-muted">Dit fotovak is nog leeg.</span>`}<span class="archer-pk-status" data-pk-status aria-live="polite"></span></div>`;
+      requestAnimationFrame(placePicker);
+    }
+    async function pickerSearch(more) {
+      if (!picker) return;
+      const P = picker;
+      P.loading = true;
+      P.error = "";
+      if (!more) { P.results = []; P.pageNo = 1; }
+      renderPicker();
+      try {
+        const d = await post("aisb_archer_design_photos", { project_id: String(pid), op: "search", q: P.q || "", page_slug: P.page ? P.page.slug : "", page: String(P.pageNo || 1) });
+        if (picker !== P) return;
+        P.q = P.q || d.search.keyword;
+        P.results = (P.results || []).concat(d.search.images || []);
+        P.totalPages = d.search.total_pages || 1;
+      } catch (err) {
+        if (picker !== P) return;
+        P.error = err.message;
+      }
+      P.loading = false;
+      renderPicker();
+    }
+    /** Kies een foto voor het vak: meteen tonen, dan bewaren. */
+    async function pickPhoto(image) {
+      if (!picker) return;
+      const P = picker;
+      const prev = P.img.getAttribute("src");
+      if (image) { P.img.src = sameScheme(image.full); P.img.srcset = ""; P.img.style.objectFit = "cover"; }
+      else { const o = P.img.getAttribute("data-archer-orig"); if (o !== null) { P.img.src = o; P.img.srcset = ""; } }
+      const st = $("[data-pk-status]", P.el);
+      if (st) st.textContent = "Bewaren…";
+      saving(true);
+      try {
+        const d = await post("aisb_archer_design_photos", { project_id: String(pid), op: "set", slot: String(P.slot), image: JSON.stringify(image || null) });
+        S.photos = d.photos;
+        injectAll();
+        renderRight();
+        saving(false);
+        closePicker();
+        toast(image ? "Foto gewisseld." : "Fotovak leeggemaakt.");
+      } catch (err) {
+        P.img.src = prev;
+        saving(false);
+        if (st) st.textContent = err.message;
+        else toast(err.message, "err");
+      }
+    }
+    document.addEventListener("archer:image-click", (e) => {
+      const { img, iframe, slot } = e.detail || {};
+      if (!img || !iframe || !(slot >= 0)) return;
+      closePicker();
+      const el = document.createElement("div");
+      el.className = "archer-picker";
+      el.setAttribute("role", "dialog");
+      el.setAttribute("aria-label", "Foto wisselen");
+      document.body.appendChild(el);
+      picker = { el, img, iframe, slot, page: pageOfSlot(slot), tab: (S.photos.pref === "own" && (S.photos.own || []).length) ? "own" : "stock", q: "", results: [], pageNo: 1 };
+      renderPicker();
+      if (picker.tab === "stock") pickerSearch(false);
+    });
+    document.addEventListener("click", async (e) => {
+      if (!picker) return;
+      const P = picker;
+      if (!P.el.contains(e.target)) return;
+      let b;
+      if (e.target.closest("[data-pk-close]")) return closePicker();
+      if ((b = e.target.closest("[data-pk-tab]"))) {
+        P.tab = b.getAttribute("data-pk-tab");
+        renderPicker();
+        if (P.tab === "stock" && !(P.results || []).length && !P.loading) pickerSearch(false);
+        return;
+      }
+      if (e.target.closest("[data-pk-more]")) { P.pageNo = (P.pageNo || 1) + 1; return pickerSearch(true); }
+      if ((b = e.target.closest("[data-pk-stock]"))) return pickPhoto((P.results || [])[Number(b.getAttribute("data-pk-stock"))]);
+      if ((b = e.target.closest("[data-pk-own]"))) return pickPhoto((P.ownList || [])[Number(b.getAttribute("data-pk-own"))]);
+      if (e.target.closest("[data-pk-clear]")) return pickPhoto(null);
+    });
+    document.addEventListener("submit", (e) => {
+      if (!picker || !e.target.matches("[data-pk-search]")) return;
+      e.preventDefault();
+      picker.q = ($("input", e.target).value || "").trim();
+      pickerSearch(false);
+    });
+    document.addEventListener("change", async (e) => {
+      if (!picker || !e.target.matches("[data-pk-upload]")) return;
+      const files = Array.from(e.target.files || []).filter((f) => /^image\//.test(f.type)).slice(0, 30);
+      if (!files.length) return;
+      const st = $("[data-pk-status]", picker.el);
+      if (st) st.textContent = "Opladen…";
+      try {
+        const up = await post("aisb_archer_intake_upload", { kind: "photos" }, files);
+        const d = await post("aisb_archer_design_photos", { project_id: String(pid), op: "own_add", ids: JSON.stringify(up.items.map((it) => it.id)) });
+        S.photos = d.photos;
+        renderRight();
+        if (files.length === 1 && picker) {
+          // Eén foto opgeladen: meteen in dit vak.
+          return pickPhoto({ attachment_id: up.items[0].id, full: up.items[0].url, thumb: up.items[0].thumb });
+        }
+        renderPicker();
+      } catch (err) {
+        if (st) st.textContent = err.message;
+      }
+    });
+    // Sluiten: Escape, buiten de kiezer klikken (niet op een andere foto: die opent een nieuwe kiezer).
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picker) closePicker(); });
+    document.addEventListener("mousedown", (e) => { if (picker && !picker.el.contains(e.target)) closePicker(); }, true);
+    window.addEventListener("resize", () => picker && placePicker());
+    // Het canvas verschuift of zoomt: de kiezer blijft bij zijn foto.
+    (function follow() { if (picker) placePicker(); requestAnimationFrame(follow); })();
 
     /* ── Opbouw veranderd (sectie erbij, weg of verplaatst): foto's laten volgen ── */
     let layoutSig = "";

@@ -357,6 +357,39 @@ class AISB_Archer_Design {
       if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
       $g = self::remember_slots($res, self::slots($pid));
       self::save_guide($pid, $g);
+    } elseif ($op === 'set') {
+      // Eén fotovak wisselen (fotokiezer op het canvas): een eigen foto, een stockfoto of leeg.
+      $slot = (int) ($_POST['slot'] ?? -1);
+      $slots = self::slots($pid);
+      if ($slot < 0 || $slot >= $slots['total']) wp_send_json_error(['message' => 'Dit fotovak bestaat niet (meer). Herlaad de pagina.'], 400);
+      $images = is_array($g['images'] ?? null) ? array_values($g['images']) : [];
+      while (count($images) < $slots['total']) $images[] = self::empty_slot();
+      $pick = json_decode((string) wp_unslash($_POST['image'] ?? 'null'), true);
+      if (!is_array($pick)) {
+        $images[$slot] = self::empty_slot();
+      } elseif (!empty($pick['attachment_id'])) {
+        $id = (int) $pick['attachment_id'];
+        if (!self::own_attachment($id) || !wp_attachment_is_image($id)) wp_send_json_error(['message' => 'Deze foto mag je niet gebruiken.'], 403);
+        $images[$slot] = self::own_item($id);
+        // Nieuwe eigen foto: ook bij de eigen foto's zetten.
+        $have = array_flip(array_map(fn($i) => (int) ($i['attachment_id'] ?? 0), $own));
+        if (!isset($have[$id])) { $own[] = self::own_item($id); $g['uploadedImages'] = $own; }
+      } else {
+        $img = self::clean_stock($pick);
+        if (!$img) wp_send_json_error(['message' => 'Ongeldige foto.'], 400);
+        $images[$slot] = $img;
+      }
+      $g['images'] = array_slice($images, 0, $slots['total']);
+      $g = self::remember_slots($g, $slots);
+      self::save_guide($pid, $g);
+    } elseif ($op === 'search') {
+      if (!class_exists('AISB_Archer_Stock')) wp_send_json_error(['message' => 'Stockfoto\'s zijn niet beschikbaar.'], 400);
+      $slug = sanitize_title(wp_unslash((string) ($_POST['page_slug'] ?? '')));
+      $title = ''; $sections = '';
+      foreach (self::slots($pid)['pages'] as $p) if ($p['slug'] === $slug) { $title = $p['title']; $sections = $p['sections']; }
+      $r = AISB_Archer_Stock::search_for($pid, sanitize_text_field(wp_unslash((string) ($_POST['q'] ?? ''))), $slug, $title, $sections, (int) ($_POST['page'] ?? 1));
+      if (is_wp_error($r)) wp_send_json_error(['message' => $r->get_error_message()], 404);
+      wp_send_json_success(['search' => $r]);
     } elseif ($op !== 'state') {
       wp_send_json_error(['message' => 'Onbekende actie.'], 400);
     }
@@ -478,6 +511,25 @@ class AISB_Archer_Design {
       'full' => set_url_scheme((string) (wp_get_attachment_image_url($id, 'large') ?: $url)),
       'alt' => (string) get_post_meta($id, '_wp_attachment_image_alt', true),
       'photographer' => 'Uploaded', 'link' => '', 'uploaded' => true, 'attachment_id' => $id,
+    ];
+  }
+
+  /** Een stockfoto uit de browser: enkel https-adressen van Unsplash of Pexels, en gekende velden. */
+  private static function clean_stock(array $p): ?array {
+    $ok = function ($u) {
+      $u = esc_url_raw((string) $u);
+      $host = (string) wp_parse_url($u, PHP_URL_HOST);
+      return (strpos($u, 'https://') === 0 && preg_match('/(^|\.)(unsplash\.com|pexels\.com)$/i', $host)) ? $u : '';
+    };
+    $full = $ok($p['full'] ?? '');
+    if ($full === '') return null;
+    return [
+      'thumb' => $ok($p['thumb'] ?? '') ?: $full,
+      'full' => $full,
+      'alt' => sanitize_text_field((string) ($p['alt'] ?? '')),
+      'photographer' => sanitize_text_field((string) ($p['photographer'] ?? '')),
+      'link' => esc_url_raw((string) ($p['link'] ?? '')),
+      'source' => in_array(($p['source'] ?? ''), ['Unsplash', 'Pexels'], true) ? $p['source'] : 'Unsplash',
     ];
   }
 

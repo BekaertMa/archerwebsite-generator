@@ -1689,39 +1689,6 @@
         if (mode === "title") return doc.body.innerHTML.replace(/\s+/g, " ").trim();
         return doc.body.innerHTML.replace(/(<br>\s*){3,}/g, "<br><br>").replace(/^(\s|<br>)+|(\s|<br>)+$/g, "").trim();
       }
-      const plainLen = (html) => {
-        const d = new DOMParser().parseFromString("<body>" + html + "</body>", "text/html");
-        return d.body.textContent.replace(/\s+/g, " ").trim().length;
-      };
-      const countText = (len, max) => (max ? `${len} / ${max}` : `${len}`);
-
-      function fieldHtml(n) {
-        const mode = n.mode || (n.name === "heading" ? "title" : n.name === "button" ? "inline" : n.name === "text" ? "rich" : "basic");
-        const v = cleanHtml(n.text || "", mode);
-        const len = plainLen(v);
-        const lab = /tagline|eyebrow/i.test(n.label || "") ? "Tagline" : TEXT_NAMES[n.name] + (n.tag && /^h\d$/.test(n.tag) ? " (" + n.tag.toUpperCase() + ")" : "");
-        const tools =
-          mode === "inline"
-            ? ""
-            : `<div class="archer-ed-tb" role="toolbar" aria-label="Opmaak">` +
-              `<button type="button" data-ed-cmd="bold" aria-label="Vet" title="Vet"><strong>B</strong></button>` +
-              `<button type="button" data-ed-cmd="italic" aria-label="Cursief" title="Cursief"><em>I</em></button>` +
-              (mode === "rich" ? `<button type="button" data-ed-cmd="insertUnorderedList" aria-label="Opsomming" title="Opsomming">•</button>` : "") +
-              `</div>`;
-        return (
-          `<div class="archer-ed-field">` +
-          `<div class="archer-ed-labelrow"><span class="aisb-label" id="archer-ed-l-${n.id}">${esc(lab)}</span>` +
-          `<span class="archer-ed-len${n.max && len > n.max ? " is-over" : ""}" data-ed-len="${n.id}" title="${n.max ? "Aanbevolen maximum: " + n.max + " tekens" : ""}">${countText(len, n.max)}</span></div>` +
-          tools +
-          `<div class="archer-ed-rte is-${mode}" id="archer-ed-${n.id}" contenteditable="true" role="textbox" spellcheck="true"` +
-          ` aria-labelledby="archer-ed-l-${n.id}"${mode === "inline" ? "" : ' aria-multiline="true"'}` +
-          ` data-ed-text="${n.id}" data-ed-key="${n.key || "text"}" data-ed-mode="${mode}" data-ed-max="${n.max || 0}">` +
-          (mode === "inline" ? esc(v) : v) +
-          `</div>` +
-          (n.max ? `<p class="archer-ed-hint" data-ed-hint="${n.id}"${len > n.max ? "" : " hidden"}>Langer dan aanbevolen voor deze plek in het ontwerp.</p>` : "") +
-          `</div>`
-        );
-      }
 
       const seg = (attr, value, options, current) =>
         `<div class="archer-seg archer-ed-seg" role="group">` +
@@ -1745,6 +1712,8 @@
         }
         const a = (sel.a = analyse(sel.nodes, docOf(sel.uuid)));
         let html = head;
+        // Teksten en foto's pas je rechtstreeks in de sectie aan; hier staan enkel opbouw en voorbeelden.
+        html += `<p class="archer-ed-note archer-ed-inline-hint">Klik op een tekst om hem te typen, of op een foto om een andere te kiezen.</p>`;
         if (isFixed(s) && a.texts.length) html += `<p class="archer-ed-note">Wijzigingen aan de ${isHead(s) ? "header" : "footer"} gelden voor alle pagina's.</p>`;
         // Voorbeeld: willekeurig een ander, of zelf kiezen uit de voorbeelden van hetzelfde type.
         html += libApi ? libApi.variantsGroup(s) : "";
@@ -1771,16 +1740,6 @@
         });
         if (layout.length) html += `<div class="archer-ed-group"><div class="archer-ed-title">Opbouw</div>${layout.join("")}</div>`;
 
-        // Teksten
-        const loose = a.texts.filter((t) => !t.item);
-        if (loose.length) html += `<div class="archer-ed-group"><div class="archer-ed-title">Teksten</div>${loose.map((t) => fieldHtml(t.n)).join("")}</div>`;
-        a.repeats.forEach((r) => {
-          r.items.forEach((it, i) => {
-            const list = a.texts.filter((t) => t.item && t.item.r === r && t.item.i === i);
-            if (!list.length) return;
-            html += `<details class="archer-ed-group archer-ed-item"${i === 0 ? " open" : ""}><summary class="archer-ed-title">Item ${a.repeats.length > 1 ? a.repeats.indexOf(r) + 1 + "." : ""}${i + 1}</summary>${list.map((t) => fieldHtml(t.n)).join("")}</details>`;
-          });
-        });
         if (!layout.length && !a.texts.length) {
           html += isHead(s) && !s.ai_wireframe_id
             ? `<p class="archer-muted">De header kan je hier niet aanpassen. Het menu volgt automatisch de pagina's van je sitemap.</p>`
@@ -1957,24 +1916,6 @@
         });
       }
 
-      // Teksten: meteen zichtbaar in het voorbeeld, even later bewaard.
-      function liveText(id, value, mode) {
-        const doc = docOf(sel.uuid);
-        const el = domOf(doc, id);
-        if (!el) return;
-        const n = sel.a && sel.a.byId[id];
-        if (n && n.name === "button") {
-          const t = Array.from(el.childNodes).find((c) => c.nodeType === 3 && c.textContent.trim());
-          if (t) t.textContent = value;
-          else el.insertBefore(doc.createTextNode(value), el.firstChild);
-        } else if (mode === "inline") {
-          el.textContent = value;
-        } else {
-          el.innerHTML = value; // al opgekuist door cleanHtml
-        }
-        const f = $("iframe", secElOf(sel.uuid));
-        if (f) measureIframe(f);
-      }
       async function flushText() {
         clearTimeout(textTimer);
         const ids = Object.keys(textQueue);
@@ -1988,29 +1929,6 @@
         });
         await send(ops, false);
       }
-
-      panel.addEventListener("input", (e) => {
-        const f = e.target.closest("[data-ed-text]");
-        if (!f || !sel) return;
-        const id = f.getAttribute("data-ed-text");
-        const mode = f.getAttribute("data-ed-mode") || "basic";
-        const value = cleanHtml(mode === "inline" ? esc(f.textContent) : f.innerHTML, mode);
-        textQueue[id] = { key: f.getAttribute("data-ed-key") || "text", value };
-        // Tekenteller en waarschuwing bij een te lange tekst.
-        const max = Number(f.getAttribute("data-ed-max")) || 0;
-        const len = plainLen(mode === "inline" ? esc(value) : value);
-        const lenEl = $(`[data-ed-len="${id}"]`, panel);
-        if (lenEl) {
-          lenEl.textContent = countText(len, max);
-          lenEl.classList.toggle("is-over", !!max && len > max);
-        }
-        const hint = $(`[data-ed-hint="${id}"]`, panel);
-        if (hint) hint.hidden = !(max && len > max);
-        liveText(id, value, mode);
-        setStatus("");
-        clearTimeout(textTimer);
-        textTimer = setTimeout(flushText, 800);
-      });
 
       panel.addEventListener("click", async (e) => {
         if (e.target.closest("[data-ed-close]")) return close();
@@ -2046,39 +1964,7 @@
           return send([{ op: "cols", id: r.id, n }], true);
         }
       });
-      panel.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        // Opmaakknoppen: de selectie in het tekstveld behouden.
-        const b = e.target.closest("[data-ed-cmd]");
-        if (!b) return;
-        e.preventDefault();
-        const f = b.closest(".archer-ed-field");
-        const rte = f && $("[data-ed-text]", f);
-        if (rte && document.activeElement !== rte) rte.focus();
-        document.execCommand(b.getAttribute("data-ed-cmd"), false, null);
-      });
-      panel.addEventListener("focusin", (e) => {
-        if (e.target.getAttribute && e.target.getAttribute("data-ed-mode") === "rich") document.execCommand("defaultParagraphSeparator", false, "p");
-      });
-      panel.addEventListener("keydown", (e) => {
-        const f = e.target.closest && e.target.closest("[data-ed-text]");
-        if (!f || e.key !== "Enter") return;
-        const mode = f.getAttribute("data-ed-mode");
-        if (mode === "inline" || mode === "title") {
-          e.preventDefault(); // titels en knoppen: één regel
-        } else if (mode === "basic") {
-          e.preventDefault();
-          document.execCommand("insertLineBreak");
-        }
-      });
-      // Plakken: alleen de tekst, zonder opmaak of kleuren van elders.
-      panel.addEventListener("paste", (e) => {
-        if (!e.target.closest || !e.target.closest("[data-ed-text]")) return;
-        e.preventDefault();
-        const t = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
-        const f = e.target.closest("[data-ed-text]");
-        document.execCommand("insertText", false, /^(inline|title)$/.test(f.getAttribute("data-ed-mode") || "") ? t.replace(/\s+/g, " ") : t);
-      });
+      panel.addEventListener("mousedown", (e) => e.stopPropagation());
       panel.addEventListener("wheel", (e) => e.stopPropagation());
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && sel && !(e.target.closest && e.target.closest("input, textarea"))) close();
@@ -2164,9 +2050,6 @@
         cancelAnimationFrame(rafId);
         loop();
         updateActive();
-        // Het veld in het paneel rechts zichtbaar maken.
-        const f = $(`[data-ed-text="${CSS.escape(id)}"]`, panel);
-        if (f) f.closest(".archer-ed-field")?.classList.add("is-live");
       }
 
       function finishInline() {
@@ -2177,7 +2060,6 @@
         tb.hidden = true;
         l.el.removeAttribute("contenteditable");
         l.el.removeAttribute("data-archer-editing");
-        $$(".archer-ed-field.is-live", panel).forEach((x) => x.classList.remove("is-live"));
         flushText();
       }
 
@@ -2188,19 +2070,6 @@
         textQueue[live.id] = { key: live.key, value };
         const n = sel && sel.a && sel.a.byId[live.id];
         if (n) n.text = value;
-        // Het veld in het paneel volgt mee.
-        const f = $(`[data-ed-text="${CSS.escape(live.id)}"]`, panel);
-        if (f && document.activeElement !== f) {
-          if (live.mode === "inline") f.textContent = live.el.textContent.replace(/\s+/g, " ").trim();
-          else f.innerHTML = value;
-        }
-        const max = f ? Number(f.getAttribute("data-ed-max")) || 0 : 0;
-        const lenEl = $(`[data-ed-len="${CSS.escape(live.id)}"]`, panel);
-        if (lenEl) {
-          const len = plainLen(live.mode === "inline" ? esc(value) : value);
-          lenEl.textContent = countText(len, max);
-          lenEl.classList.toggle("is-over", !!max && len > max);
-        }
         measureIframe(live.iframe);
         setStatus("");
         clearTimeout(textTimer);
@@ -2233,10 +2102,16 @@
             "[data-archer-edit]:hover{outline:2px solid rgba(27,90,91,.55);outline-offset:3px}" +
             "[data-archer-editing]{outline:2px solid #1B5A5B!important;outline-offset:3px;cursor:text}" +
             "[data-archer-edit] strong,[data-archer-edit] b{font-weight:700}[data-archer-edit] em,[data-archer-edit] i{font-style:italic}" +
-            "[data-archer-edit] a{text-decoration:underline}";
+            "[data-archer-edit] a{text-decoration:underline}" +
+            // Foto's: klikken opent de fotokiezer (archer-design.js zet data-archer-slot op de fotovakken).
+            "img[data-archer-slot]{cursor:pointer;pointer-events:auto!important}" +
+            "img[data-archer-slot]:hover{outline:3px solid rgba(27,90,91,.75);outline-offset:-3px}";
           doc.head.appendChild(st);
           doc.addEventListener("click", (e) => {
             if (e.target.closest && e.target.closest("a")) e.preventDefault(); // knoppen en links: niet volgen
+            const onText = e.target.closest && e.target.closest("[data-archer-edit]");
+            const img = (e.target.closest && e.target.closest("img[data-archer-slot]")) || (!onText && imageAt(doc, e.clientX, e.clientY));
+            if (img) { e.preventDefault(); return imageClick(img); }
             const t = e.target.closest && e.target.closest("[data-archer-edit]");
             if (t) startInline(t, { x: e.clientX, y: e.clientY });
           }, true);
@@ -2280,9 +2155,34 @@
           const y = (pendingPoint.y - r.top) / s;
           pendingPoint = null;
           const hit = doc.elementFromPoint(x, y);
+          // Eerste klik op een foto: meteen de fotokiezer (de foto zelf vangt geen klikken voor de sectie open is).
+          const img = imageAt(doc, x, y);
+          if (img) return imageClick(img);
           const t = hit && hit.closest && hit.closest("[data-archer-edit]");
           if (t) startInline(t, { x, y });
         }
+      }
+
+      /** Het fotovak op dit punt (ook als er een laag over de foto ligt, zoals een overlay). */
+      function imageAt(doc, x, y) {
+        const list = doc.elementsFromPoint ? doc.elementsFromPoint(x, y) : [doc.elementFromPoint(x, y)];
+        for (const el of list) {
+          if (!el || !el.closest) continue;
+          if (el.closest("[data-archer-edit]")) return null; // tekst boven de foto gaat voor
+          const img = el.matches("img[data-archer-slot]") ? el : null;
+          if (img) return img;
+        }
+        return null;
+      }
+      /** Fotovak aangeklikt: archer-design.js toont de fotokiezer. */
+      function imageClick(img) {
+        finishInline();
+        const doc = img.ownerDocument;
+        const iframe = frameOf(doc);
+        const secEl = iframe && iframe.closest(".archer-cv-sec, .aisb-wf-section");
+        document.dispatchEvent(new CustomEvent("archer:image-click", {
+          detail: { img, iframe, uuid: secEl ? secEl.getAttribute("data-archer-cv-uuid") || secEl.getAttribute("data-uuid") : "", slot: Number(img.getAttribute("data-archer-slot")) },
+        }));
       }
 
       // Ergens anders klikken (paneel, canvas): klaar met deze tekst.
