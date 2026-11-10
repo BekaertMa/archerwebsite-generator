@@ -161,25 +161,29 @@ class AISB_Archer_Generate {
    *
    * @param string $prompt       De volledige prompt van de wireframe-AI (met "Target JSON:" op het einde).
    * @param array  $to_translate section_N => ['purpose' => ..., 'modules' => [...]]
+   * @param array  $ctx          project_id, page_slug, page_title, page_type, page_purpose (voor de nalezing).
    * @return array|null Zelfde vorm als het oude antwoord, of null als niets lukte.
    */
-  public static function translate_sections_parallel(string $prompt, array $to_translate): ?array {
+  public static function translate_sections_parallel(string $prompt, array $to_translate, array $ctx = []): ?array {
     if (!$to_translate || !class_exists('WpOrg\\Requests\\Requests')) return null;
     $self = new self();
     $base = preg_replace('/Target JSON:\n.*$/s', '', $prompt);
     $base .= "\nLENGTH: every text must fit the slot of the placeholder it replaces in the design. LIMITS gives the maximum number of words per module id. Write each text so it naturally fits within that many words: choose a shorter formulation instead of cutting a longer one. Every text is a complete phrase or sentence that stands on its own; never continue a sentence in the next module and never stop mid-sentence. Headings are short and punchy (a hero title is a few words, not a sentence about everything the company does). Short labels (stats, taglines, list items) are 1 to 4 words.\n"
       . "FORMAT: plain text only. No HTML tags, no <span>, no style attributes and no colours: colours and emphasis are chosen later in the style step.\n"
       . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n"
-      . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::copy_rules() . "\n" : '');
+      . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::copy_rules() . "\n" : '')
+      . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::copy_rules() . "\n" : '');
+    // Aanspreekvorm uit de toon van de intake (je of u), voor alle secties gelijk.
+    if (class_exists('AISB_Archer_Copy_Coach')) $base .= AISB_Archer_Copy_Coach::address_rule($base);
     // Stijl al gekozen (teksten opnieuw maken na de stap Stijl): de stem uit de DESIGN.md van die stijl.
-    $pid_now = (int) ($_POST['project_id'] ?? $_POST['aisb_project'] ?? $_GET['aisb_project'] ?? 0);
+    $pid_now = (int) ($ctx['project_id'] ?? 0) ?: (int) ($_POST['project_id'] ?? $_POST['aisb_project'] ?? $_GET['aisb_project'] ?? 0);
     if ($pid_now && class_exists('AISB_Archer_Styles')) {
       $notes = AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid_now, 'aisb_style_guide', true), true), 'copy');
       if ($notes !== '') $base .= $notes . "Match this voice; the copy rules above still apply.\n";
     }
     // Overzicht of detailpagina van een lijst (occasies, realisaties ...): bij het publiceren worden de kaarten
     // de items van een inhoudstype en wordt de detailpagina het sjabloon voor één item.
-    $slug_now = sanitize_title((string) wp_unslash($_POST['page_slug'] ?? ''));
+    $slug_now = sanitize_title((string) ($ctx['page_slug'] ?? '')) ?: sanitize_title((string) wp_unslash($_POST['page_slug'] ?? ''));
     if ($pid_now && $slug_now !== '' && class_exists('AISB_Archer_Collections')) {
       foreach (AISB_Archer_Collections::pairs($pid_now) as $pair) {
         $sg = $pair['def']['singular'];
@@ -221,6 +225,7 @@ class AISB_Archer_Generate {
           . "A module marked \"section\" is the section's own tagline, heading or intro: it names what the whole section is about and is NEVER one of the MUST COVER points. A module marked \"item N\" belongs to repeated slot N and carries MUST COVER point N and nothing else.\n" : '')
         . ($roles && $kc && $item_n > count($kc) ? "SURPLUS SLOTS: the design has " . $item_n . " repeated slots but this section has only " . count($kc) . " points. Items 1 to " . count($kc) . " carry the points, in order. Each slot after that gets a short line that supports the same subject (a benefit, a reassurance, a next step) and must NOT introduce a new topic, and must NOT borrow a topic that another section of this page covers.\n" : '')
         . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
+        . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
         . "You write ONLY " . $key . ". The page reads as one story from top to bottom: this section covers its own purpose and nothing else. Do not repeat what another section of this page covers: no second introduction of the business, no restating the hero claim, no list of the same services or the same benefits again, no same examples or sentences. Use fresh wording; a reader who scrolls must learn something new in every section.\n"
         . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
         . "Target JSON:\n" . wp_json_encode([$key => $target])];
@@ -284,7 +289,11 @@ class AISB_Archer_Generate {
     }
     // Herhaling over secties heen (drie keer dezelfde uitleg): één herschrijfvraag voor de dubbels.
     $out = self::dedupe_sections($self, $out, $to_translate, $limits, $system);
-    return self::finish_words($out, $to_translate, $pid_now);
+    // Copycoach: de hele pagina nalezen en de zwakste teksten herschrijven (niet bij één losse sectie).
+    $out = self::review_page($self, $out, $to_translate, $limits, $system, $pid_now, $slug_now, $ctx);
+    $out = self::finish_words($out, $to_translate, $pid_now);
+    do_action('archer_copy_written', $out, $to_translate, $pid_now, $slug_now);
+    return $out;
   }
 
   /**
@@ -459,6 +468,81 @@ class AISB_Archer_Generate {
     return $out;
   }
 
+  /**
+   * Nalezing door de copycoach (AISB_Archer_Copy_Coach): één AI-vraag voor de hele pagina met een score
+   * op 100 en herschrijvingen van de zwakste teksten. Alleen bij drie of meer secties (een volledige
+   * pagina), uit te zetten met de filter archer_copy_review. Mislukt de vraag, dan blijft alles zoals het was.
+   */
+  private static function review_page(self $self, array $out, array $to_translate, array $limits, string $system, int $pid, string $slug, array $ctx): array {
+    if (!class_exists('AISB_Archer_Copy_Coach') || !AISB_Archer_Copy_Coach::on() || count($out) < 3) return $out;
+    if (!apply_filters('archer_copy_review', true, $pid, $slug)) return $out;
+    $brief = $pid ? (string) get_post_meta($pid, 'aisb_project_brief', true) : '';
+    if (trim($brief) === '') return $out;
+    // Header en footer niet herschrijven (zoals bij dedupe_sections).
+    $chrome = [];
+    $keys = array_map('strval', array_keys($to_translate));
+    if (count($keys) >= 3) { $chrome[$keys[0]] = 1; $chrome[end($keys)] = 1; }
+    foreach ($to_translate as $key => $sec) {
+      if (preg_match('/^(header|footer|navigati|voet|hoofding|pied)/u', mb_strtolower((string) ($sec['purpose'] ?? '')))) $chrome[(string) $key] = 1;
+    }
+    $texts = [];
+    foreach ($out as $key => $sec) {
+      if (isset($chrome[(string) $key])) continue;
+      foreach ((array) ($sec['modules'] ?? []) as $mid => $mod) {
+        $type = (string) ($to_translate[$key]['modules'][$mid]['type'] ?? ($mod['type'] ?? ''));
+        $first = true;
+        foreach ((array) ($mod['settings'] ?? []) as $sk => $val) {
+          if (!is_string($val)) continue;
+          $plain = trim(html_entity_decode(wp_strip_all_tags($val), ENT_QUOTES, 'UTF-8'));
+          $max = $first ? (int) ($limits[$key][$mid] ?? 0) : 0;
+          $first = false;
+          // Formuliervelden, labels van één woord en lege teksten laten we staan.
+          if ($plain === '' || mb_strlen($plain) < 3 || in_array($type, ['form', 'map', 'image', 'icon', 'logo', 'nav-menu', 'nav-nested'], true)) continue;
+          $texts[$key . '|' . $mid . '|' . $sk] = [
+            'section' => mb_substr((string) ($to_translate[$key]['purpose'] ?? ''), 0, 160),
+            'type' => $type ?: 'text',
+            'text' => $plain,
+            'max_chars' => $max ?: max(30, (int) ceil(mb_strlen($plain) * 1.2)),
+          ];
+        }
+      }
+    }
+    if (count($texts) < 4) return $out;
+    $page = array_filter([
+      'title' => (string) ($ctx['page_title'] ?? $slug),
+      'type' => (string) ($ctx['page_type'] ?? ''),
+      'purpose' => (string) ($ctx['page_purpose'] ?? ''),
+    ], 'strlen');
+    $t0 = microtime(true);
+    $res = $self->ai_multi(['r' => ['system' => $system, 'user' => AISB_Archer_Copy_Coach::review_prompt($brief, $page, $texts)]], 'review', 60)['r'] ?? null;
+    if (!is_array($res)) {
+      error_log('[AISB] Archer copycoach: nalezing van ' . $slug . ' mislukt, teksten blijven zoals ze zijn.');
+      return $out;
+    }
+    // Knoplabels die meer dan eens op de pagina staan (ook in de header) niet los van elkaar wijzigen.
+    $labels = [];
+    foreach ($out as $key => $sec) foreach ((array) ($sec['modules'] ?? []) as $mid => $mod) {
+      $type = (string) ($to_translate[$key]['modules'][$mid]['type'] ?? ($mod['type'] ?? ''));
+      if (!in_array($type, ['button', 'text-link'], true)) continue;
+      foreach ((array) ($mod['settings'] ?? []) as $val) if (is_string($val) && trim($val) !== '') { $lk = mb_strtolower(trim(wp_strip_all_tags($val))); $labels[$lk] = ($labels[$lk] ?? 0) + 1; }
+    }
+    $locked = array_filter($labels, fn($n) => $n > 1);
+    $fixes = AISB_Archer_Copy_Coach::accept_fixes((array) ($res['fixes'] ?? []), $texts, $brief, $locked);
+    $changes = [];
+    foreach ($fixes as $id => $new) {
+      [$key, $mid, $sk] = explode('|', $id, 3);
+      if (!isset($out[$key]['modules'][$mid]['settings'][$sk])) continue;
+      $max = (int) $texts[$id]['max_chars'];
+      $type = (string) $texts[$id]['type'];
+      $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $max * 1.1 ? $new : self::trim_to($new, (int) round($max * ($type === 'heading' ? 1.3 : 1)));
+      $changes[] = ['from' => $texts[$id]['text'], 'to' => wp_strip_all_tags($out[$key]['modules'][$mid]['settings'][$sk])];
+    }
+    AISB_Archer_Copy_Coach::remember($pid, $slug, $res, count($fixes), $changes);
+    do_action('archer_copy_reviewed', $res, $texts, $fixes, $pid, $slug);
+    error_log(sprintf('[AISB] Archer copycoach: %s scoort %d/100, %d van %d voorstel(len) toegepast (%.1fs).', $slug ?: '?', (int) ($res['total'] ?? 0), count($fixes), count((array) ($res['fixes'] ?? [])), microtime(true) - $t0));
+    return $out;
+  }
+
   /* ───────────────────────── Tekstlengte en opmaak ───────────────────────── */
 
   /**
@@ -609,6 +693,7 @@ class AISB_Archer_Generate {
       'plan' => ['model' => 'gpt-5.4-mini', 'effort' => 'low'],
       'sections' => ['model' => 'gpt-5.4-mini', 'effort' => 'none'],
       'copy' => ['model' => 'gpt-5.4-mini', 'effort' => 'none'],
+      'review' => ['model' => 'gpt-5.4-mini', 'effort' => 'low'],
     ];
     $m = apply_filters('archer_ai_' . $task . '_model', $defaults[$task] ?? $defaults['sections']);
     return is_array($m) ? $m : $defaults['sections'];
@@ -629,7 +714,7 @@ class AISB_Archer_Generate {
   }
 
   /** Na zoveel seconden zonder antwoord gaat dezelfde AI-vraag een tweede keer uit (het eerste antwoord telt). */
-  private const HEDGE_AFTER = ['copy' => 12.0, 'sections' => 15.0, 'plan' => 20.0];
+  private const HEDGE_AFTER = ['copy' => 12.0, 'sections' => 15.0, 'plan' => 20.0, 'review' => 30.0];
 
   /**
    * Zoals Requests::request_multiple, maar met een reservevraag voor trage antwoorden: een AI-antwoord
@@ -1052,6 +1137,7 @@ PROMPT;
       . "- key_content: 2–4 concrete items from the brief.\n"
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
       . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::plan_rules() : '')
+      . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::plan_rules() : '')
       . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
     $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')

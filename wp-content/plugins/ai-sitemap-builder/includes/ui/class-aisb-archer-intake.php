@@ -40,6 +40,7 @@ class AISB_Archer_Intake {
     'opening_hours' => 'Openingsuren',
     // 2. Klanten en doel
     'audience'      => 'Doelgroep',
+    'customer_need' => 'Waarmee klanten komen',
     'main_goal'     => 'Doel van de website',
     'booking'       => 'Online boeken',
     'price_info'    => 'Prijzen',
@@ -49,6 +50,7 @@ class AISB_Archer_Intake {
     'references'    => 'Referenties',
     'certifications'=> 'Erkenningen',
     'guarantees'    => 'Garanties',
+    'objections'    => 'Twijfels van klanten',
     // 4. Pagina's
     'must_pages'    => "Pagina's",
     'page_count'    => "Aantal pagina's",
@@ -71,14 +73,14 @@ class AISB_Archer_Intake {
   /** Blokken van de agenda (voor de voortgang in de interface). */
   public const BLOCKS = [
     'zaak'       => ['label' => 'De zaak',          'fields' => ['business_name', 'activity', 'services', 'region', 'founded', 'team', 'opening_hours']],
-    'klant'      => ['label' => 'Klanten en doel',  'fields' => ['audience', 'main_goal', 'price_info']],
-    'vertrouwen' => ['label' => 'Vertrouwen',       'fields' => ['usp', 'reviews', 'references', 'certifications']],
+    'klant'      => ['label' => 'Klanten en doel',  'fields' => ['audience', 'customer_need', 'main_goal', 'price_info']],
+    'vertrouwen' => ['label' => 'Vertrouwen',       'fields' => ['usp', 'reviews', 'references', 'certifications', 'objections']],
     'paginas'    => ['label' => "Pagina's",         'fields' => ['must_pages', 'page_notes']],
     'stijl'      => ['label' => 'Stijl en beeld',   'fields' => ['tone', 'languages', 'style_id', 'brand_colors', 'logo', 'photos', 'contact']],
   ];
 
   /** Lijstvelden. */
-  private const LISTS = ['services', 'must_pages', 'languages', 'page_notes', 'faq_topics', 'references', 'certifications'];
+  private const LISTS = ['services', 'must_pages', 'languages', 'page_notes', 'faq_topics', 'references', 'certifications', 'objections'];
 
   /** Zonder deze velden start de generatie niet. */
   public const REQUIRED = ['business_name', 'activity', 'audience', 'region', 'main_goal', 'tone', 'languages', 'style_id'];
@@ -576,6 +578,7 @@ AGENDA, in this order. Skip what is known. Required fields are marked *.
    opening_hours: only for a shop, salon, practice, restaurant or other place people visit.
 2. KLANTEN EN DOEL
    audience*: "B2C", "B2B" or "B2B en B2C", plus who exactly if they say.
+   customer_need: why customers come to them, in the customer's words: the problem they want solved or what they want to get ("Waarmee komen klanten meestal bij jullie?"). One or two short sentences; "Sla over" allowed. This is the core of the website's message, so ask it unless the brief or website already answers it.
    main_goal*: what a visitor must do: "Bellen", "Offerte aanvragen", "Afspraak boeken", "Reserveren", "Langskomen", "Bestellen", "Contactformulier".
    booking: only if main_goal is booking or reservation: "Calendly", "Eigen boekingssysteem (link)", "Nog geen", or the tool name. Archer links to an external tool; it does not sync calendars.
    price_info: show prices? "Vaste prijzen tonen", "Vanaf-prijzen", "Prijs op aanvraag".
@@ -583,6 +586,7 @@ AGENDA, in this order. Skip what is known. Required fields are marked *.
    usp: what sets them apart (one or two sentences).
    reviews: Google rating and number of reviews, or a short customer quote; "Sla over" allowed.
    references: known clients or projects they may show; certifications: labels, federations, diplomas; guarantees: warranty or promise. Ask references and certifications in one question if the business is B2B or a trade; skip guarantees unless it fits (trades, repairs, products).
+   objections: what makes people hesitate before they call, book or buy ("Waarover twijfelen mensen voor ze beslissen?", for example price, waiting time, whether it is for them). A short list; "Sla over" allowed. If the user answers this, do not ask faq_topics again later unless they want a FAQ page.
 4. PAGINA'S
    must_pages: ask "Welke pagina's wil je op je website?" with ask "must_pages" (the checklist card). page_count is inferred from it (one of "1", "2-5", "5-10", "10-15", "15+"); never ask it.
    page_notes: per-page depth. After must_pages, ask ONE OR TWO focused follow-ups about the most important pages, for example:
@@ -608,7 +612,7 @@ FINISHING
 
 OUTPUT: only a JSON object:
 {"reply": string, "ask": string, "options": [string], "multi": boolean, "input": "text"|"url"|"none", "brief": {only the fields you add or change in this turn}, "done": boolean}
-Field types: strings, except services, must_pages, languages, page_notes, faq_topics, references, certifications (arrays of strings) and contact (object with address, phone, email, socials as strings). Never write the fields style_id, logo or own_photos yourself: the cards set them. Keep values short and factual, in the user's words. Never invent facts the user did not give or the website does not show. "Sla over" means: store nothing for that field and never ask it again (store "-" to mark it as asked).
+Field types: strings, except services, must_pages, languages, page_notes, faq_topics, references, certifications, objections (arrays of strings) and contact (object with address, phone, email, socials as strings). Never write the fields style_id, logo or own_photos yourself: the cards set them. Keep values short and factual, in the user's words. Never invent facts the user did not give or the website does not show. "Sla over" means: store nothing for that field and never ask it again (store "-" to mark it as asked).
 TXT;
   }
 
@@ -746,6 +750,7 @@ TXT;
       $line('Team', 'team'),
       $line('Openingsuren', 'opening_hours'),
       $line('Doelgroep', 'audience'),
+      $line('Waarmee klanten komen (hun probleem of wens, in hun woorden)', 'customer_need'),
       $line('Wat een bezoeker moet doen (hoofddoel, de knop in de header)', 'main_goal'),
       !empty($b['booking']) && $b['booking'] !== '-' ? 'Online boeken via: ' . $b['booking'] . ' (externe link of widget, geen agendakoppeling).' : '',
       $line('Prijzen', 'price_info'),
@@ -754,6 +759,7 @@ TXT;
       $line('Referenties', 'references'),
       $line('Erkenningen en labels', 'certifications'),
       $line('Garanties', 'guarantees'),
+      $line('Twijfels van klanten (beantwoorden op de site)', 'objections'),
       $line('Toon van de teksten', 'tone'),
       $line("Pagina's die zeker moeten", 'must_pages'),
       $line('Afspraken per pagina', 'page_notes'),

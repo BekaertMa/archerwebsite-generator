@@ -292,7 +292,7 @@ class AISB_Wireframes_AI {
     $settings = get_option('aisb_settings', []);
     $openai = new \AISB_OpenAI();
     // Archer: elke sectie apart en tegelijk laten schrijven (sneller model); anders de oude, ene grote vraag.
-    $translated = class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::translate_sections_parallel($prompt, $to_translate) : null;
+    $translated = class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::translate_sections_parallel($prompt, $to_translate, ['project_id' => $project_id, 'page_slug' => $page_slug, 'page_title' => (string) $page_title, 'page_type' => (string) $page_type, 'page_purpose' => (string) $page_purpose]) : null;
     if (!is_array($translated)) {
     $res = $openai->call_openai_chat_completions($prompt, $settings, "Return valid JSON only. No markdown. No explanation.");
 
