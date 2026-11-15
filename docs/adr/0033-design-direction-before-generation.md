@@ -30,18 +30,22 @@ The method takes about an hour with a designer. Archer's target is briefing to l
 - Fired once from the browser when the intake reaches block 4 or 5 (main goal known and pages, tone or style being asked). If it is not ready when the client clicks "Maak mijn website", `aisb_archer_plan` builds it on the spot.
 - Output (JSON, validated): positioning (one sentence), main promise, primary action, proof points from the brief only, 3–5 principles, what to avoid (including claims every competitor makes), the image look, and 0–3 designer questions.
 
-### 3. Designer checkpoint: at most 3 questions, each with a proposal
+### 3. Questions to the owner: at most 4, about facts the pages need
 
-- When the intake agent says it is done, the server asks the strategy's open questions before finishing, one per turn, without an extra AI call.
-- Every question has a proposed answer as the first option and "Kies jij maar" (take the proposal). The client can always type their own answer.
-- Questions only cover real trade-offs the brief does not settle (show prices or not, call or book online, lead with the price or with the craft). Tone: plain and short.
-- The client can skip the whole checkpoint by clicking "Maak mijn website" earlier; the proposals are then used.
+- A separate step goes through the pages the owner asked for, one by one, and checks whether the brief gives the facts to fill each page: for whom a service is and what the client gets (amounts, sizes, duration, price range), the steps and timing of the process, what was done for each reference, which jobs are open. It asks for the biggest gaps first.
+- It also asks to confirm a brief value that looks wrong or contradicts the rest (a label that does not fit the activity, a "customer need" that is really a channel).
+- Never questions about design, layout, page order or sections: the owner is not a designer, and Archer decides those.
+- Open questions show an example answer; choice questions show options. "Sla over" is always possible.
+- The intake asks them at the end, one per turn, without an extra AI call. If they are still being made, it waits up to 40 s rather than skip them.
+- Revised on 15/11/2026 after the first test: the first version asked layout questions ("proces of verhaal eerst?") and produced no usable content.
 
 ### 4. One design brief that every AI step reads (the AGENTS.md equivalent)
 
 - Stored on the project as post meta `archer_direction` (JSON, `v: 1`): research, strategy, the client's checkpoint decisions, and a hash.
 - `AISB_Archer_Direction::prompt_block($project_id, $task)` returns a compact block (at most about 1,800 characters) for one task: `plan`, `sections`, `copy`, `menu` or `photo`. Each task gets only the part it needs.
 - The block also carries the style's do's and don'ts from `design-notes.json` for section planning. Theme and voice already go to the copy prompt through `AISB_Archer_Styles::prompt_notes()`.
+- After the page structure is set, a storyline step gives every page its own job, message, beats in reading order, the facts it tells and what is told elsewhere. Section planning and copy follow the storyline of that page, so pages stop repeating the same differentiator block.
+- The direction is written in English for the AI. The site language is enforced at the end of every section and copy prompt; page names from the (Dutch) brief are translated.
 - The direction never overrides the brief, the section rules or the "never invent facts" rule. It decides emphasis, not facts.
 
 ### 5. One image look across the site
@@ -63,7 +67,7 @@ The method takes about an hour with a designer. Archer's target is briefing to l
 
 ## Consequences
 
-- Two extra AI calls per site (research and strategy), both mostly hidden behind the intake. Extra cost per site: a few cents. The checkpoint adds at most 3 short turns.
+- Four extra AI calls per site (research, strategy, questions, storyline), both mostly hidden behind the intake. Extra cost per site: a few cents. The questions add at most 4 short turns.
 - Research depends on the provider's web search. It can fail or find nothing. Then the strategy uses the brief only, and generation never waits for it.
 - Prompts get longer. The block per task is kept short and only carries what that task needs.
 - Generated images cost money per image and carry provider terms for commercial use. They stay off until those terms and the cost per site are checked.
