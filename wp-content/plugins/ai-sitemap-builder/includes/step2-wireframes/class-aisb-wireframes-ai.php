@@ -484,7 +484,10 @@ class AISB_Wireframes_AI {
    * Recursief AI-gegenereerde tekst terugmergen in Bricks elementen.
    * Volgt dezelfde structuur als extract_text_recursive, maar schrijft terug.
    */
-  private function merge_text_recursive(array &$target, array $source): void {
+  private function merge_text_recursive(&$target, $source): void {
+    // De AI geeft soms een kapotte waarde (een losse string in plaats van settings): overslaan, niet crashen.
+    if (!is_array($source)) return;
+    if (!is_array($target)) $target = [];
     foreach ($source as $key => $value) {
         if (is_string($value)) {
             $target[$key] = $value;

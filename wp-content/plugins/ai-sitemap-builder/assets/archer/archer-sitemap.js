@@ -1442,6 +1442,7 @@
           page_count: opts.pageCount || "5-10",
           project_id: state.projectId || "",
           contact: JSON.stringify(opts.contact || {}),
+          direction: opts.direction || "",
         });
         mark("plan", "done", plan.data.sitemap.length + " pagina's");
         mark("sections", "active");

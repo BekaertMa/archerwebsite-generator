@@ -181,6 +181,8 @@ class AISB_Archer_Generate {
       $notes = AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid_now, 'aisb_style_guide', true), true), 'copy');
       if ($notes !== '') $base .= $notes . "Match this voice; the copy rules above still apply.\n";
     }
+    // Ontwerprichting (ADR-0033): positionering, belofte, bewijs en wat te vermijden, voor elke sectie gelijk.
+    if ($pid_now && class_exists('AISB_Archer_Direction')) $base .= AISB_Archer_Direction::prompt_block($pid_now, 'copy');
     // Overzicht of detailpagina van een lijst (occasies, realisaties ...): bij het publiceren worden de kaarten
     // de items van een inhoudstype en wordt de detailpagina het sjabloon voor één item.
     $slug_now = sanitize_title((string) ($ctx['page_slug'] ?? '')) ?: sanitize_title((string) wp_unslash($_POST['page_slug'] ?? ''));
@@ -888,6 +890,12 @@ class AISB_Archer_Generate {
     $contact = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::clean(is_array($contact_raw) ? $contact_raw : []) : null;
     $contact_lines = $contact ? AISB_Archer_Site::brief_lines($contact) : '';
 
+    // Ontwerprichting uit de intake (ADR-0033): onderzoek, strategie en ontwerpvragen van deze intake.
+    // Nog geen strategie: nu maken (± 10 s). Geen intake (oud formulier): geen richting, zoals vroeger.
+    $direction = [];
+    $draft = class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::clean_draft(wp_unslash($_POST['direction'] ?? '')) : '';
+    if ($draft !== '') $direction = AISB_Archer_Direction::attach(0, $draft, $prompt . ($contact_lines !== '' ? "\n\n" . $contact_lines : ''), $languages[0] ?? 'Dutch');
+
     if ($mode === 'url') {
       $src = AISB_Archer_Sitemap_Rules::get_source();
       if (!$src || empty($src['pages'])) wp_send_json_error(['message' => 'De gelezen website is niet meer beschikbaar. Probeer opnieuw.'], 400);
@@ -896,7 +904,7 @@ class AISB_Archer_Generate {
       $context_prompt = $brief;
     } else {
       if (mb_strlen($prompt) < 10) wp_send_json_error(['message' => 'Beschrijf de zaak iets uitgebreider.'], 400);
-      $data = $this->plan_from_prompt($prompt . ($contact_lines !== '' ? "\n\n" . $contact_lines : ''), $languages, $page_count);
+      $data = $this->plan_from_prompt($prompt . ($contact_lines !== '' ? "\n\n" . $contact_lines : ''), $languages, $page_count, $direction ? AISB_Archer_Direction::prompt_block(0, 'plan', $direction) : '');
       if (is_wp_error($data)) wp_send_json_error(['message' => $data->get_error_message()], 502);
       $brief = $prompt;
       $context_prompt = $prompt;
@@ -921,6 +929,7 @@ class AISB_Archer_Generate {
       update_post_meta($project_id, 'aisb_project_languages', wp_json_encode($languages));
     }
     if ($contact) AISB_Archer_Site::save((int) $project_id, $contact);
+    if ($direction) AISB_Archer_Direction::save((int) $project_id, $direction);
     // Bestaande website: het logo meteen in de stijlgids (als er nog geen logo is).
     if ($mode === 'url' && !empty($src['logo']) && class_exists('AISB_Archer_Logo')) {
       AISB_Archer_Logo::store((int) $project_id, (string) $src['logo']);
@@ -986,10 +995,11 @@ class AISB_Archer_Generate {
   }
 
   /** Structuur uit een beschrijving: één kleine AI-vraag (enkel pagina's, geen secties). */
-  private function plan_from_prompt(string $prompt, array $languages, string $page_count) {
+  private function plan_from_prompt(string $prompt, array $languages, string $page_count, string $direction = '') {
     $lang = self::lang_name($languages);
     $system = self::plan_system_prompt();
     $user = "Language: {$lang}\nDesired number of pages: {$page_count}\n\nBrief:\n" . mb_substr($prompt, 0, 9000);
+    if ($direction !== '') $user .= "\n\n" . $direction . "Use the direction to decide which pages carry the primary action and what each page's purpose stresses; it never adds pages the brief gives no content for.\n";
     // Sectoradvies (UI/UX Pro Max): welke pagina's deze sector nodig heeft (bv. realisaties, werkgebied, afspraak).
     if (class_exists('AISB_Archer_Sector')) {
       $rules = AISB_Archer_Sector::prompt_rules_for(AISB_Archer_Sector::detect($prompt));
@@ -1090,7 +1100,8 @@ PROMPT;
       . 'children only one level deep, at most 8 per item; use only slugs from the list; every slug at most once; keep the order a visitor expects (offer first, about and contact last); '
       . 'the "cta" (a button in the header) is the main conversion page when the site has one (quote, appointment, booking, reservation, valuation), otherwise the contact page; the cta is never also a menu item; when the cta is not the contact page, contact is the last menu item; labels 1 to 3 words in ' . $lang . ', spelled exactly like the page title when you reuse it (keep apostrophes, hyphens and accents: "Regio\'s", "Zorg-op-maat"), no other punctuation; '
       . 'pages that do not fit may be left out (they stay in the footer).';
-    $user = wp_json_encode(['website' => (string) ($data['website_name'] ?? ''), 'goal' => (string) ($data['website_goal'] ?? ''), 'pages' => $list], JSON_UNESCAPED_UNICODE);
+    $user = wp_json_encode(['website' => (string) ($data['website_name'] ?? ''), 'goal' => (string) ($data['website_goal'] ?? ''), 'pages' => $list], JSON_UNESCAPED_UNICODE)
+      . (class_exists('AISB_Archer_Direction') ? "\n\n" . AISB_Archer_Direction::prompt_block($project_id, 'menu') : '');
     $res = $this->ai_multi(['m' => ['system' => $system, 'user' => $user]], 'plan', 60)['m'] ?? null;
     if (!is_array($res) || empty($res['items'])) wp_send_json_success(['menu' => $fallback, 'ai' => false]);
     $menu = AISB_Archer_Chrome::menu(['archer_menu' => ['items' => $res['items'], 'cta' => $res['cta'] ?? '']] + $data, $pages);
@@ -1143,7 +1154,8 @@ PROMPT;
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
       . "\nAll pages of the site:\n" . implode("\n", array_slice($outline_lines, 0, 70))
       . "\n\nBrief:\n" . $brief
-      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '');
+      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '')
+      . (class_exists('AISB_Archer_Direction') ? "\n" . AISB_Archer_Direction::prompt_block($project_id, 'sections') : '');
 
     $calls = [];
     foreach ($pages as $p) {

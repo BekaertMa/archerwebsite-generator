@@ -110,6 +110,19 @@ class AISB_Archer_Intake {
     if (is_array($set) && $set) $brief = self::clean_brief(array_merge($brief, $set));
     if (!$messages) wp_send_json_error(['message' => 'Er is nog geen bericht.'], 400);
 
+    // Ontwerpvragen (ADR-0033): het antwoord bewaren en zonder AI-vraag naar de volgende vraag of het einde.
+    $draft = class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::clean_draft(wp_unslash($_POST['draft'] ?? '')) : '';
+    $answering_cp = sanitize_key((string) wp_unslash($_POST['answering'] ?? ''));
+    if ($draft !== '' && strpos($answering_cp, 'checkpoint_') === 0) {
+      $last = '';
+      for ($i = count($messages) - 1; $i >= 0; $i--) if ($messages[$i]['role'] === 'user') { $last = $messages[$i]['text']; break; }
+      // Een wedervraag is geen antwoord: die gaat naar de agent, de vraag komt daarna terug.
+      if (!preg_match('/\?\s*$/u', $last)) {
+        AISB_Archer_Direction::answer($draft, substr($answering_cp, strlen('checkpoint_')), $last);
+        $this->checkpoint_or_done($draft, $brief, 'Dank je, dat is alles wat ik nodig heb. Kijk de samenvatting nog even na.');
+      }
+    }
+
     // Een bestaande website lezen we één keer (homepagina), zodat de agent niet vraagt wat er al staat.
     $site_excerpt = '';
     if (!empty($brief['existing_site'])) $site_excerpt = self::site_excerpt((string) $brief['existing_site']);
@@ -142,6 +155,9 @@ class AISB_Archer_Intake {
       return mb_substr(trim(wp_strip_all_tags((string) $o)), 0, 60);
     }, (array) ($out['options'] ?? [])), 'strlen'));
 
+    // Klaar volgens de agent: eerst de open ontwerpvragen van de strategie (hoogstens 3).
+    if ($done && $draft !== '') $this->checkpoint_or_done($draft, $new_brief, (string) ($out['reply'] ?? ''), true);
+
     $ask = sanitize_key((string) ($out['ask'] ?? ''));
     $card = $done ? null : self::card_for($ask, $new_brief);
 
@@ -159,6 +175,32 @@ class AISB_Archer_Intake {
       'missing'  => $missing,
       'summary'  => (!$missing) ? self::summary($new_brief) : [],
       'progress' => self::progress($new_brief),
+    ]);
+  }
+
+  /**
+   * Stelt de volgende open ontwerpvraag, of rondt af. Stuurt het antwoord zelf (wp_send_json_success).
+   * $only_if_question: enkel antwoorden als er een vraag is (anders loopt ajax_turn gewoon verder).
+   */
+  private function checkpoint_or_done(string $draft, array $brief, string $done_reply, bool $only_if_question = false): void {
+    $q = AISB_Archer_Direction::next_question($draft);
+    if (!$q && $only_if_question) return;
+    $missing = self::missing($brief);
+    if ($q) {
+      $strategy = (array) AISB_Archer_Direction::part($draft, 'strategy');
+      $turn = AISB_Archer_Direction::question_turn($q, (int) $q['index'] === 0, $strategy);
+      wp_send_json_success([
+        'reply' => $turn['reply'], 'options' => $turn['options'], 'multi' => false, 'input' => 'text',
+        'ask' => $turn['ask'], 'card' => null, 'brief' => $brief, 'done' => false,
+        'ready' => !$missing, 'missing' => $missing, 'summary' => [], 'progress' => self::progress($brief),
+        'checkpoint' => ['index' => (int) $q['index'] + 1, 'total' => (int) $q['total']],
+      ]);
+    }
+    wp_send_json_success([
+      'reply' => $done_reply !== '' ? mb_substr(trim(wp_strip_all_tags($done_reply)), 0, 700) : 'Dat is alles wat ik nodig heb.',
+      'options' => [], 'multi' => false, 'input' => 'text', 'ask' => '', 'card' => null, 'brief' => $brief,
+      'done' => !$missing, 'ready' => !$missing, 'missing' => $missing,
+      'summary' => !$missing ? self::summary($brief) : [], 'progress' => self::progress($brief),
     ]);
   }
 

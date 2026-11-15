@@ -21,6 +21,8 @@ require_once __DIR__ . '/class-aisb-archer-collections.php';
 require_once __DIR__ . '/class-aisb-archer-structure.php';
 require_once __DIR__ . '/class-aisb-archer-megamenu.php';
 require_once __DIR__ . '/class-aisb-archer-intake.php';
+require_once __DIR__ . '/class-aisb-archer-direction.php';
+require_once __DIR__ . '/class-aisb-archer-imagery.php';
 require_once __DIR__ . '/class-aisb-archer-design.php';
 
 /**
@@ -114,6 +116,8 @@ class AISB_Archer_UI {
     (new AISB_Archer_Styles())->init();
     (new AISB_Archer_Site())->init();
     (new AISB_Archer_Intake())->init();
+    (new AISB_Archer_Direction())->init();
+    (new AISB_Archer_Imagery())->init();
     (new AISB_Archer_Design())->init();
   }
 

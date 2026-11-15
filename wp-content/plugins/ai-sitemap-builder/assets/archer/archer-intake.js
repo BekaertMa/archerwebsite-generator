@@ -133,7 +133,8 @@
       attach: $("[data-intake-attach]", root),
     };
 
-    let state = { messages: [], brief: {}, progress: { have: 0, need: 8, blocks: [] }, done: false, ready: false, summary: [] };
+    const newDraft = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    let state = { messages: [], brief: {}, progress: { have: 0, need: 8, blocks: [] }, done: false, ready: false, summary: [], draft: newDraft(), dirResearch: false, dirStrategy: false };
     let busy = false;
     let peek = null; // stijl of kleur waar de muis op staat (voorbeeld, nog niet gekozen)
 
@@ -145,7 +146,28 @@
         const s = JSON.parse(sessionStorage.getItem(STORE) || "null");
         if (s && Array.isArray(s.messages) && s.messages.length) state = Object.assign(state, s);
       } catch (e) { /* niets bewaard */ }
+      if (!state.draft) state.draft = newDraft();
     };
+
+    /*
+     * Ontwerprichting (ADR-0033), op de achtergrond: het onderzoek zodra naam, activiteit en regio er zijn,
+     * de strategie zodra het doel bekend is en de intake bij de pagina's of de stijl is. Niet wachten: de
+     * server bewaart het resultaat per intake (draft) en de generatie gebruikt wat er dan is.
+     */
+    function maybeDirection() {
+      const b = state.brief;
+      const has = (k) => b[k] && b[k] !== "-" && (!Array.isArray(b[k]) || b[k].length);
+      if (!state.dirResearch && has("business_name") && has("activity") && has("region")) {
+        state.dirResearch = true;
+        save();
+        post("aisb_archer_direction_research", { draft: state.draft, brief: JSON.stringify(b) }).catch(() => { /* niet nodig om verder te gaan */ });
+      }
+      if (!state.dirStrategy && has("main_goal") && (has("must_pages") || has("tone") || has("style_id") || state.ready)) {
+        state.dirStrategy = true;
+        save();
+        post("aisb_archer_direction_strategy", { draft: state.draft, brief: JSON.stringify(b) }).catch(() => { state.dirStrategy = false; save(); });
+      }
+    }
 
     /* ── Stijlen (voor kaarten en voorbeeld) ─────────────── */
 
@@ -592,6 +614,7 @@
           brief: JSON.stringify(state.brief),
           set: JSON.stringify(set || {}),
           answering,
+          draft: state.draft,
         });
         state.brief = d.brief || state.brief;
         state.progress = d.progress || state.progress;
@@ -607,6 +630,7 @@
         save();
         renderAll();
         refreshStyles();
+        maybeDirection();
         el.input.focus();
       }
     }
@@ -739,6 +763,7 @@
         languages: (b.languages && b.languages.length ? b.languages : ["Dutch"]).slice(0, 1),
         pageCount: b.page_count || "5-10",
         contact: { address: c.address || "", phone: c.phone || "", email: c.email || "", socials: c.socials || "" },
+        direction: state.draft || "",
       };
       $$("[data-intake-go], [data-intake-go-early]").forEach((btn) => { btn.disabled = true; });
       overlay("sitemap", "Ik bepaal welke pagina's er komen en wat er op elke pagina staat.");

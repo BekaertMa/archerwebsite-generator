@@ -15,7 +15,8 @@ class AISB_OpenAI {
     public function call_openai_chat_completions($user_prompt, $settings, $override_system_prompt = null) {
       $endpoint = $settings['endpoint'] ?: 'https://api.openai.com/v1/chat/completions';
       $api_key = $settings['api_key'];
-      $model = $settings['model'] ?: 'gpt-4o-mini';
+      // Model-ids van OpenAI zijn kleine letters ("GPT-5.4" in de instellingen gaf een 404 op elke vraag).
+      $model = strtolower(trim((string) ($settings['model'] ?: 'gpt-4o-mini')));
       $timeout = (int) $settings['timeout'];
 
       $system_prompt = ($override_system_prompt !== null) ? (string)$override_system_prompt : $this->system_prompt();
@@ -30,6 +31,12 @@ class AISB_OpenAI {
         // Ruime output-limiet zodat grote multi-section JSON antwoorden compleet zijn.
         'max_tokens' => 16000,
       ];
+      // Redeneermodellen (gpt-5, o-reeks): geen temperature en max_completion_tokens in plaats van max_tokens.
+      if (preg_match('/^(gpt-5|gpt-6|o\d)/', $model)) {
+        unset($body['temperature'], $body['max_tokens']);
+        $body['max_completion_tokens'] = 16000;
+        $body['reasoning_effort'] = (string) apply_filters('aisb_openai_reasoning_effort', 'low', $model);
+      }
 
       // Forceer JSON alleen wanneer de prompt duidelijk JSON verwacht.
       if (strpos($system_prompt, 'JSON') !== false || strpos($user_prompt, 'JSON') !== false) {
