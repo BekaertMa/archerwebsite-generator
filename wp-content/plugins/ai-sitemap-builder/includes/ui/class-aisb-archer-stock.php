@@ -233,6 +233,24 @@ class AISB_Archer_Stock {
     return ['images' => array_slice($pool, 0, $need + 8), 'keyword' => $kw, 'sources' => self::sources()];
   }
 
+  /**
+   * Stockfoto's zoeken voor de fotokiezer in het scherm Ontwerp. Zonder zoekwoord: het zoekwoord van de pagina.
+   *
+   * @return array{images: array, keyword: string, page: int, total_pages: int}|WP_Error
+   */
+  public static function search_for(int $pid, string $q, string $slug, string $title, string $sections, int $page = 1) {
+    $q = trim($q);
+    if ($q === '') $q = $slug !== '' ? self::page_keyword($pid, $slug, $title, $sections) : self::keyword($pid);
+    $page = max(1, min(50, $page));
+    $u = self::unsplash($q, 12, $page);
+    $x = self::pexels($q, 12, $page);
+    $ui = is_wp_error($u) ? [] : $u['images'];
+    $xi = is_wp_error($x) ? [] : $x['images'];
+    if (!$ui && !$xi) return new WP_Error('no_photos', 'Geen foto\'s gevonden voor "' . $q . '".');
+    $pages = max(is_wp_error($u) ? 1 : $u['total_pages'], is_wp_error($x) ? 1 : $x['total_pages']);
+    return ['images' => self::mix($ui, $xi, 24), 'keyword' => $q, 'page' => $page, 'total_pages' => min($pages, 50)];
+  }
+
   /* ───────────────────────── AJAX ───────────────────────── */
 
   /** Alle foto's voor de wireframes in één keer (stap Foto's). */
