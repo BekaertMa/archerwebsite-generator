@@ -162,7 +162,8 @@
         save();
         post("aisb_archer_direction_research", { draft: state.draft, brief: JSON.stringify(b) }).catch(() => { /* niet nodig om verder te gaan */ });
       }
-      if (!state.dirStrategy && has("main_goal") && (has("must_pages") || has("tone") || has("style_id") || state.ready)) {
+      // Pas als de pagina's gekozen zijn: de vragen aan de eigenaar gaan over wat die pagina's nodig hebben.
+      if (!state.dirStrategy && has("main_goal") && (has("must_pages") || state.ready)) {
         state.dirStrategy = true;
         save();
         post("aisb_archer_direction_strategy", { draft: state.draft, brief: JSON.stringify(b) }).catch(() => { state.dirStrategy = false; save(); });

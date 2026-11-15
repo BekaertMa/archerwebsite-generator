@@ -183,7 +183,8 @@ class AISB_Archer_Intake {
    * $only_if_question: enkel antwoorden als er een vraag is (anders loopt ajax_turn gewoon verder).
    */
   private function checkpoint_or_done(string $draft, array $brief, string $done_reply, bool $only_if_question = false): void {
-    $q = AISB_Archer_Direction::next_question($draft);
+    // Einde van de intake: wacht hoogstens 40 s op vragen die nog gemaakt worden.
+    $q = AISB_Archer_Direction::next_question($draft, $only_if_question ? 40 : 0);
     if (!$q && $only_if_question) return;
     $missing = self::missing($brief);
     if ($q) {

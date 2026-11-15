@@ -25,8 +25,8 @@ class AISB_Archer_Direction {
 
   public const VERSION = 1;
   public const META = 'archer_direction';
-  /** Hoogstens zoveel ontwerpvragen. */
-  public const MAX_QUESTIONS = 3;
+  /** Hoogstens zoveel vragen aan de eigenaar. */
+  public const MAX_QUESTIONS = 4;
   /** Antwoord dat het voorstel kiest. */
   public const TAKE_PROPOSAL = 'Kies jij maar';
 
@@ -49,6 +49,20 @@ class AISB_Archer_Direction {
     if ($draft === '') return null;
     $v = get_transient(self::tkey($draft, $part));
     return $v === false ? null : $v;
+  }
+
+  /** Zelfde als part(), maar vers uit de database: een ander verzoek kan de waarde intussen gezet hebben. */
+  public static function fresh_part(string $draft, string $part) {
+    if ($draft === '') return null;
+    $k = self::tkey($draft, $part);
+    if (!wp_using_ext_object_cache()) {
+      wp_cache_delete('_transient_' . $k, 'options');
+      wp_cache_delete('_transient_timeout_' . $k, 'options');
+      wp_cache_delete('notoptions', 'options');
+    } else {
+      wp_cache_delete($k, 'transient');
+    }
+    return self::part($draft, $part);
   }
 
   private static function set_part(string $draft, string $part, $value): void {
@@ -95,10 +109,14 @@ class AISB_Archer_Direction {
     [$draft, $brief] = $this->check();
     @set_time_limit(120);
     ignore_user_abort(true);
+    // Loopt: de intake wacht op het einde even op de vragen in plaats van ze over te slaan.
+    self::set_part($draft, 'strategy_running', time());
     $research = self::wait_research($draft, 25);
     $text = class_exists('AISB_Archer_Intake') ? AISB_Archer_Intake::prompt_text($brief) : '';
     if (mb_strlen($text) < 20) wp_send_json_error(['message' => 'De brief is nog te kort.'], 400);
-    $s = self::strategy($text, $research, (string) (($brief['languages'] ?? ['Dutch'])[0] ?? 'Dutch'), self::style_hint((string) ($brief['style_id'] ?? '')));
+    // De vragen gaan naar de eigenaar in de taal van het gesprek (Vlaams); de richting zelf is Engels.
+    $s = self::strategy($text, $research, 'Dutch', self::style_hint((string) ($brief['style_id'] ?? '')));
+    delete_transient(self::tkey($draft, 'strategy_running'));
     if (is_wp_error($s)) {
       self::log('strategy', 'failed', ['error' => $s->get_error_message()]);
       wp_send_json_success(['status' => 'failed']);
@@ -111,7 +129,7 @@ class AISB_Archer_Direction {
   private static function wait_research(string $draft, int $max): array {
     $end = time() + $max;
     do {
-      $r = self::part($draft, 'research');
+      $r = self::fresh_part($draft, 'research');
       if (!is_array($r) || ($r['status'] ?? '') !== 'running') break;
       if ((time() - (int) ($r['started'] ?? 0)) > 150) break; // vastgelopen
       sleep(1);
@@ -203,24 +221,24 @@ class AISB_Archer_Direction {
    *
    * @return array|WP_Error
    */
-  public static function strategy(string $brief_text, array $research, string $language = 'Dutch', string $style_hint = '') {
+  public static function strategy(string $brief_text, array $research, string $chat_language = 'Dutch', string $style_hint = '') {
     $key = self::api_key();
     if ($key === '') return new WP_Error('aisb_no_key', 'Er is geen AI-sleutel ingesteld.');
     $model = apply_filters('archer_ai_strategy_model', ['model' => 'gpt-5.4-mini', 'effort' => 'low']);
-    $lang = ['Dutch' => 'Belgian Dutch (Flemish)', 'French' => 'Belgian French', 'English' => 'English', 'German' => 'German'][$language] ?? 'Belgian Dutch (Flemish)';
-    $system = "You are the senior designer and strategist at Archer, a Belgian web studio for small local businesses. Before the site is built, you set its direction: what it stands for, what a visitor must do, what to stress and what to avoid. Return ONLY valid JSON.\n"
-      . "Write positioning, promise, primary_action.label, proof, principles, avoid and questions in {$lang}. Write imagery in English.\n"
+    $chat = ['Dutch' => 'Belgian Dutch (Flemish)', 'French' => 'Belgian French', 'English' => 'English', 'German' => 'German'][$chat_language] ?? 'Belgian Dutch (Flemish)';
+    // De richting is een instructie voor de AI, geen sitetekst: altijd in het Engels. Zo neemt geen enkele
+    // stap Nederlandse zinnen over op een Engelstalige site. Enkel de vragen aan de klant zijn in zijn taal.
+    $system = "You are the senior designer and strategist at Archer, a Belgian web studio for small local businesses. Before the site is built, you set its direction. Return ONLY valid JSON, in English.\n"
       . "Rules:\n"
       . "- Use only facts from the brief. Never invent numbers, years, names, reviews, prices or guarantees.\n"
-      . "- proof: facts from the brief that make a visitor trust this business (years active, method, ingredients or materials, certifications, reviews, references, guarantees). Not the list of services, not the region. Leave it empty if there are none.\n"
-      . "- positioning: one sentence: for whom, what, and why this business rather than the others. Concrete, no hype words (uniek, passie, kwaliteit, professioneel, ontzorgen).\n"
-      . "- promise: the main message for the home page hero, at most 10 words, plain language a customer would use.\n"
-      . "- primary_action: the one thing a visitor must do (from the brief's main goal); type is one of call, quote, book, visit, order, form; label is the button text (2 to 4 words).\n"
-      . "- principles: 3 to 5 short rules for this site's content and layout, specific to this business (for example 'Toon eerst de prijs, dan de werkwijze' or 'Elke dienstpagina eindigt met dezelfde afspraakknop'). No generic web advice.\n"
-      . "- avoid: 2 to 4 things not to say or do, including claims every competitor already makes (from the research) when they add nothing.\n"
+      . "- proof: facts from the brief that make a visitor trust this business (years active, team, method, materials, own money or other structural differences, certifications, reviews, references, guarantees). Not the list of services, not the region. Copy the facts, don't reword them into claims.\n"
+      . "- positioning: one sentence: for whom, what, and why this business rather than the others. Build it on the brief's differentiator (what sets them apart) and on the research gaps, not on what every competitor says. No hype words.\n"
+      . "- promise: the meaning of the home page hero message in at most 10 words (it will be written in the site language later).\n"
+      . "- primary_action: the one thing a visitor must do (from the brief's main goal); type is one of call, quote, book, visit, order, form; label is the meaning of the button text in English (2 to 4 words).\n"
+      . "- principles: 3 to 5 short rules for this site's content, specific to this business. No generic web advice.\n"
+      . "- avoid: 2 to 4 things not to say, including claims every competitor already makes (from the research) when they add nothing.\n"
       . "- imagery: one consistent photo look for the whole site (light, setting, framing, colour mood) in one line, 3 to 6 concrete subjects that fit this business, and 1 to 3 things photos must not show.\n"
-      . "- questions: 0 to 3 design decisions the brief does not settle and that really change the site (for example: show prices or not; call or book online first; lead with price or with craftsmanship; one page per service or one overview). Each has a short question (max 14 words, informal 'je' unless the tone is formal), 2 or 3 short options (1 to 5 words), a proposal that is one of the options, and why in max 12 words. Ask nothing the brief already answers. Fewer is better; 0 is fine.\n"
-      . "JSON: {\"positioning\":\"\",\"promise\":\"\",\"primary_action\":{\"type\":\"\",\"label\":\"\"},\"proof\":[\"\"],\"principles\":[\"\"],\"avoid\":[\"\"],\"imagery\":{\"look\":\"\",\"subjects\":[\"\"],\"avoid\":[\"\"]},\"questions\":[{\"id\":\"q1\",\"question\":\"\",\"options\":[\"\"],\"proposal\":\"\",\"why\":\"\"}]}";
+      . "JSON: {\"positioning\":\"\",\"promise\":\"\",\"primary_action\":{\"type\":\"\",\"label\":\"\"},\"proof\":[\"\"],\"principles\":[\"\"],\"avoid\":[\"\"],\"imagery\":{\"look\":\"\",\"subjects\":[\"\"],\"avoid\":[\"\"]}}";
     $user = "BRIEF:\n" . mb_substr($brief_text, 0, 6000);
     if (!empty($research['peers']) || !empty($research['common'])) {
       $user .= "\n\nRESEARCH (local businesses with the same activity, from their websites):\n";
@@ -255,8 +273,52 @@ class AISB_Archer_Direction {
     $s['tokens'] = (int) ($j['usage']['total_tokens'] ?? 0);
     $s['secs'] = sprintf('%.1f', microtime(true) - $t);
     $s['research_used'] = !empty($research['peers']);
+    // Vragen aan de eigenaar: een aparte stap die pagina per pagina nagaat wat er ontbreekt.
+    $q = self::questions($brief_text, $chat_language);
+    $s['questions'] = is_wp_error($q) ? [] : $q;
     self::log('strategy', 'done', ['questions' => count($s['questions']), 'tokens' => $s['tokens'], 'secs' => $s['secs'], 'model' => $s['model'], 'research' => $s['research_used']]);
     return $s;
+  }
+
+  /**
+   * Vragen aan de eigenaar: wat de gekozen pagina's nodig hebben en de brief niet geeft, plus waarden die
+   * niet kloppen. Gaat eerst pagina per pagina na wat ontbreekt (pages[]), kiest dan de 3 à 4 belangrijkste.
+   *
+   * @return array|WP_Error
+   */
+  public static function questions(string $brief_text, string $chat_language = 'Dutch') {
+    $key = self::api_key();
+    if ($key === '') return new WP_Error('aisb_no_key', 'Er is geen AI-sleutel ingesteld.');
+    $model = apply_filters('archer_ai_questions_model', ['model' => 'gpt-5.4-mini', 'effort' => 'medium']);
+    $chat = ['Dutch' => 'Belgian Dutch (Flemish), informal je', 'French' => 'Belgian French', 'English' => 'English', 'German' => 'German'][$chat_language] ?? 'Belgian Dutch (Flemish), informal je';
+    $system = "Archer is building a website for a small business. The owner filled in a brief. Before the pages are written, you find the facts that are still missing to give every page real content, and you ask the owner for them. Return ONLY valid JSON.\n"
+      . "Step 1, pages: for EVERY page the brief asks for, write in English what that page needs to tell and whether the brief gives the concrete facts for it (enough: true/false, missing: what is missing). Service pages need: for whom exactly, what the client gets (amounts, sizes, duration or price range), how it differs from the other services. A process page needs the steps and their timing. A cases or references page needs, per case, the situation, what was done and the result. A vacancies page needs the open roles. An about page needs the story and the people.\n"
+      . "Step 2, confirm: brief values that look wrong or contradict the rest (a certification or label that does not fit the activity, a 'customer need' that is really a channel, services that do not fit the target group). Empty if none.\n"
+      . "Step 3, questions: 3 or 4 questions, chosen from step 1 (biggest gaps on the most important pages first) and step 2 (at most one). Rules:\n"
+      . "- Facts only the owner knows. Never about design, layout, order, sections or wording.\n"
+      . "- One topic per question, everyday words, no jargon (no 'governance', 'propositie', 'USP', 'due diligence'), at most 22 words, in {$chat}. Name the page when it is for one page.\n"
+      . "- A confirm question quotes the value and has options ['Ja, klopt', 'Nee, weglaten'] (in the conversation language).\n"
+      . "- options only when the answer is a choice, otherwise an empty list. proposal: one of the options or empty.\n"
+      . "- example: for an open question, a realistic example answer as the owner would type it, max 14 words, in {$chat}; never an instruction or a question.\n"
+      . "- Never ask what the brief already answers.\n"
+      . "JSON: {\"pages\":[{\"page\":\"\",\"enough\":false,\"missing\":\"\"}],\"confirm\":[\"\"],\"questions\":[{\"page\":\"\",\"question\":\"\",\"options\":[],\"proposal\":\"\",\"example\":\"\"}]}";
+    $body = ['model' => $model['model'], 'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => "BRIEF:\n" . mb_substr($brief_text, 0, 6000)]], 'response_format' => ['type' => 'json_object']];
+    if (preg_match('/^(gpt-5|gpt-6|o\d)/', (string) $model['model'])) {
+      if (!empty($model['effort'])) $body['reasoning_effort'] = $model['effort'];
+    } else {
+      $body['temperature'] = 0.3;
+    }
+    $t = microtime(true);
+    $res = wp_remote_post('https://api.openai.com/v1/chat/completions', ['timeout' => 90, 'headers' => ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $key], 'body' => wp_json_encode($body)]);
+    if (is_wp_error($res)) return $res;
+    $code = (int) wp_remote_retrieve_response_code($res);
+    $j = json_decode((string) wp_remote_retrieve_body($res), true);
+    if ($code < 200 || $code >= 300) return new WP_Error('aisb_ai_' . $code, (string) ($j['error']['message'] ?? 'AI-fout ' . $code));
+    $data = self::json_from((string) ($j['choices'][0]['message']['content'] ?? ''));
+    if (!$data) return new WP_Error('aisb_bad_json', 'De vragen gaven geen geldig antwoord.');
+    $q = self::clean_strategy(['questions' => (array) ($data['questions'] ?? [])])['questions'];
+    self::log('questions', 'done', ['questions' => count($q), 'gaps' => count(array_filter((array) ($data['pages'] ?? []), fn($p) => is_array($p) && empty($p['enough']))), 'secs' => sprintf('%.1f', microtime(true) - $t), 'tokens' => (int) ($j['usage']['total_tokens'] ?? 0)]);
+    return $q;
   }
 
   /** Strategie valideren: enkel de verwachte velden, korte teksten, vragen met een geldig voorstel. */
@@ -267,15 +329,21 @@ class AISB_Archer_Direction {
     $questions = [];
     foreach ((array) ($d['questions'] ?? []) as $i => $q) {
       if (!is_array($q)) continue;
-      $opts = self::items($q['options'] ?? [], 3, 40);
+      $opts = self::items($q['options'] ?? [], 4, 40);
       $prop = self::txt($q['proposal'] ?? '', 40);
-      $text = self::txt($q['question'] ?? '', 160);
-      if ($text === '' || count($opts) < 2) continue;
-      // Het voorstel moet een van de opties zijn; anders de eerste optie.
+      $text = self::txt($q['question'] ?? '', 200);
+      if ($text === '' || count($opts) === 1) continue;
+      // Een voorstel kan enkel een van de opties zijn.
       $match = '';
       foreach ($opts as $o) if (mb_strtolower($o) === mb_strtolower($prop)) $match = $o;
-      $prop = $match !== '' ? $match : $opts[0];
-      $questions[] = ['id' => 'q' . (count($questions) + 1), 'question' => $text, 'options' => $opts, 'proposal' => $prop, 'why' => self::txt($q['why'] ?? '', 120)];
+      $questions[] = [
+        'id' => 'q' . (count($questions) + 1),
+        'page' => self::txt($q['page'] ?? '', 60),
+        'question' => $text,
+        'options' => $opts,
+        'proposal' => $match,
+        'example' => self::txt($q['example'] ?? '', 100),
+      ];
       if (count($questions) >= self::MAX_QUESTIONS) break;
     }
     return [
@@ -299,9 +367,19 @@ class AISB_Archer_Direction {
 
   /* ───────────────────────── Ontwerpvragen ───────────────────────── */
 
-  /** De volgende open vraag van deze draft, of null. */
-  public static function next_question(string $draft): ?array {
+  /**
+   * De volgende open vraag van deze draft, of null. Loopt de strategie nog (onderzoek + vragen duren
+   * samen tot ± 50 s), dan wacht dit tot $wait seconden: liever even wachten dan de vragen overslaan.
+   */
+  public static function next_question(string $draft, int $wait = 0): ?array {
     $s = self::part($draft, 'strategy');
+    $end = time() + $wait;
+    while (!is_array($s) && $wait > 0 && time() < $end) {
+      $run = (int) self::fresh_part($draft, 'strategy_running');
+      if (!$run || time() - $run > 120) break;
+      sleep(1);
+      $s = self::fresh_part($draft, 'strategy');
+    }
     if (!is_array($s) || empty($s['questions'])) return null;
     $cp = self::checkpoint($draft);
     if (!empty($cp['skipped'])) return null;
@@ -317,32 +395,42 @@ class AISB_Archer_Direction {
     return ['answers' => is_array($cp['answers'] ?? null) ? $cp['answers'] : [], 'skipped' => !empty($cp['skipped'])];
   }
 
-  /** Bewaart het antwoord op een ontwerpvraag. "Kies jij maar" (of leeg) neemt het voorstel. */
+  /**
+   * Bewaart het antwoord op een vraag. "Kies jij maar" neemt het voorstel (als er een is),
+   * "Sla over" bewaart niets bruikbaars (de pagina blijft dan algemeen op dat punt).
+   */
   public static function answer(string $draft, string $id, string $answer): void {
     $s = self::part($draft, 'strategy');
     if (!is_array($s)) return;
     $q = null;
     foreach ((array) ($s['questions'] ?? []) as $x) if ($x['id'] === $id) $q = $x;
     if (!$q) return;
-    $answer = self::txt($answer, 200);
-    $took = $answer === '' || preg_match('/^(kies jij maar|maakt niet uit|jij mag kiezen|sla over|geen voorkeur|ok(é|e)?|prima|doe maar)\b/iu', $answer);
+    $answer = self::txt($answer, 400);
+    $skip = $answer === '' || preg_match('/^(sla over|overslaan|weet ik niet|geen idee|nvt|n\.?v\.?t\.?)\b/iu', $answer);
+    $take = !$skip && preg_match('/^(kies jij maar|maakt niet uit|jij mag kiezen|geen voorkeur|doe maar)\b/iu', $answer);
     $cp = self::checkpoint($draft);
-    $cp['answers'][$id] = ['question' => $q['question'], 'answer' => $took ? $q['proposal'] : $answer, 'proposal' => $q['proposal'], 'by' => $took ? 'archer' : 'client'];
+    if ($skip || ($take && ($q['proposal'] ?? '') === '')) {
+      $cp['answers'][$id] = ['page' => $q['page'] ?? '', 'question' => $q['question'], 'answer' => '', 'by' => 'skipped'];
+    } else {
+      $cp['answers'][$id] = ['page' => $q['page'] ?? '', 'question' => $q['question'], 'answer' => $take ? $q['proposal'] : $answer, 'by' => $take ? 'archer' : 'client'];
+    }
     self::set_part($draft, 'checkpoint', $cp);
   }
 
-  /** Vraag zoals de intake hem toont: het voorstel eerst, dan de andere opties, dan "Kies jij maar". */
+  /** Vraag zoals de intake hem toont: opties (voorstel eerst) of een open vraag met een voorbeeld. */
   public static function question_turn(array $q, bool $first, array $strategy): array {
-    $opts = array_values(array_unique(array_merge([$q['proposal']], $q['options'])));
-    $opts[] = self::TAKE_PROPOSAL;
-    $intro = '';
-    if ($first) {
-      $n = (int) ($q['total'] ?? 1);
-      $intro = (!empty($strategy['positioning']) ? 'Zo zet ik je zaak neer: ' . rtrim($strategy['positioning'], '.') . '. ' : '')
-        . ($n > 1 ? "Nog {$n} keuzes voor het ontwerp. " : 'Nog één keuze voor het ontwerp. ');
+    $opts = [];
+    if (!empty($q['options'])) {
+      $opts = $q['proposal'] !== '' ? array_values(array_unique(array_merge([$q['proposal']], $q['options']))) : $q['options'];
     }
+    $opts[] = 'Sla over';
+    $n = (int) ($q['total'] ?? 1);
+    $intro = $first ? ($n > 1 ? "Nog {$n} vragen, zodat elke pagina iets concreets te vertellen heeft. " : 'Nog één vraag, zodat de pagina\'s iets concreets te vertellen hebben. ') : '';
+    $tail = '';
+    if (!empty($q['example']) && empty($q['options'])) $tail = ' Bijvoorbeeld: ' . rtrim($q['example'], '.') . '.';
+    elseif ($q['proposal'] !== '') $tail = ' Mijn voorstel: ' . $q['proposal'] . '.';
     return [
-      'reply' => $intro . $q['question'] . ' Mijn voorstel: ' . $q['proposal'] . '.' . (!empty($q['why']) ? ' ' . rtrim($q['why'], '.') . '.' : ''),
+      'reply' => $intro . $q['question'] . $tail,
       'options' => array_slice($opts, 0, 5),
       'ask' => 'checkpoint_' . $q['id'],
     ];
@@ -354,13 +442,13 @@ class AISB_Archer_Direction {
    * Zet de richting van de draft op het project. Zonder strategie en met een brieftekst: nu maken
    * (met het onderzoek als dat al klaar is). Geeft de richting terug (leeg als er niets is).
    */
-  public static function attach(int $pid, string $draft, string $brief_text = '', string $language = 'Dutch'): array {
+  public static function attach(int $pid, string $draft, string $brief_text = '', string $site_language = 'Dutch'): array {
     $draft = self::clean_draft($draft);
     $research = $draft !== '' ? self::part($draft, 'research') : null;
     $research = is_array($research) && ($research['status'] ?? '') === 'done' ? $research : [];
     $strategy = $draft !== '' ? self::part($draft, 'strategy') : null;
     if (!is_array($strategy) && $brief_text !== '') {
-      $s = self::strategy($brief_text, $research, $language, self::style_hint_for_project($pid));
+      $s = self::strategy($brief_text, $research, 'Dutch', self::style_hint_for_project($pid));
       $strategy = is_wp_error($s) ? null : $s;
     }
     if (!is_array($strategy)) return [];
@@ -372,6 +460,8 @@ class AISB_Archer_Direction {
       'research' => $research ? ['peers' => $research['peers'] ?? [], 'common' => $research['common'] ?? [], 'gaps' => $research['gaps'] ?? []] : [],
       'strategy' => $strategy,
       'decisions' => $decisions,
+      'language' => $site_language,
+      'pages' => [],
     ];
     $dir['hash'] = substr(md5(wp_json_encode([$dir['research'], $strategy['positioning'] ?? '', $strategy['principles'] ?? [], $decisions])), 0, 10);
     if ($pid) self::save($pid, $dir);
@@ -384,6 +474,72 @@ class AISB_Archer_Direction {
     self::log('attach', 'done', ['project' => $pid, 'hash' => $dir['hash'] ?? '', 'decisions' => count((array) ($dir['decisions'] ?? [])), 'research' => !empty($dir['research'])]);
   }
 
+  /**
+   * Verhaallijn per pagina, nadat de paginastructuur vastligt: de taak van de pagina, de boodschap,
+   * de stappen van het verhaal in leesvolgorde, welke feiten de pagina "bezit" en wat elders verteld wordt.
+   * Zo vertelt elke pagina iets eigens in plaats van overal hetzelfde blok te herhalen.
+   *
+   * @return array slug => [job, message, beats[], owns[], not_here[]]
+   */
+  public static function storyline(array $pages, string $brief_text, array $dir): array {
+    $key = self::api_key();
+    if ($key === '' || !$pages) return [];
+    $model = apply_filters('archer_ai_storyline_model', ['model' => 'gpt-5.4-mini', 'effort' => 'low']);
+    $list = [];
+    foreach (array_slice($pages, 0, 24) as $p) {
+      if (empty($p['slug'])) continue;
+      $list[] = ['slug' => (string) $p['slug'], 'title' => (string) ($p['page_title'] ?? ''), 'type' => (string) ($p['page_type'] ?? ''), 'parent' => (string) ($p['parent_slug'] ?? ''), 'purpose' => (string) ($p['page_purpose'] ?? ''), 'template_for_items' => !empty($p['archer_collection'])];
+    }
+    $s = (array) ($dir['strategy'] ?? []);
+    $answers = [];
+    foreach ((array) ($dir['decisions'] ?? []) as $d) if (($d['answer'] ?? '') !== '') $answers[] = (!empty($d['page']) ? '[' . $d['page'] . '] ' : '') . $d['question'] . ' → ' . $d['answer'];
+    $system = "You plan the storyline of every page of a small-business website before its sections and texts are written. Return ONLY valid JSON, in English.\n"
+      . "Rules:\n"
+      . "- Every page has one job for the visitor who lands on it and tells its own story. A visitor who reads three pages must learn something new on each one.\n"
+      . "- The home page carries the positioning, the promise and the differentiator in short and leads to the other pages. Other pages do not repeat the home page's differentiator; at most one sentence refers to it, and only where it matters for that page.\n"
+      . "- Service page: the situation of the client it is for, what the client gets concretely, how it works for this service, proof that fits this service, the next step.\n"
+      . "- Overview of services: help the visitor choose (difference between the services, for whom each is), then the next step. Do not tell each service in full.\n"
+      . "- About: why the business exists, the people, how they work day to day. Process page: the steps in order with what happens and how long. Listing: what the items have in common and how to pick one. Case or detail: the situation, what was done, the result. Template for items: the parts every item page has. Vacancies: why work here and the roles. Contact: how to reach them and what happens after.\n"
+      . "- beats: 3 to 5 parts in reading order; each beat says in one short line what that part of the page tells. No section types, no layout.\n"
+      . "- owns: the facts from the brief and the owner's answers that are told mainly on this page. Give every fact to the page where it matters most; a fact appears on at most 2 pages.\n"
+      . "- not_here: themes that are told on other pages and that this page must not repeat.\n"
+      . "- Use only facts from the brief and the owner's answers. Where they give nothing for a beat, keep that beat short and general and say so (no facts given); never invent details.\n"
+      . "JSON: {\"pages\":[{\"slug\":\"\",\"job\":\"\",\"message\":\"\",\"beats\":[\"\"],\"owns\":[\"\"],\"not_here\":[\"\"]}]}";
+    $user = "PAGES:\n" . wp_json_encode($list, JSON_UNESCAPED_UNICODE)
+      . "\n\nBRIEF:\n" . mb_substr($brief_text, 0, 6000)
+      . "\n\nDIRECTION:\nPositioning: " . ($s['positioning'] ?? '') . "\nProof: " . implode('; ', (array) ($s['proof'] ?? []))
+      . ($answers ? "\n\nOWNER'S ANSWERS:\n- " . implode("\n- ", $answers) : '');
+    $body = ['model' => $model['model'], 'messages' => [['role' => 'system', 'content' => $system], ['role' => 'user', 'content' => $user]], 'response_format' => ['type' => 'json_object']];
+    if (preg_match('/^(gpt-5|gpt-6|o\d)/', (string) $model['model'])) {
+      if (!empty($model['effort'])) $body['reasoning_effort'] = $model['effort'];
+    } else {
+      $body['temperature'] = 0.4;
+    }
+    $t = microtime(true);
+    $res = wp_remote_post('https://api.openai.com/v1/chat/completions', ['timeout' => 60, 'headers' => ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $key], 'body' => wp_json_encode($body)]);
+    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) {
+      self::log('storyline', 'failed', ['error' => is_wp_error($res) ? $res->get_error_message() : (string) wp_remote_retrieve_response_code($res)]);
+      return [];
+    }
+    $j = json_decode((string) wp_remote_retrieve_body($res), true);
+    $data = self::json_from((string) ($j['choices'][0]['message']['content'] ?? ''));
+    $out = [];
+    $valid = array_flip(array_column($list, 'slug'));
+    foreach ((array) ($data['pages'] ?? []) as $p) {
+      $slug = sanitize_title((string) ($p['slug'] ?? ''));
+      if ($slug === '' || !isset($valid[$slug])) continue;
+      $out[$slug] = [
+        'job' => self::txt($p['job'] ?? '', 200),
+        'message' => self::txt($p['message'] ?? '', 200),
+        'beats' => self::items($p['beats'] ?? [], 5, 180),
+        'owns' => self::items($p['owns'] ?? [], 6, 160),
+        'not_here' => self::items($p['not_here'] ?? [], 5, 120),
+      ];
+    }
+    self::log('storyline', 'done', ['pages' => count($out), 'of' => count($list), 'secs' => sprintf('%.1f', microtime(true) - $t), 'tokens' => (int) ($j['usage']['total_tokens'] ?? 0)]);
+    return $out;
+  }
+
   public static function for_project(int $pid): array {
     if (!$pid) return [];
     $d = json_decode((string) get_post_meta($pid, self::META, true), true);
@@ -394,7 +550,7 @@ class AISB_Archer_Direction {
    * De ontwerpbrief voor één AI-taak (plan, sections, copy, menu, photo). Leeg zonder richting.
    * Kort gehouden: elke taak krijgt enkel wat ze nodig heeft.
    */
-  public static function prompt_block(int $pid, string $task, ?array $dir = null): string {
+  public static function prompt_block(int $pid, string $task, ?array $dir = null, string $slug = ''): string {
     $dir = $dir ?? self::for_project($pid);
     $s = $dir['strategy'] ?? null;
     if (!is_array($s)) return '';
@@ -403,6 +559,9 @@ class AISB_Archer_Direction {
       if (empty($img['look'])) return '';
       return 'One photo look for the whole site: ' . rtrim($img['look'], '. ') . '.' . (!empty($img['avoid']) ? ' Never show: ' . implode(', ', $img['avoid']) . '.' : '');
     }
+    $lang = self::site_language($pid, $dir);
+    $story = $slug !== '' ? ($dir['pages'][$slug] ?? null) : null;
+    $home = $slug === '' || $slug === 'home';
     $lines = [];
     $add = function (string $label, $v) use (&$lines) {
       if (is_array($v)) { $v = array_values(array_filter($v)); if (!$v) return; $lines[] = $label . ":\n- " . implode("\n- ", $v); return; }
@@ -410,24 +569,50 @@ class AISB_Archer_Direction {
     };
     $action = trim((string) ($s['primary_action']['label'] ?? ''));
     $add('Positioning', $s['positioning'] ?? '');
-    if ($task !== 'menu') $add('Main promise (home hero)', $s['promise'] ?? '');
-    $add('Primary action on every page', $action !== '' ? $action . ' (' . ($s['primary_action']['type'] ?? '') . ')' : '');
-    if ($task === 'menu') return "DESIGN DIRECTION:\n" . implode("\n", $lines) . "\nThe header button (cta) is the page for the primary action.\n";
-    if (in_array($task, ['sections', 'copy'], true)) $add('Proof to use (facts from the brief only)', $s['proof'] ?? []);
+    if ($task !== 'menu' && ($home || !$story)) $add('Main promise (home hero, meaning)', $s['promise'] ?? '');
+    $add('Primary action (meaning of the button)', $action !== '' ? $action . ' (' . ($s['primary_action']['type'] ?? '') . ')' : '');
+    if ($task === 'menu') return "DESIGN DIRECTION (in English for you; menu labels stay in {$lang}):\n" . implode("\n", $lines) . "\nThe header button (cta) is the page for the primary action.\n";
+    // Het bewijs hoort bij de pagina's die het bezitten (verhaallijn); zonder verhaallijn: de algemene lijst.
+    if (in_array($task, ['sections', 'copy'], true) && !$story) $add('Proof to use (facts from the brief only)', $s['proof'] ?? []);
     $add('Principles', $s['principles'] ?? []);
     $avoid = (array) ($s['avoid'] ?? []);
     if ($task === 'copy' && !empty($dir['research']['common'])) $avoid[] = 'Claims every competitor makes, unless you make them concrete: ' . implode('; ', array_slice($dir['research']['common'], 0, 4));
     $add('Avoid', $avoid);
     $dec = [];
-    foreach ((array) ($dir['decisions'] ?? []) as $d) $dec[] = $d['question'] . ' → ' . $d['answer'];
-    $add('Decided with the client (these win over anything above, including the primary action)', $dec);
+    foreach ((array) ($dir['decisions'] ?? []) as $d) {
+      if (($d['answer'] ?? '') === '') continue;
+      if ($story && !empty($d['page']) && !self::page_match((string) $d['page'], $slug)) continue;
+      $dec[] = (!empty($d['page']) ? '[' . $d['page'] . '] ' : '') . $d['question'] . ' → ' . $d['answer'];
+    }
+    $add("Facts and choices from the owner (they win over anything above; translate them into {$lang})", $dec);
+    if ($story) {
+      $lines[] = 'THIS PAGE (' . $slug . ") tells its own story; follow it:\n"
+        . 'Job: ' . $story['job'] . "\nMessage: " . $story['message']
+        . ($story['beats'] ? "\nBeats in reading order:\n- " . implode("\n- ", $story['beats']) : '')
+        . ($story['owns'] ? "\nFacts this page tells:\n- " . implode("\n- ", $story['owns']) : '')
+        . ($story['not_here'] ? "\nTold on other pages, do not repeat here:\n- " . implode("\n- ", $story['not_here']) : '');
+    }
     if ($task === 'sections') {
       $rules = self::style_rules($pid);
       if ($rules !== '') $lines[] = $rules;
+      if ($story) $lines[] = 'Plan the sections along the beats above, in that order (one section per beat, plus header and footer). Do not add a section for a theme that is told on other pages.';
     }
     if (!$lines) return '';
-    $out = "DESIGN DIRECTION (set before building, v" . (int) ($dir['v'] ?? 1) . "; follow it for emphasis and order, never against the brief, the rules above or the facts):\n" . implode("\n", $lines) . "\n";
-    return mb_substr($out, 0, 1800) . "\n";
+    $out = "DESIGN DIRECTION (written in English for you; write every visible text in {$lang}; follow it for emphasis and order, never against the brief, the rules above or the facts):\n" . implode("\n", $lines) . "\n";
+    return mb_substr($out, 0, 3200) . "\n";
+  }
+
+  /** Taal van de site (eerste projecttaal), als naam voor de prompt. */
+  public static function site_language(int $pid, array $dir = []): string {
+    $l = $pid ? json_decode((string) get_post_meta($pid, 'aisb_project_languages', true), true) : null;
+    $first = is_array($l) && $l ? (string) $l[0] : (string) ($dir['language'] ?? 'Dutch');
+    return ['Dutch' => 'Belgian Dutch', 'French' => 'French', 'English' => 'English', 'German' => 'German'][$first] ?? $first;
+  }
+
+  /** Hoort een antwoord bij deze pagina? (paginanaam uit de brief tegenover de slug) */
+  private static function page_match(string $page, string $slug): bool {
+    $a = sanitize_title($page);
+    return $a === $slug || strpos($slug, $a) !== false || strpos($a, $slug) !== false;
   }
 
   /** Do's en don'ts van de gekozen stijl (design-notes.json), voor het sectieplan. */

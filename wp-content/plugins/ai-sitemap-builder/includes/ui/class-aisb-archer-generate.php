@@ -173,8 +173,12 @@ class AISB_Archer_Generate {
       . (class_exists('AISB_Archer_Taste') ? AISB_Archer_Taste::copy_rules() : '') . "\n"
       . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::copy_rules() . "\n" : '')
       . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::copy_rules() . "\n" : '');
-    // Aanspreekvorm uit de toon van de intake (je of u), voor alle secties gelijk.
-    if (class_exists('AISB_Archer_Copy_Coach')) $base .= AISB_Archer_Copy_Coach::address_rule($base);
+    // Taal van de site: de brief is Nederlands, ook voor een Engelse of Franse site.
+    $pid_lang = (int) ($ctx['project_id'] ?? 0) ?: (int) ($_POST['project_id'] ?? $_POST['aisb_project'] ?? $_GET['aisb_project'] ?? 0);
+    $site_lang = $pid_lang && class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::site_language($pid_lang) : '';
+    $lang_rule = $site_lang !== '' ? "LANGUAGE (overrides everything above): write every text in {$site_lang}, also buttons, labels, taglines and short items. The brief, the notes, the points and the current texts may be in another language: translate them into {$site_lang}; only proper names stay as they are. Never mix languages.\n" : '';
+    // Aanspreekvorm uit de toon van de intake (je of u): enkel voor een Nederlandstalige site.
+    if (class_exists('AISB_Archer_Copy_Coach') && ($site_lang === '' || stripos($site_lang, 'Dutch') !== false)) $base .= AISB_Archer_Copy_Coach::address_rule($base);
     // Stijl al gekozen (teksten opnieuw maken na de stap Stijl): de stem uit de DESIGN.md van die stijl.
     $pid_now = (int) ($ctx['project_id'] ?? 0) ?: (int) ($_POST['project_id'] ?? $_POST['aisb_project'] ?? $_GET['aisb_project'] ?? 0);
     if ($pid_now && class_exists('AISB_Archer_Styles')) {
@@ -182,7 +186,9 @@ class AISB_Archer_Generate {
       if ($notes !== '') $base .= $notes . "Match this voice; the copy rules above still apply.\n";
     }
     // Ontwerprichting (ADR-0033): positionering, belofte, bewijs en wat te vermijden, voor elke sectie gelijk.
-    if ($pid_now && class_exists('AISB_Archer_Direction')) $base .= AISB_Archer_Direction::prompt_block($pid_now, 'copy');
+    if ($pid_now && class_exists('AISB_Archer_Direction')) {
+      $base .= AISB_Archer_Direction::prompt_block($pid_now, 'copy', null, sanitize_title((string) ($ctx['page_slug'] ?? '')));
+    }
     // Overzicht of detailpagina van een lijst (occasies, realisaties ...): bij het publiceren worden de kaarten
     // de items van een inhoudstype en wordt de detailpagina het sjabloon voor één item.
     $slug_now = sanitize_title((string) ($ctx['page_slug'] ?? '')) ?: sanitize_title((string) wp_unslash($_POST['page_slug'] ?? ''));
@@ -229,7 +235,8 @@ class AISB_Archer_Generate {
         . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
         . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::section_hint((string) ($section['purpose'] ?? ''), (string) ($section['type'] ?? ($section['section_type'] ?? ''))) : '')
         . "You write ONLY " . $key . ". The page reads as one story from top to bottom: this section covers its own purpose and nothing else. Do not repeat what another section of this page covers: no second introduction of the business, no restating the hero claim, no list of the same services or the same benefits again, no same examples or sentences. Use fresh wording; a reader who scrolls must learn something new in every section.\n"
-        . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n\n"
+        . "LIMITS (max words per module id):\n" . wp_json_encode(array_map(fn($c) => max(2, (int) floor($c / 7)), $limits[$key])) . "\n"
+        . $lang_rule . "\n"
         . "Target JSON:\n" . wp_json_encode([$key => $target])];
     }
     $answers = $self->ai_multi($calls, 'copy', 90);
@@ -516,7 +523,9 @@ class AISB_Archer_Generate {
       'purpose' => (string) ($ctx['page_purpose'] ?? ''),
     ], 'strlen');
     $t0 = microtime(true);
-    $res = $self->ai_multi(['r' => ['system' => $system, 'user' => AISB_Archer_Copy_Coach::review_prompt($brief, $page, $texts)]], 'review', 60)['r'] ?? null;
+    $rl = $pid && class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::site_language($pid) : '';
+    $rl_rule = $rl !== '' ? "\nLANGUAGE: every fix is written in {$rl}. The brief may be in another language: translate what you take from it. A text that is not in {$rl} is itself a problem to fix.\n" : '';
+    $res = $self->ai_multi(['r' => ['system' => $system, 'user' => AISB_Archer_Copy_Coach::review_prompt($brief, $page, $texts) . $rl_rule]], 'review', 60)['r'] ?? null;
     if (!is_array($res)) {
       error_log('[AISB] Archer copycoach: nalezing van ' . $slug . ' mislukt, teksten blijven zoals ze zijn.');
       return $out;
@@ -918,6 +927,10 @@ class AISB_Archer_Generate {
       if (empty($data['sitemap'][$i]['page_type'])) $data['sitemap'][$i]['page_type'] = self::guess_type((string) $p['slug'], (string) ($p['page_title'] ?? ''));
     }
 
+    // Verhaallijn per pagina (ADR-0033): elke pagina een eigen taak, boodschap en verhaal, zodat niet elke
+    // pagina hetzelfde blok herhaalt. Eén AI-vraag op de definitieve paginastructuur.
+    if ($direction) $direction['pages'] = AISB_Archer_Direction::storyline((array) $data['sitemap'], $prompt . ($contact_lines !== '' ? "\n\n" . $contact_lines : ''), $direction);
+
     if ($contact_lines !== '') $brief .= "\n\n" . $contact_lines;
     $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
     if ($project_id && !$this->can_access($project_id)) $project_id = 0;
@@ -999,6 +1012,7 @@ class AISB_Archer_Generate {
     $lang = self::lang_name($languages);
     $system = self::plan_system_prompt();
     $user = "Language: {$lang}\nDesired number of pages: {$page_count}\n\nBrief:\n" . mb_substr($prompt, 0, 9000);
+    $user .= "\nThe brief may be written in another language than {$lang}: translate the page names it asks for into {$lang} (keep proper names).";
     if ($direction !== '') $user .= "\n\n" . $direction . "Use the direction to decide which pages carry the primary action and what each page's purpose stresses; it never adds pages the brief gives no content for.\n";
     // Sectoradvies (UI/UX Pro Max): welke pagina's deze sector nodig heeft (bv. realisaties, werkgebied, afspraak).
     if (class_exists('AISB_Archer_Sector')) {
@@ -1137,7 +1151,7 @@ PROMPT;
       $outline_lines[] = '- ' . ($o['title'] ?? '') . ' (' . ($o['slug'] ?? '') . (isset($o['parent']) && $o['parent'] && $o['parent'] !== 'home' ? ', under ' . $o['parent'] : '') . ')';
     }
     $system = "You are a senior web strategist writing the section plan of one website page. Return ONLY valid JSON.\n"
-      . "Write everything in {$lang}. Never mix languages. Never invent facts (names, numbers, prices, addresses) that are not in the brief.\n"
+      . "Write everything in {$lang}, also section_name, purpose and key_content. The brief may be written in another language: translate its facts, page names and service names into {$lang} (proper names stay as they are). Never mix languages. Never invent facts (names, numbers, prices, addresses) that are not in the brief.\n"
       . "Sections:\n"
       . "- The FIRST section is always section_type \"Headers\" and the LAST section is always section_type \"Footers\".\n"
       . "- Between them: Home 6–8 sections; overview pages 4–6 (on listing overviews a Category Filters section (search and filters) right before the results grid of the items; on other overviews a section that lists the child pages); detail, case, blog and service pages 3–5; Contact 2–3 (form, details, map); legal pages 1 (Content Sections).\n"
@@ -1154,8 +1168,7 @@ PROMPT;
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
       . "\nAll pages of the site:\n" . implode("\n", array_slice($outline_lines, 0, 70))
       . "\n\nBrief:\n" . $brief
-      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '')
-      . (class_exists('AISB_Archer_Direction') ? "\n" . AISB_Archer_Direction::prompt_block($project_id, 'sections') : '');
+      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '');
 
     $calls = [];
     foreach ($pages as $p) {
@@ -1168,7 +1181,9 @@ PROMPT;
         . (!empty($p['purpose']) ? "\n- purpose: " . sanitize_text_field((string) $p['purpose']) : '')
         . ($children ? "\n- child pages: " . implode(', ', array_slice($children, 0, 12)) : '')
         . (!empty($p['collection']) ? "\n- this is a template for " . (int) $p['collection'] . " similar items" : '');
-      $calls[$slug] = ['system' => $system, 'user' => $context . "\n\n" . $page];
+      // Ontwerprichting met het verhaal van DEZE pagina (ADR-0033).
+      $dirblock = class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::prompt_block($project_id, 'sections', null, $slug) : '';
+      $calls[$slug] = ['system' => $system, 'user' => $context . ($dirblock !== '' ? "\n" . $dirblock : '') . "\n\n" . $page];
     }
     $answers = $this->ai_multi($calls, 'sections', 60);
 
