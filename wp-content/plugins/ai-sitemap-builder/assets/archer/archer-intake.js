@@ -28,6 +28,7 @@
     business_name: "Naam", existing_site: "Website", activity: "Activiteit", services: "Diensten",
     region: "Regio", service_area: "Werkgebied", founded: "Sinds", team: "Team", opening_hours: "Open",
     audience: "Doelgroep", customer_need: "Klantvraag", main_goal: "Doel", booking: "Boeken", price_info: "Prijzen",
+    voice_note: "Eigen verhaal",
     usp: "Troef", reviews: "Reviews", references: "Referenties", certifications: "Erkenningen", guarantees: "Garantie", objections: "Twijfels",
     must_pages: "Pagina's", page_count: "Aantal", page_notes: "Per pagina", faq_topics: "FAQ",
     tone: "Toon", languages: "Talen", style_id: "Stijl", style_mood: "Sfeer", brand_colors: "Kleur",
@@ -48,6 +49,7 @@
     if (k === "style_id") return styleName(v);
     if (k === "logo") return typeof v === "object" ? "opgeladen" : String(v);
     if (k === "own_photos") return Array.isArray(v) ? v.length + " opgeladen" : "";
+    if (k === "voice_note") return "ingesproken";
     return Array.isArray(v) ? v.join(", ") : String(v);
   };
 
@@ -92,7 +94,7 @@
           <div class="archer-intake-orb" aria-hidden="true"></div>
           <h1 class="archer-intake-title">Laten we je website maken.</h1>
           <p class="archer-intake-lead">Ik ben de assistent van Archer. Ik stel je een reeks korte vragen over je zaak, je klanten, je pagina's en je stijl. Bij elk antwoord zie je je website groeien.</p>
-          <p class="archer-intake-lead archer-small">Begin met de naam van je zaak of het adres van je huidige website.</p>
+          <p class="archer-intake-lead archer-small">Begin met de naam van je zaak of het adres van je huidige website. Liever vertellen? Klik op de microfoon en vertel in twee minuten over je zaak: dat levert de site meer op dan tien antwoorden.</p>
         </div>
         <div class="archer-intake-log" data-intake-log aria-live="polite"></div>
         <div class="archer-intake-ready" data-intake-ready hidden>
@@ -100,6 +102,11 @@
           <button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-intake-go-early>Bouw mijn website →</button>
         </div>
         <form class="archer-intake-composer" data-intake-form>
+          <button type="button" class="archer-intake-mic" data-intake-mic title="Vertel over je zaak in 2 minuten">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+            <span class="archer-intake-mic-time" data-intake-mic-time hidden>0:00</span>
+            <span class="archer-sr-only">Vertel over je zaak</span>
+          </button>
           <label class="archer-intake-attach" title="Logo of foto's opladen">
             <input type="file" accept="image/*" multiple data-intake-attach hidden>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -131,6 +138,8 @@
       ready: $("[data-intake-ready]", root),
       preview: $("[data-intake-preview]", root),
       attach: $("[data-intake-attach]", root),
+      mic: $("[data-intake-mic]", root),
+      micTime: $("[data-intake-mic-time]", root),
     };
 
     const newDraft = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -671,6 +680,81 @@
       }
     });
 
+    /* ── Microfoon: de eigenaar vertelt zijn zaak ─────────────────────────
+       Een formulier levert wat de vraag uitlokt; een verteld verhaal levert wat alleen hij weet
+       (hoe lang, waarom, de specialiteit, de zin die hij altijd tegen klanten zegt) en hoe hij praat.
+       De opname gaat naar de transcriptie en wordt daarna weggegooid; enkel de tekst blijft. */
+    const MIC_MAX = 120;
+    let rec = null, recChunks = [], recTimer = null, recSecs = 0, recStream = null;
+
+    const micLang = () => ({ Dutch: "nl", French: "fr", English: "en", German: "de" }[(state.brief.languages || [])[0]] || "nl");
+
+    function micPaint(on) {
+      el.mic.classList.toggle("is-recording", on);
+      el.micTime.hidden = !on;
+      el.mic.title = on ? "Klaar? Klik om te stoppen" : "Vertel over je zaak in 2 minuten";
+      if (on) el.micTime.textContent = Math.floor(recSecs / 60) + ":" + String(recSecs % 60).padStart(2, "0");
+    }
+
+    function micSay(text) {
+      state.messages.push({ role: "agent", text: text });
+      renderAll();
+    }
+
+    function micStop() {
+      if (rec && rec.state !== "inactive") rec.stop();
+    }
+
+    async function micStart() {
+      if (busy) return;
+      try {
+        recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        return micSay("Ik kan de microfoon niet gebruiken. Geef toestemming in je browser, of typ je verhaal gewoon.");
+      }
+      const type = ["audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+      rec = new MediaRecorder(recStream, type ? { mimeType: type } : undefined);
+      recChunks = [];
+      recSecs = 0;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+      rec.onstop = async () => {
+        clearInterval(recTimer);
+        recStream.getTracks().forEach((t) => t.stop());
+        micPaint(false);
+        const mime = rec.mimeType || "audio/webm";
+        const blob = new Blob(recChunks, { type: mime });
+        recChunks = [];
+        if (blob.size < 2000) return micSay("Dat was te kort om uit te schrijven. Probeer het nog eens.");
+        const ext = mime.indexOf("mp4") > -1 ? "mp4" : mime.indexOf("ogg") > -1 ? "ogg" : "webm";
+        try {
+          busy = true;
+          typing(true);
+          const d = await post("aisb_archer_intake_voice", { language: micLang() }, [new File([blob], "opname." + ext, { type: mime })]);
+          busy = false;
+          typing(false);
+          // De uitgeschreven tekst gaat als gewoon antwoord naar de agent (die haalt er velden uit)
+          // én apart in de brief, waar het stemprofiel hem volledig leest.
+          send(d.text, { voice_note: d.text });
+        } catch (err) {
+          busy = false;
+          typing(false);
+          micSay(err.message || "Uitschrijven lukte niet.");
+        }
+      };
+      rec.start();
+      micPaint(true);
+      recTimer = setInterval(() => {
+        recSecs++;
+        micPaint(true);
+        if (recSecs >= MIC_MAX) micStop();
+      }, 1000);
+    }
+
+    el.mic.addEventListener("click", () => {
+      if (!navigator.mediaDevices || !window.MediaRecorder) return micSay("Deze browser kan niet opnemen. Typ je verhaal gerust.");
+      if (rec && rec.state === "recording") micStop(); else micStart();
+    });
+
     $("[data-intake-legacy]", root).addEventListener("click", () => {
       start.classList.remove("archer-intake-on");
       document.body.classList.remove("archer-intake-mode");
@@ -715,6 +799,8 @@
         line("Gewenste sfeer", "style_mood"),
         line("Voorbeeldsites", "examples"),
         line("Liever niet", "dislikes"),
+        // Het ingesproken verhaal, ingekort: het stemprofiel leest het later volledig.
+        b.voice_note ? "De eigenaar vertelde zelf over zijn zaak (uitgeschreven opname; hier staan details die nergens anders staan, en zo praat hij):\n" + String(b.voice_note).slice(0, 1500) : "",
       ].filter(Boolean).join("\n");
     }
 

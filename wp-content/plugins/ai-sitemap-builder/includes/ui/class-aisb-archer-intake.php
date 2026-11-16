@@ -45,6 +45,7 @@ class AISB_Archer_Intake {
     'booking'       => 'Online boeken',
     'price_info'    => 'Prijzen',
     // 3. Vertrouwen
+    'voice_note'    => 'In eigen woorden',
     'usp'           => 'Wat jullie onderscheidt',
     'reviews'       => 'Reviews',
     'references'    => 'Referenties',
@@ -92,6 +93,7 @@ class AISB_Archer_Intake {
     add_action('wp_ajax_aisb_archer_intake_turn', [$this, 'ajax_turn']);
     add_action('wp_ajax_aisb_archer_intake_styles', [$this, 'ajax_styles']);
     add_action('wp_ajax_aisb_archer_intake_upload', [$this, 'ajax_upload']);
+    add_action('wp_ajax_aisb_archer_intake_voice', [$this, 'ajax_voice']);
     add_action('wp_ajax_aisb_archer_intake_save', [$this, 'ajax_save']);
   }
 
@@ -284,6 +286,78 @@ class AISB_Archer_Intake {
     wp_send_json_success(['kind' => $kind, 'items' => $items, 'errors' => $errors]);
   }
 
+  /**
+   * De eigenaar vertelt zijn zaak in twee minuten, de opname wordt uitgeschreven.
+   *
+   * Dit is de rijkste invoer die de intake kan krijgen: een formulier levert wat de vraag uitlokt,
+   * een verteld verhaal levert de details die alleen hij kent (hoe lang, waarom, de specialiteit,
+   * de zin die hij altijd tegen klanten zegt) én de manier waarop hij praat. AISB_Archer_Voice
+   * maakt daar het stemprofiel van.
+   *
+   * De opname zelf wordt niet bewaard: ze gaat naar de transcriptie en daarna weg. Enkel de tekst blijft.
+   */
+  public function ajax_voice(): void {
+    $this->check();
+    @set_time_limit(180);
+    if (empty($_FILES['files'])) wp_send_json_error(['message' => 'Geen opname ontvangen.'], 400);
+    $f = $_FILES['files'];
+    $file = [
+      'name' => is_array($f['name']) ? ($f['name'][0] ?? '') : $f['name'],
+      'type' => is_array($f['type']) ? ($f['type'][0] ?? '') : $f['type'],
+      'tmp_name' => is_array($f['tmp_name']) ? ($f['tmp_name'][0] ?? '') : $f['tmp_name'],
+      'size' => (int) (is_array($f['size']) ? ($f['size'][0] ?? 0) : $f['size']),
+    ];
+    if (!$file['tmp_name'] || !is_uploaded_file($file['tmp_name'])) wp_send_json_error(['message' => 'De opname kwam niet door.'], 400);
+    // OpenAI neemt tot 25 MB; twee minuten spraak is een fractie daarvan.
+    if ($file['size'] > 25 * 1024 * 1024) wp_send_json_error(['message' => 'De opname is te lang.'], 400);
+    if ($file['size'] < 2000) wp_send_json_error(['message' => 'De opname is te kort. Vertel iets langer.'], 400);
+    $ext = ['audio/webm' => 'webm', 'video/webm' => 'webm', 'audio/ogg' => 'ogg', 'audio/mp4' => 'mp4', 'audio/x-m4a' => 'm4a', 'audio/mpeg' => 'mp3', 'audio/wav' => 'wav', 'audio/wave' => 'wav', 'audio/x-wav' => 'wav'][strtolower(explode(';', (string) $file['type'])[0])] ?? '';
+    if ($ext === '') wp_send_json_error(['message' => 'Dit soort opname kunnen we niet uitschrijven.'], 400);
+
+    $settings = class_exists('AISB_Settings') ? (array) (new AISB_Settings())->get_settings() : (array) get_option('aisb_settings', []);
+    $key = (string) ($settings['api_key'] ?? '');
+    if ($key === '') wp_send_json_error(['message' => 'Er is geen AI-sleutel ingesteld.'], 400);
+    $model = (string) apply_filters('archer_ai_transcribe_model', 'gpt-4o-transcribe');
+    $lang = sanitize_text_field((string) ($_POST['language'] ?? 'nl'));
+    $lang = preg_match('/^[a-z]{2}$/', $lang) ? $lang : 'nl';
+
+    $audio = file_get_contents($file['tmp_name']);
+    if ($audio === false) wp_send_json_error(['message' => 'De opname kon niet gelezen worden.'], 500);
+    $bound = 'archer' . wp_generate_password(16, false);
+    $body = '';
+    foreach (['model' => $model, 'language' => $lang, 'response_format' => 'text'] as $k => $v) {
+      $body .= "--{$bound}\r\nContent-Disposition: form-data; name=\"{$k}\"\r\n\r\n{$v}\r\n";
+    }
+    $body .= "--{$bound}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"opname.{$ext}\"\r\n"
+      . "Content-Type: " . $file['type'] . "\r\n\r\n" . $audio . "\r\n--{$bound}--\r\n";
+    unset($audio);
+
+    $res = wp_remote_post('https://api.openai.com/v1/audio/transcriptions', [
+      'timeout' => 150,
+      'headers' => ['Content-Type' => 'multipart/form-data; boundary=' . $bound, 'Authorization' => 'Bearer ' . $key],
+      'body' => $body,
+    ]);
+    @unlink($file['tmp_name']);
+    if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
+    $code = (int) wp_remote_retrieve_response_code($res);
+    $raw = trim((string) wp_remote_retrieve_body($res));
+    if ($code < 200 || $code >= 300) {
+      $j = json_decode($raw, true);
+      wp_send_json_error(['message' => (string) ($j['error']['message'] ?? 'Uitschrijven lukte niet (' . $code . ').')], 502);
+    }
+    // response_format=text geeft kale tekst; sommige modellen geven toch JSON terug.
+    $text = $raw;
+    if (strpos($raw, '{') === 0) {
+      $j = json_decode($raw, true);
+      $text = (string) ($j['text'] ?? '');
+    }
+    $text = trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags($text)));
+    if (mb_strlen($text) < 20) wp_send_json_error(['message' => 'We hoorden te weinig. Probeer het nog eens in een stillere ruimte.'], 400);
+    $text = mb_substr($text, 0, 8000);
+    error_log(sprintf('[AISB] Archer opname uitgeschreven: %d tekens, %d kB audio.', mb_strlen($text), (int) round($file['size'] / 1024)));
+    wp_send_json_success(['text' => $text, 'words' => count(preg_split('/\s+/u', $text))]);
+  }
+
   public function ajax_save(): void {
     $this->check();
     $project_id = (int) ($_POST['project_id'] ?? 0);
@@ -308,7 +382,16 @@ class AISB_Archer_Intake {
       update_post_meta($project_id, 'archer_contact', wp_slash(wp_json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
     }
     $design = self::apply_design($project_id, $brief);
-    wp_send_json_success(['saved' => true, 'design' => $design]);
+    // Het stemprofiel van deze klant (AISB_Archer_Voice): hier gemaakt, want hier is de brief compleet,
+    // inclusief het ingesproken verhaal. Alles wat daarna tekst maakt of nakijkt, leest eruit.
+    $voice = ['has' => false];
+    if (class_exists('AISB_Archer_Voice') && AISB_Archer_Voice::on()) {
+      $langs = (array) ($brief['languages'] ?? []);
+      $v = AISB_Archer_Voice::build($project_id, $brief, self::prompt_text($brief), (string) ($langs[0] ?? 'Dutch'));
+      if (is_wp_error($v)) error_log('[AISB] Archer stemprofiel mislukt: ' . $v->get_error_message());
+      $voice = AISB_Archer_Voice::summary($project_id);
+    }
+    wp_send_json_success(['saved' => true, 'design' => $design, 'voice' => $voice]);
   }
 
   /** De bevestigde brief van een project (leeg als het project zonder intake gemaakt is). */
@@ -704,6 +787,10 @@ TXT;
         } elseif (is_string($v) && trim($v) !== '') {
           $out[$k] = mb_substr(trim(wp_strip_all_tags($v)), 0, 60);
         }
+      } elseif ($k === 'voice_note') {
+        // Het verhaal van de eigenaar: langer dan de andere velden, want daar zit de waarde in.
+        $s = trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags(is_array($v) ? implode(' ', $v) : (string) $v)));
+        if (mb_strlen($s) >= 20) $out[$k] = mb_substr($s, 0, 8000);
       } elseif ($k === 'own_photos') {
         $list = [];
         foreach ((array) $v as $ph) {
@@ -810,6 +897,8 @@ TXT;
       $line('Gewenste sfeer', 'style_mood'),
       $line('Voorbeeldsites', 'examples'),
       $line('Liever niet', 'dislikes'),
+      // Het ingesproken verhaal staat achteraan en ingekort: het stemprofiel krijgt het volledig.
+      !empty($b['voice_note']) ? "De eigenaar vertelde zelf over zijn zaak (uitgeschreven opname; hier staan details die nergens anders staan, en zo praat hij):\n" . mb_substr((string) $b['voice_note'], 0, 1500) : '',
     ]));
   }
 

@@ -173,6 +173,13 @@ class AISB_Archer_Copy_Coach {
       foreach ($po[0] as $ph) if (mb_strpos($new, $ph) === false) continue 2;
       if (preg_match('/\[[^\]]+\]/u', $new) && !$po[0]) continue;
       if (class_exists('AISB_Archer_Taste') && AISB_Archer_Taste::stock_phrase($new)) continue;
+      // Een herschrijving moet de AI-tics (Nederlands uit Nederland, ambtelijk, verzonnen enthousiasme)
+      // wegnemen, niet omruilen. "Wij staan voor u klaar" vervangen door "U bent bij ons aan het juiste
+      // adres" is geen verbetering, dus zo'n voorstel gaat niet door: het aantal treffers moet dalen.
+      if (class_exists('AISB_Archer_Dutch') && AISB_Archer_Dutch::on()) {
+        $tells_new = count(AISB_Archer_Dutch::tells($new));
+        if ($tells_new > 0 && $tells_new >= count(AISB_Archer_Dutch::tells($old))) continue;
+      }
       if ($kind === 'heading') $new = rtrim($new, '.');
       if (in_array($kind, ['button', 'text-link'], true) && count(preg_split('/\s+/u', $new)) > 4) continue;
       $max = (int) ($texts[$id]['max_chars'] ?? 0);
@@ -182,14 +189,24 @@ class AISB_Archer_Copy_Coach {
     return $ok;
   }
 
-  /** Bewaart de score per pagina (verborgen meta, voor opvolging en latere weergave). */
-  public static function remember(int $pid, string $slug, $res, int $fixed, array $changes = []): void {
+  /**
+   * Bewaart de score per pagina (verborgen meta, voor opvolging en latere weergave).
+   *
+   * @param array $tells Wat er na de nalezing nog als AI klinkt (AISB_Archer_Dutch::scan op de
+   *                     teksten zoals ze nu zijn): de treffers die de coach niet opgeruimd kreeg.
+   */
+  public static function remember(int $pid, string $slug, $res, int $fixed, array $changes = [], array $tells = []): void {
     if (!$pid || $slug === '' || !is_array($res)) return;
     $scores = [];
     foreach (self::RUBRIC as $k => $max) $scores[$k] = max(0, min($max, (int) ($res['scores'][$k] ?? 0)));
     $weak = array_slice(array_values(array_filter(array_map(fn($w) => is_string($w) ? sanitize_text_field($w) : '', (array) ($res['weak'] ?? [])))), 0, 4);
+    $left = [];
+    foreach ($tells as $hits) foreach ((array) $hits as $h) {
+      $left[] = ['group' => (string) ($h['group'] ?? ''), 'hit' => sanitize_text_field((string) ($h['hit'] ?? '')), 'note' => sanitize_text_field((string) ($h['note'] ?? ''))];
+      if (count($left) >= 8) break 2;
+    }
     update_post_meta($pid, '_archer_copy_score_' . $slug, [
-      'total' => array_sum($scores), 'scores' => $scores, 'weak' => $weak, 'fixed' => $fixed, 'changes' => array_slice($changes, 0, self::MAX_FIXES), 'at' => time(),
+      'total' => array_sum($scores), 'scores' => $scores, 'weak' => $weak, 'fixed' => $fixed, 'changes' => array_slice($changes, 0, self::MAX_FIXES), 'tells' => $left, 'at' => time(),
     ]);
   }
 

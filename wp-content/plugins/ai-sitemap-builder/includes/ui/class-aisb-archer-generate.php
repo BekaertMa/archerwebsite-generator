@@ -189,6 +189,16 @@ class AISB_Archer_Generate {
     if ($pid_now && class_exists('AISB_Archer_Direction')) {
       $base .= AISB_Archer_Direction::prompt_block($pid_now, 'copy', null, sanitize_title((string) ($ctx['page_slug'] ?? '')));
     }
+    // Stemprofiel (AISB_Archer_Voice): voor wie, hoe het klinkt, welke twijfels, en de eigen woorden
+    // van de eigenaar. De richting zegt wat er staat, dit zegt tegen wie en hoe.
+    if ($pid_now && class_exists('AISB_Archer_Voice') && AISB_Archer_Voice::on()) {
+      $base .= AISB_Archer_Voice::prompt_block($pid_now, 'copy');
+    }
+    // Waaraan je in Vlaanderen hoort dat een AI de tekst schreef: Nederlands uit Nederland,
+    // ambtelijke u-taal, verzonnen enthousiasme, vormtics.
+    if (class_exists('AISB_Archer_Dutch') && AISB_Archer_Dutch::on() && AISB_Archer_Dutch::applies($site_lang)) {
+      $base .= AISB_Archer_Dutch::checklist(class_exists('AISB_Archer_Copy_Coach') ? AISB_Archer_Copy_Coach::address($base) : '');
+    }
     // Overzicht of detailpagina van een lijst (occasies, realisaties ...): bij het publiceren worden de kaarten
     // de items van een inhoudstype en wordt de detailpagina het sjabloon voor één item.
     $slug_now = sanitize_title((string) ($ctx['page_slug'] ?? '')) ?: sanitize_title((string) wp_unslash($_POST['page_slug'] ?? ''));
@@ -557,7 +567,21 @@ class AISB_Archer_Generate {
     $t0 = microtime(true);
     $rl = $pid && class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::site_language($pid) : '';
     $rl_rule = $rl !== '' ? "\nLANGUAGE: every fix is written in {$rl}. The brief may be in another language: translate what you take from it. A text that is not in {$rl} is itself a problem to fix.\n" : '';
-    $res = $self->ai_multi(['r' => ['system' => $system, 'user' => AISB_Archer_Copy_Coach::review_prompt($brief, $page, $texts) . $rl_rule]], 'review', 60)['r'] ?? null;
+    // De critic krijgt het stemprofiel van deze klant en, voor een Nederlandstalige site, de checklist
+    // "klinkt dit als AI" plus de treffers die mechanisch gevonden zijn. Die laatste zijn zeker, dus de
+    // nalezing moet ze herschrijven; wat oordeel vraagt, staat in de checklist.
+    $extra = '';
+    if ($pid && class_exists('AISB_Archer_Voice') && AISB_Archer_Voice::on()) {
+      $vb = AISB_Archer_Voice::prompt_block($pid, 'review');
+      if ($vb !== '') $extra .= "\n" . $vb;
+    }
+    $scan = [];
+    if (class_exists('AISB_Archer_Dutch') && AISB_Archer_Dutch::on() && AISB_Archer_Dutch::applies($rl)) {
+      $extra .= "\n" . AISB_Archer_Dutch::checklist(AISB_Archer_Copy_Coach::address($brief));
+      $scan = AISB_Archer_Dutch::scan($texts);
+      if ($scan) $extra .= "\n" . AISB_Archer_Dutch::findings_block($scan, $texts);
+    }
+    $res = $self->ai_multi(['r' => ['system' => $system, 'user' => AISB_Archer_Copy_Coach::review_prompt($brief, $page, $texts) . $rl_rule . $extra]], 'review', 60)['r'] ?? null;
     if (!is_array($res)) {
       error_log('[AISB] Archer copycoach: nalezing van ' . $slug . ' mislukt, teksten blijven zoals ze zijn.');
       return $out;
@@ -580,9 +604,16 @@ class AISB_Archer_Generate {
       $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $max * 1.1 ? $new : self::trim_to($new, (int) round($max * ($type === 'heading' ? 1.3 : 1)));
       $changes[] = ['from' => $texts[$id]['text'], 'to' => wp_strip_all_tags($out[$key]['modules'][$mid]['settings'][$sk])];
     }
-    AISB_Archer_Copy_Coach::remember($pid, $slug, $res, count($fixes), $changes);
+    // Wat er ná de herschrijvingen nog als AI klinkt: dat is wat de coach niet opgeruimd kreeg.
+    $left = [];
+    if ($scan) {
+      $after = $texts;
+      foreach ($fixes as $id => $new) if (isset($after[$id])) $after[$id]['text'] = $new;
+      $left = AISB_Archer_Dutch::scan($after);
+    }
+    AISB_Archer_Copy_Coach::remember($pid, $slug, $res, count($fixes), $changes, $left);
     do_action('archer_copy_reviewed', $res, $texts, $fixes, $pid, $slug);
-    error_log(sprintf('[AISB] Archer copycoach: %s scoort %d/100, %d van %d voorstel(len) toegepast (%.1fs).', $slug ?: '?', (int) ($res['total'] ?? 0), count($fixes), count((array) ($res['fixes'] ?? [])), microtime(true) - $t0));
+    error_log(sprintf('[AISB] Archer copycoach: %s scoort %d/100, %d van %d voorstel(len) toegepast%s (%.1fs).', $slug ?: '?', (int) ($res['total'] ?? 0), count($fixes), count((array) ($res['fixes'] ?? [])), $scan ? sprintf(', %d AI-tic(s) gevonden en %d nog over', count($scan), count($left)) : '', microtime(true) - $t0));
     return $out;
   }
 
@@ -1196,6 +1227,16 @@ PROMPT;
     $lang = self::lang_name(is_array($languages) ? $languages : ['Dutch']);
     $brief = mb_substr((string) get_post_meta($project_id, 'aisb_project_brief', true), 0, 4500);
     $types = $this->section_types();
+    // Sector en regio: de compositie opent bij het probleem of bij het resultaat, en een lokale zaak
+    // zet haar plaats boven de vouw.
+    $sector_key = class_exists('AISB_Archer_Sector') ? AISB_Archer_Sector::for_project($project_id) : '';
+    $region = '';
+    if (preg_match('/^\s*(Regio|Werkgebied)\s*:\s*(.+)$/mu', $brief, $rm)) $region = trim($rm[2]);
+    // De twijfels van klanten uit de brief: daarop staat de FAQ vlak voor de laatste oproep.
+    $objections = [];
+    if (preg_match('/^\s*Twijfels van klanten[^:]*:\s*(.+)$/mu', $brief, $om)) {
+      $objections = array_values(array_filter(array_map('trim', preg_split('/\s*[,;]\s*/u', rtrim($om[1], '.')))));
+    }
 
     $outline_lines = [];
     foreach ((array) $outline as $o) {
@@ -1215,17 +1256,22 @@ PROMPT;
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
       . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::plan_rules() : '')
       . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::plan_rules() : '')
+      // De vaste vorm van een verkooppagina, met de opening (probleem of resultaat) naar de sector.
+      . (class_exists('AISB_Archer_Composition') && AISB_Archer_Composition::on() ? AISB_Archer_Composition::rules($sector_key, $region !== '') : '')
       . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
     $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
       . "\nAll pages of the site:\n" . implode("\n", array_slice($outline_lines, 0, 70))
       . "\n\nBrief:\n" . $brief
-      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '');
+      . (class_exists('AISB_Archer_Sector') ? "\n\n" . AISB_Archer_Sector::prompt_rules($project_id) . "Apply the sector guidance mainly to the home page and the contact or booking path; it never overrides the brief or the section rules above.\n" : '')
+      . (class_exists('AISB_Archer_Voice') && AISB_Archer_Voice::on() ? "\n\n" . AISB_Archer_Voice::prompt_block($project_id, 'sections') : '');
 
     $calls = [];
+    $page_types = [];
     foreach ($pages as $p) {
       if (!is_array($p) || empty($p['slug'])) continue;
       $slug = sanitize_title((string) $p['slug']);
+      $page_types[$slug] = (string) ($p['page_type'] ?? 'Other');
       $children = array_filter((array) ($p['children'] ?? []), 'is_string');
       $page = "Write the sections for this page:\n- slug: " . $slug . "\n- title: " . sanitize_text_field((string) ($p['title'] ?? ''))
         . "\n- type: " . sanitize_text_field((string) ($p['page_type'] ?? 'Other'))
@@ -1246,7 +1292,13 @@ PROMPT;
       if (is_wp_error($p)) { $errors[$slug] = $p->get_error_message(); continue; }
       $out[$slug] = [
         'page_purpose' => sanitize_text_field((string) ($p['page_purpose'] ?? '')),
-        'sections' => $this->clean_sections((array) ($p['sections'] ?? []), $types, $lang_code),
+        'sections' => $this->clean_sections((array) ($p['sections'] ?? []), $types, $lang_code, [
+          'page_type' => (string) ($page_types[$slug] ?? 'Other'),
+          'lang' => $lang_code,
+          'objections' => $objections,
+          'sector' => $sector_key,
+          'slug' => $slug,
+        ]),
         'seo' => [
           'primary_keyword' => sanitize_text_field((string) ($p['seo']['primary_keyword'] ?? '')),
           'secondary_keywords' => array_values(array_map('sanitize_text_field', array_filter((array) ($p['seo']['secondary_keywords'] ?? []), 'is_string'))),
@@ -1259,7 +1311,7 @@ PROMPT;
     wp_send_json_success(['pages' => $out, 'errors' => $errors]);
   }
 
-  private function clean_sections(array $sections, array $types, string $lang): array {
+  private function clean_sections(array $sections, array $types, string $lang, array $ctx = []): array {
     $clean = [];
     foreach ($sections as $s) {
       if (!is_array($s)) continue;
@@ -1283,6 +1335,14 @@ PROMPT;
     foreach ($clean as $s) { if ($s['section_type'] === 'Headers') $has_head = true; if ($s['section_type'] === 'Footers') $has_foot = true; }
     if (!$has_head) array_unshift($clean, ['section_name' => $nav, 'section_type' => 'Headers', 'purpose' => '', 'key_content' => []]);
     if (!$has_foot) $clean[] = ['section_name' => $foot, 'section_type' => 'Footers', 'purpose' => '', 'key_content' => []];
-    return AISB_Archer_Sitemap_Rules::order_sections($clean);
+    $clean = AISB_Archer_Sitemap_Rules::order_sections($clean);
+    // De vaste vorm van een verkooppagina vastleggen: opening vooraan, bewijs bij de beslissing,
+    // een FAQ voor de laatste oproep als er twijfels zijn, en een afsluiter. In de prompt staat
+    // hetzelfde, maar daar houdt het model zich er meestal aan en af en toe niet.
+    if (class_exists('AISB_Archer_Composition') && AISB_Archer_Composition::on()) {
+      [$clean, $notes] = AISB_Archer_Composition::apply($clean, $ctx + ['lang' => $lang]);
+      if ($notes) error_log('[AISB] Archer opbouw ' . (string) ($ctx['slug'] ?? '?') . ': ' . implode(', ', $notes) . '.');
+    }
+    return $clean;
   }
 }
