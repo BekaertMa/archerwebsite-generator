@@ -1019,6 +1019,9 @@ class AISB_Archer_Generate {
       $rules = AISB_Archer_Sector::prompt_rules_for(AISB_Archer_Sector::detect($prompt));
       if ($rules !== '') $user .= "\n\n" . $rules . "Use this only to decide which pages the site needs (for example a projects, service area or booking page); never add pages the brief gives no content for.\n";
     }
+    // De paginalijst en de afspraken per pagina komen van de klant zelf: als laatste nog eens mee, bindend.
+    $wishes = self::page_wishes($prompt);
+    if ($wishes !== '') $user .= "\n\n" . $wishes;
     $json = $this->ai_multi(['plan' => ['system' => $system, 'user' => $user]], 'plan', 60)['plan'];
     if (is_wp_error($json)) return $json;
     $pages = [];
@@ -1057,6 +1060,22 @@ class AISB_Archer_Generate {
     ];
   }
 
+  /**
+   * De regels over de paginastructuur die de klant zelf gaf, als slotinstructie voor de planstap.
+   * Ze staan al in de brief, maar daar verliezen ze het van de vaste structuurregels in de system prompt.
+   */
+  private static function page_wishes(string $brief): string {
+    $lines = [];
+    foreach (preg_split('/\r\n|\r|\n/', $brief) as $line) {
+      $line = trim($line);
+      if (stripos($line, "Pagina's die zeker moeten") === 0 || stripos($line, 'Afspraken per pagina') === 0) $lines[] = $line;
+    }
+    if (!$lines) return '';
+    return "The client asked for this page structure. It outranks every structure rule in your instructions, including the one that gives each named service its own child page:\n"
+      . implode("\n", $lines)
+      . "\nMake exactly the pages in that list, plus Home, Contact and the detail template pages the rules require. An agreement like \"Behandelingen: samen op één overzichtspagina\" means one overview page WITHOUT a child page per treatment.\n";
+  }
+
   private static function plan_system_prompt(): string {
     return <<<'PROMPT'
 You are a senior information architect for small-business websites. Return ONLY valid JSON.
@@ -1064,17 +1083,18 @@ Create the page structure (no sections) from the brief.
 JSON: {"website_name":"","website_goal":"","primary_audiences":[""],"sitemap":[{"page_title":"","nav_label":"","slug":"","page_type":"Home|Service|About|Contact|Blog|Landing|Legal|Listing|Detail|Other","priority":"Core|Support|Optional","parent_slug":"string|null","page_purpose":"one sentence"}]}
 
 How to structure:
+- The brief outranks every rule below. When it lists the pages to make ("Pagina's die zeker moeten", "maak precies deze pagina's"), make exactly those, plus Home, Contact and the detail template pages these rules require. When it records an agreement per page ("Afspraken per pagina"), follow it to the letter: "Behandelingen: samen op één overzichtspagina" means ONE overview page with no child page per item, and "Sportrevalidatie: eigen pagina" means that one does get its own page.
 - Organise pages the way visitors look for things, not the way the business is organised internally.
 - Search filters are NOT pages. If visitors filter on type, price, brand, location, size or rooms, that happens on ONE overview page that lists all items. Never make separate pages per filter value (no "Houses for sale" and "Apartments for sale"; no page per car brand; no page per price range).
 - Every overview of items that change over time (listings, properties, cars, products, projects, cases, vacancies, events, blog posts, team members) gets exactly ONE detail template page as its child (for example "Pand (detailpagina)", "Wagen (detailpagina)", "Vacature (detailpagina)"). Do not invent individual items.
-- Services the business names in the brief get one child page each under a services overview (max 6). Without named services: one services page, no children.
+- Services the business names in the brief get one child page each under a services overview (max 6), unless the brief's page list or its agreements per page keep them together on one overview page. Without named services: one services page, no children.
 - Industry patterns (use when they fit; translate the titles to the requested language):
   - Real estate: Te koop (overview of all items) > Pand te koop (detail); Te huur (overview of all items) > Pand te huur (detail); Verkopen of verhuren (for owners: valuation request); Over ons; Contact.
   - Car dealer / garage: Occasions (overview of all items) > Wagen (detail); Onderhoud en herstellingen (with the named services as children); Afspraak maken; Over ons; Contact.
   - Restaurant / hospitality: Menukaart; Reserveren; Over ons; Contact (events or catering only if named).
   - Construction / installers: Diensten (named services as children); Realisaties > Realisatie (detail); Offerte aanvragen; Over ons; Contact.
   - Webshop: Shop (overview of all items) > Product (detail); Over ons; Klantenservice; Contact.
-  - Practice / healthcare / professional services: Behandelingen or Diensten (named ones as children); Team; Afspraak maken; Tarieven (only if relevant); Contact.
+  - Practice / healthcare / professional services: Behandelingen or Diensten (named ones as children, unless the brief keeps them on one overview page); Team; Afspraak maken; Tarieven (only if relevant); Contact.
 - Add a conversion page when the brief's goal asks for it (appointment, quote, valuation, reservation), unless the contact page covers it.
 - Always include a Contact page. Add a Blog only when the brief mentions content, news or SEO.
 - Exactly one Home page: slug "home", parent_slug null. Every other page has a parent_slug ("home" for menu pages). Max 3 levels.

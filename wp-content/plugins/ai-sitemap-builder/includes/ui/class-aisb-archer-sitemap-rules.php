@@ -123,6 +123,55 @@ class AISB_Archer_Sitemap_Rules {
     return null;
   }
 
+  /* ───────────────────────── Afspraken van de klant ───────────────────────── */
+
+  /** De waarde van één regel uit de brief ("Pagina's die zeker moeten: ..."), zonder label en punt. */
+  private static function brief_value(string $brief, string $label): string {
+    foreach (preg_split('/\r\n|\r|\n/', $brief) as $line) {
+      $line = trim($line);
+      if (stripos($line, $label) !== 0) continue;
+      $rest = trim(substr($line, strlen($label)));
+      // Het label kan een toelichting tussen haakjes hebben: "Pagina's die zeker moeten (maak precies deze...)".
+      if (strpos($rest, '(') === 0) { $close = strpos($rest, ')'); if ($close !== false) $rest = trim(substr($rest, $close + 1)); }
+      return trim($rest, " .:\t");
+    }
+    return '';
+  }
+
+  /** De pagina's die de klant zelf vroeg, als plain-slugs. Die blijven altijd staan. */
+  public static function asked_pages(string $brief): array {
+    $out = [];
+    foreach (explode(',', self::brief_value($brief, "Pagina's die zeker moeten")) as $name) {
+      $slug = self::plain($name);
+      if ($slug !== '') $out[$slug] = true;
+    }
+    return $out;
+  }
+
+  /**
+   * Pagina's die de klant samen op één overzichtspagina wil, uit "Afspraken per pagina".
+   * "Behandelingen: samen op één overzichtspagina" => ['behandelingen' => true].
+   * Zo'n pagina krijgt geen kindpagina's en ook geen detailpagina.
+   */
+  public static function flat_overviews(string $brief): array {
+    $value = self::brief_value($brief, 'Afspraken per pagina');
+    if ($value === '') return [];
+    $out = [];
+    // "Behandelingen: samen op één pagina, Sportrevalidatie: eigen pagina": splitsen vóór elke "Pagina:".
+    foreach (preg_split('/,\s*(?=[^,:]{2,40}:)/u', $value) as $item) {
+      if (strpos($item, ':') === false) continue;
+      [$page, $note] = array_map('trim', explode(':', $item, 2));
+      $slug = self::plain($page);
+      $note = self::plain($note); // accentloos en met koppeltekens: "samen-op-een-overzichtspagina"
+      if ($slug === '' || $note === '') continue;
+      $together = strpos($note, 'overzichtspagina') !== false
+        || (strpos($note, 'samen') !== false && strpos($note, 'pagina') !== false)
+        || preg_match('/geen-(aparte|eigen|sub)[a-z]*-?pagina/', $note);
+      if ($together) $out[$slug] = true;
+    }
+    return $out;
+  }
+
   /* ───────────────────────── Regels na generatie ───────────────────────── */
 
   /**
@@ -145,10 +194,14 @@ class AISB_Archer_Sitemap_Rules {
     // 2. Altijd een contactpagina.
     $data = $this->ensure_contact($data, $lang);
 
-    // 3. Overzichtspagina's krijgen altijd een subpagina.
-    $data = $this->ensure_detail_pages($data, $lang);
+    // 3. Afspraken van de klant: wat samen op één overzichtspagina moet, krijgt geen subpagina's.
+    $flat = self::flat_overviews($prompt);
+    $data = $this->respect_flat_overviews($data, $flat, self::asked_pages($prompt));
 
-    // 4. Header eerst, footer laatst.
+    // 4. Overzichtspagina's krijgen altijd een subpagina, behalve die van de klant samen moeten.
+    $data = $this->ensure_detail_pages($data, $lang, $flat);
+
+    // 5. Header eerst, footer laatst.
     foreach ($data['sitemap'] as $i => $page) {
       $data['sitemap'][$i]['sections'] = self::order_sections((array) ($page['sections'] ?? []));
     }
@@ -245,7 +298,33 @@ class AISB_Archer_Sitemap_Rules {
     return $data;
   }
 
-  private function ensure_detail_pages(array $data, string $lang): array {
+  /**
+   * Kindpagina's onder een pagina die de klant samen op één overzichtspagina wil: weg.
+   * Pagina's die de klant zelf bij naam vroeg, blijven staan (die zijn geen uitsplitsing van de AI).
+   */
+  private function respect_flat_overviews(array $data, array $flat, array $asked): array {
+    if (!$flat) return $data;
+    $drop = [];
+    foreach ($data['sitemap'] as $p) {
+      $parent = self::plain((string) ($p['parent_slug'] ?? ''));
+      if ($parent === '' || empty($flat[$parent])) continue;
+      $slug = (string) ($p['slug'] ?? '');
+      if ($slug === '') continue;
+      if (isset($asked[self::plain($slug)]) || isset($asked[self::plain((string) ($p['page_title'] ?? ''))])) continue;
+      $drop[$slug] = true;
+    }
+    if (!$drop) return $data;
+    $data['sitemap'] = array_values(array_filter($data['sitemap'], function ($p) use ($drop) {
+      return empty($drop[(string) ($p['slug'] ?? '')]);
+    }));
+    // Wat onder een weggevallen pagina hing, komt onder home.
+    foreach ($data['sitemap'] as $i => $p) {
+      if (!empty($drop[(string) ($p['parent_slug'] ?? '')])) $data['sitemap'][$i]['parent_slug'] = 'home';
+    }
+    return $data;
+  }
+
+  private function ensure_detail_pages(array $data, string $lang, array $flat = []): array {
     $by_slug = [];
     $children = [];
     foreach ($data['sitemap'] as $p) {
@@ -258,6 +337,8 @@ class AISB_Archer_Sitemap_Rules {
     foreach ($data['sitemap'] as $p) {
       $slug = (string) ($p['slug'] ?? '');
       if ($slug === 'home') continue;
+      // De klant wil deze pagina samen op één overzichtspagina: dan ook geen detailpagina.
+      if (!empty($flat[self::plain($slug)]) || !empty($flat[self::plain((string) ($p['page_title'] ?? ''))])) continue;
       $info = self::collection_for($p);
       if (!$info && !empty($p['archer_collection'])) {
         // Een map met veel pagina's op de bestaande site (bv. /occasions/…).
