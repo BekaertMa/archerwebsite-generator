@@ -17,6 +17,7 @@ require_once __DIR__ . '/class-aisb-archer-sector.php';
 require_once __DIR__ . '/class-aisb-archer-checks.php';
 require_once __DIR__ . '/class-aisb-archer-marketing.php';
 require_once __DIR__ . '/class-aisb-archer-copy-coach.php';
+require_once __DIR__ . '/class-aisb-archer-design-coach.php';
 require_once __DIR__ . '/class-aisb-archer-collections.php';
 require_once __DIR__ . '/class-aisb-archer-structure.php';
 require_once __DIR__ . '/class-aisb-archer-megamenu.php';

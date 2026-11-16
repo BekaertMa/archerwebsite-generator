@@ -301,6 +301,8 @@ class AISB_Archer_Generate {
     // Copycoach: de hele pagina nalezen en de zwakste teksten herschrijven (niet bij één losse sectie).
     $out = self::review_page($self, $out, $to_translate, $limits, $system, $pid_now, $slug_now, $ctx);
     $out = self::finish_words($out, $to_translate, $pid_now);
+    // Ontwerpcoach: de opbouw van de pagina nakijken. Die herschrijft niets, hij meet en benoemt.
+    self::design_review_page($self, $out, $to_translate, $limits, $pid_now, $slug_now, $ctx);
     do_action('archer_copy_written', $out, $to_translate, $pid_now, $slug_now);
     return $out;
   }
@@ -475,6 +477,36 @@ class AISB_Archer_Generate {
       $out[$key]['modules'][$mid]['settings'][$sk] = mb_strlen($new) <= $d['max_chars'] * 1.1 ? $new : self::trim_to($new, (int) $d['max_chars']);
     }
     return $out;
+  }
+
+  /**
+   * Nalezing door de ontwerpcoach (AISB_Archer_Design_Coach): de opbouw van de pagina tegen de regels
+   * van de gekozen stijl. Één AI-vraag per pagina, uit te zetten met de filter archer_design_review.
+   * De harde bevindingen (dubbele labels, dezelfde sectie twee keer, tekst die niet past) worden ook
+   * bewaard als de AI-vraag mislukt. Deze stap verandert niets aan de secties.
+   */
+  private static function design_review_page(self $self, array $out, array $to_translate, array $limits, int $pid, string $slug, array $ctx): void {
+    if (!class_exists('AISB_Archer_Design_Coach') || !AISB_Archer_Design_Coach::on()) return;
+    if (!$pid || $slug === '' || count($out) < 3) return;
+    if (!apply_filters('archer_design_review', true, $pid, $slug)) return;
+    $facts = AISB_Archer_Design_Coach::facts($out, $to_translate, $limits);
+    if (count($facts) < 3) return;
+    $findings = AISB_Archer_Design_Coach::findings($facts);
+    $page = array_filter([
+      'title' => (string) ($ctx['page_title'] ?? $slug),
+      'type' => (string) ($ctx['page_type'] ?? ''),
+      'purpose' => (string) ($ctx['page_purpose'] ?? ''),
+    ], 'strlen');
+    $t0 = microtime(true);
+    $guide = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
+    $res = $self->ai_multi(['d' => [
+      'system' => 'You are a web design reviewer for small-business websites. Return ONLY valid JSON.',
+      'user' => AISB_Archer_Design_Coach::review_prompt($page, $facts, $findings, $guide),
+    ]], 'design', 45)['d'] ?? null;
+    if (!is_array($res)) error_log('[AISB] Archer ontwerpcoach: nalezing van ' . $slug . ' mislukt, alleen de harde bevindingen worden bewaard.');
+    AISB_Archer_Design_Coach::remember($pid, $slug, $res, $findings, count($facts));
+    do_action('archer_design_reviewed', $res, $facts, $findings, $pid, $slug);
+    error_log(sprintf('[AISB] Archer ontwerpcoach: %s scoort %s/100, %d harde bevinding(en) (%.1fs).', $slug ?: '?', is_array($res) ? (string) (int) ($res['total'] ?? 0) : '-', count($findings), microtime(true) - $t0));
   }
 
   /**
