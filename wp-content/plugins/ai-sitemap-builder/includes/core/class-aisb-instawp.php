@@ -814,8 +814,18 @@ class AISB_InstaWP {
     $clone = is_array($publish_site['clone'] ?? null) ? $publish_site['clone'] : [];
     $site = is_array($publish_site['site'] ?? null) ? $publish_site['site'] : [];
 
+    // Eerst de stockkopieën naar de nieuwe site, dan pas de pagina's opbouwen: zo wijzen die
+    // meteen naar haar eigen mediabibliotheek.
+    $stock_map = $this->sideload_stock_images(
+      (int) $project->ID,
+      $site,
+      isset($export['style_guide']) && is_array($export['style_guide']) ? $export['style_guide'] : [],
+      $timeout
+    );
+
     $style_guide = $this->normalise_runtime_style_guide(
-      isset($export['style_guide']) && is_array($export['style_guide']) ? $export['style_guide'] : []
+      isset($export['style_guide']) && is_array($export['style_guide']) ? $export['style_guide'] : [],
+      $stock_map
     );
     $section_images = $this->build_export_section_image_map(
       $pages,
@@ -898,7 +908,7 @@ class AISB_InstaWP {
     return $normalised;
   }
 
-  private function normalise_runtime_style_guide(array $guide): array {
+  private function normalise_runtime_style_guide(array $guide, array $stock_map = []): array {
     $colours = [];
     if (!empty($guide['colours']) && is_array($guide['colours'])) {
       foreach ($guide['colours'] as $colour) {
@@ -920,8 +930,8 @@ class AISB_InstaWP {
         if ($full === '' && $thumb === '') continue;
 
         $images[] = [
-          'full' => $this->convert_local_url_to_data_uri($full),
-          'thumb' => $this->convert_local_url_to_data_uri($thumb),
+          'full' => $this->publishable_image_url($full, $image, $stock_map),
+          'thumb' => $this->publishable_image_url($thumb, $image, $stock_map),
         ];
       }
     }
@@ -940,6 +950,99 @@ class AISB_InstaWP {
       // Archer: beweging op de gepubliceerde site (AISB_Archer_Motion), een keer uitgevoerd door het runtime-script.
       'houseJs' => class_exists('AISB_Archer_Motion') ? AISB_Archer_Motion::js() : '',
     ];
+  }
+
+  /**
+   * Het adres van een foto zoals het de gepubliceerde site in gaat.
+   *
+   * Een eigen foto van de klant reist als data-URI mee: die staat alleen hier, dus moet ze in de
+   * pagina zelf zitten. Een kopie van een stockfoto niet. Die zijn groot, er staan er tientallen
+   * op een site, en ze zijn gewoon bij deze server op te halen.
+   *
+   * Dat verschil is geen detail. Project 34294 had 190 binnengehaalde Pixabay-foto's: 58,6 MB op
+   * schijf, 98,5 MB als base64, en nog eens zoveel doordat build_export_section_image_map() het
+   * volle adres per fotovak herhaalt. Omdat build_runtime_payload() per pagina draait, kreeg
+   * wp_json_encode() dat 21 keer te verwerken en liep het geheugen (768 MB) leeg op de eerste.
+   *
+   * Het adres hieronder is bedoeld als tijdelijk: na het publiceren haalt de doelsite de
+   * bestanden een voor een binnen (AISB_InstaWP::sideload_stock_images) en wijst de pagina
+   * daarna naar haar eigen mediabibliotheek.
+   */
+  private function publishable_image_url(string $url, $image = null, array $map = []): string {
+    if ($url === '' || strpos($url, 'data:') === 0) return $url;
+    $id = is_array($image) ? (int) ($image['attachment_id'] ?? 0) : 0;
+    if ($id && (string) get_post_meta($id, '_archer_stock_source', true) !== '') {
+      // Staat de foto al in de mediabibliotheek van de doelsite, dan wijst de pagina daarheen.
+      if (isset($map[$url]) && $map[$url] !== '') return (string) $map[$url];
+      return set_url_scheme($url, 'https');
+    }
+    return $this->convert_local_url_to_data_uri($url);
+  }
+
+  /**
+   * De stockkopieën een voor een naar de mediabibliotheek van de nieuwe site.
+   *
+   * Niet allemaal tegelijk in de pagina (dat was de geheugenfout) en ook niet als blijvende
+   * verwijzing naar deze server: de opgeleverde site hoort haar eigen bestanden te hebben. Per
+   * foto één wp.uploadFile, dus er staat nooit meer dan één bestand tegelijk in het geheugen.
+   *
+   * Dit draait vóór het opbouwen van de pagina's, zodat die meteen naar de nieuwe adressen
+   * wijzen en er achteraf niets herschreven hoeft te worden.
+   *
+   * Wat niet lukt, blijft naar deze server wijzen. Een foto die traag laadt is beter dan een
+   * publicatie die afbreekt. De lijst wordt bij het project bewaard, zodat opnieuw publiceren
+   * niet opnieuw tweehonderd bestanden verstuurt.
+   *
+   * @return array<string,string> adres hier => adres op de doelsite
+   */
+  private function sideload_stock_images(int $project_id, array $site, array $guide, int $timeout): array {
+    if (empty($site['xmlrpc_url']) || empty($site['username'])) return [];
+    $sleutel = '_aisb_stock_media_' . substr(md5((string) ($site['site_url'] ?? $site['xmlrpc_url'])), 0, 12);
+    $map = get_post_meta($project_id, $sleutel, true);
+    $map = is_array($map) ? $map : [];
+
+    $home = untrailingslashit(home_url());
+    $todo = [];
+    foreach ((array) ($guide['images'] ?? []) as $img) {
+      if (!is_array($img)) continue;
+      $id = (int) ($img['attachment_id'] ?? 0);
+      if (!$id || (string) get_post_meta($id, '_archer_stock_source', true) === '') continue;
+      foreach (['full', 'thumb'] as $k) {
+        $u = trim((string) ($img[$k] ?? ''));
+        if ($u === '' || isset($map[$u]) || strpos($u, $home) !== 0) continue;
+        $todo[$u] = 1;
+      }
+    }
+    if (!$todo) return $map;
+
+    $gelukt = 0;
+    $mislukt = 0;
+    $start = microtime(true);
+    foreach (array_keys($todo) as $u) {
+      // Ruim voor de tijdslimiet stoppen: wat overblijft gaat bij de volgende publicatie mee.
+      if (microtime(true) - $start > 420) { $mislukt += count($todo) - $gelukt - $mislukt; break; }
+      $pad = wp_normalize_path(untrailingslashit(ABSPATH) . substr($u, strlen($home)));
+      if (!is_file($pad) || !is_readable($pad)) { $mislukt++; continue; }
+      $type = (string) (wp_check_filetype(basename($pad))['type'] ?? '');
+      if ($type === '') { $mislukt++; continue; }
+      $bytes = @file_get_contents($pad);
+      if ($bytes === false || $bytes === '') { $mislukt++; continue; }
+      if (!class_exists('IXR_Base64')) require_once ABSPATH . WPINC . '/class-IXR.php';
+      $res = $this->call_xmlrpc($site['xmlrpc_url'], $timeout, 'wp.uploadFile', [
+        1,
+        (string) $site['username'],
+        (string) ($site['password'] ?? ''),
+        ['name' => basename($pad), 'type' => $type, 'bits' => new IXR_Base64($bytes), 'overwrite' => true],
+      ], 'stockfoto naar de doelsite');
+      unset($bytes);
+      if (is_wp_error($res) || !is_array($res) || empty($res['url'])) { $mislukt++; continue; }
+      $map[$u] = (string) $res['url'];
+      $gelukt++;
+    }
+    update_post_meta($project_id, $sleutel, $map);
+    error_log('[AISB] stockfoto\'s naar de doelsite: ' . $gelukt . ' gelukt, ' . $mislukt . ' niet, in '
+      . round(microtime(true) - $start, 1) . 's');
+    return $map;
   }
 
   private function normalise_runtime_typography($typography): array {
