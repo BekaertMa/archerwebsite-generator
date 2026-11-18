@@ -119,6 +119,121 @@ class AISB_Archer_Stock {
     return preg_match('#photo-[0-9a-f]+-[0-9a-f]+|photos/\d+#i', $url, $m) ? strtolower($m[0]) : $url;
   }
 
+  /* ───────────────────────── Waar een foto woont ───────────────────────── */
+
+  /**
+   * Hotlinken of een eigen kopie? De bibliotheken vragen daar iets anders in, en dat verschil is
+   * geen detail maar een voorwaarde van hun API:
+   * - Unsplash verplicht hotlinken ("All API uses must use the hotlinked image URLs returned by the
+   *   API under the photo.urls properties", en dat geldt voor elk gebruik, niet enkel voor
+   *   zoekresultaten). Hun foto's blijven dus bij hen staan.
+   * - Pexels laat het vrij.
+   * - Pixabay verbiedt permanent hotlinken en vraagt de foto naar de eigen server te halen.
+   * Een bron die hier niet in staat, blijft hotlinken. Dat is de veilige kant: te veel kopiëren
+   * breekt een voorwaarde, te weinig kopiëren breekt hoogstens een foto.
+   */
+  const HOSTING = ['Unsplash' => 'hotlink', 'Pexels' => 'kopie', 'Pixabay' => 'kopie'];
+
+  public static function hosting(string $source): string {
+    return self::HOSTING[$source] ?? 'hotlink';
+  }
+
+  /**
+   * Een stockfoto naar de mediabibliotheek halen, als haar bron dat toelaat of vraagt.
+   * Lukt het niet, dan blijft ze staan waar ze stond: een site die een foto elders ophaalt is
+   * beter dan een site met een gat. De fotograaf, de link en de bron blijven hoe dan ook bewaard,
+   * want de bronvermelding hangt daaraan en niet aan het adres van het bestand.
+   */
+  public static function localise(array $photo, int $pid = 0): array {
+    if (self::hosting((string) ($photo['source'] ?? '')) !== 'kopie') return $photo;
+    if (!empty($photo['attachment_id']) || !empty($photo['uploaded'])) return $photo;
+    $full = (string) ($photo['full'] ?? '');
+    if ($full === '' || self::is_local($full)) return $photo;
+
+    $id = self::existing($full) ?: self::store($full, $photo, $pid);
+    if (!$id) return $photo;
+    $local = set_url_scheme((string) wp_get_attachment_url($id));
+    if ($local === '') return $photo;
+
+    $photo['attachment_id'] = $id;
+    $photo['remote'] = $full;
+    $photo['full'] = $local;
+    $photo['thumb'] = set_url_scheme((string) (wp_get_attachment_image_url($id, 'medium_large') ?: $local));
+    return $photo;
+  }
+
+  private static function is_local(string $url): bool {
+    $h = (string) wp_parse_url($url, PHP_URL_HOST);
+    return $h === '' || strcasecmp($h, (string) wp_parse_url(home_url(), PHP_URL_HOST)) === 0;
+  }
+
+  /** Dezelfde foto al eens binnengehaald? Dan die hergebruiken in plaats van opnieuw te downloaden. */
+  private static function existing(string $url): int {
+    $q = get_posts(['post_type' => 'attachment', 'post_status' => 'inherit', 'numberposts' => 1,
+      'fields' => 'ids', 'meta_key' => '_archer_stock_key', 'meta_value' => self::pkey($url)]);
+    return $q ? (int) $q[0] : 0;
+  }
+
+  /** @return int attachment-id, of 0 als het niet lukte. */
+  private static function store(string $url, array $photo, int $pid): int {
+    $res = wp_remote_get($url, ['timeout' => 25, 'redirection' => 3]);
+    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return 0;
+    $bytes = (string) wp_remote_retrieve_body($res);
+    if ($bytes === '' || strlen($bytes) > 12 * MB_IN_BYTES) return 0;
+    // Wat binnenkomt is van een derde: eerst kijken of het werkelijk een beeld is, en welk.
+    $info = @getimagesizefromstring($bytes);
+    $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? '';
+    if ($ext === '') return 0;
+
+    $alt = (string) ($photo['alt'] ?? '');
+    $naam = 'archer-' . sanitize_title(strtolower((string) ($photo['source'] ?? 'stock'))) . '-'
+      . sanitize_title(mb_substr($alt !== '' ? $alt : 'foto', 0, 40)) . '-' . wp_generate_password(6, false) . '.' . $ext;
+    $up = wp_upload_bits($naam, null, $bytes);
+    if (!empty($up['error']) || empty($up['file'])) return 0;
+
+    $id = wp_insert_attachment(['post_mime_type' => $info['mime'], 'post_title' => $alt !== '' ? $alt : $naam,
+      'post_status' => 'inherit', 'post_parent' => 0], $up['file']);
+    if (is_wp_error($id) || !$id) { @unlink($up['file']); return 0; }
+    if (!function_exists('wp_generate_attachment_metadata')) require_once ABSPATH . 'wp-admin/includes/image.php';
+    wp_update_attachment_metadata($id, wp_generate_attachment_metadata($id, $up['file']));
+    if ($alt !== '') update_post_meta($id, '_wp_attachment_image_alt', $alt);
+    // De herkomst blijft aan het beeld hangen, niet aan de stijlgids: zo weten we later nog
+    // waar het vandaan komt, ook als het project opnieuw opgebouwd wordt.
+    update_post_meta($id, '_archer_stock_key', self::pkey($url));
+    update_post_meta($id, '_archer_stock_source', (string) ($photo['source'] ?? ''));
+    update_post_meta($id, '_archer_stock_link', (string) ($photo['link'] ?? ''));
+    update_post_meta($id, '_archer_stock_photographer', (string) ($photo['photographer'] ?? ''));
+    if ($pid) update_post_meta($id, '_archer_project', $pid);
+    return (int) $id;
+  }
+
+  /**
+   * De foto's van een bestaand project alsnog binnenhalen. Geeft terug hoeveel er omgezet zijn,
+   * hoeveel er bij hun bron blijven (Unsplash) en hoeveel er niet lukten.
+   */
+  public static function backfill(int $pid, bool $dry = false): array {
+    $g = json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true);
+    if (!is_array($g)) $g = [];
+    $imgs = is_array($g['images'] ?? null) ? array_values($g['images']) : [];
+    $n = ['om' => 0, 'blijft' => 0, 'mislukt' => 0, 'al_lokaal' => 0];
+    foreach ($imgs as $i => $img) {
+      if (!is_array($img) || empty($img['full'])) continue;
+      if (!empty($img['attachment_id']) || self::is_local((string) $img['full'])) { $n['al_lokaal']++; continue; }
+      if (self::hosting((string) ($img['source'] ?? '')) !== 'kopie') { $n['blijft']++; continue; }
+      if ($dry) { $n['om']++; continue; }
+      $nieuw = self::localise($img, $pid);
+      if (empty($nieuw['attachment_id'])) { $n['mislukt']++; continue; }
+      $imgs[$i] = $nieuw;
+      $n['om']++;
+    }
+    if (!$dry && $n['om']) {
+      $g['images'] = $imgs;
+      update_post_meta($pid, 'aisb_style_guide', wp_slash(wp_json_encode($g, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)));
+      update_post_meta($pid, 'aisb_project_updated_at', gmdate('c'));
+    }
+    return $n;
+  }
+
   /** Om en om uit beide lijsten, zonder dubbele foto's. */
   private static function mix(array $a, array $b, int $max): array {
     $out = [];

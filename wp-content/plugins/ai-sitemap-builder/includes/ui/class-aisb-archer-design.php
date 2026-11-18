@@ -377,7 +377,8 @@ class AISB_Archer_Design {
       } else {
         $img = self::clean_stock($pick);
         if (!$img) wp_send_json_error(['message' => 'Ongeldige foto.'], 400);
-        $images[$slot] = $img;
+        // Naar de mediabibliotheek als de bron dat toelaat (AISB_Archer_Stock::HOSTING).
+        $images[$slot] = class_exists('AISB_Archer_Stock') ? AISB_Archer_Stock::localise($img, $pid) : $img;
       }
       $g['images'] = array_slice($images, 0, $slots['total']);
       $g = self::remember_slots($g, $slots);
@@ -447,7 +448,8 @@ class AISB_Archer_Design {
         if (!$idx) break;
         if (empty($pick['full']) || isset($taken[AISB_Archer_Stock::pkey($pick['full'])])) continue;
         $taken[AISB_Archer_Stock::pkey($pick['full'])] = 1;
-        $images[array_shift($idx)] = $pick;
+        // Het adres bij de bron blijft de sleutel tegen dubbels; wat in de gids komt, is de kopie.
+        $images[array_shift($idx)] = AISB_Archer_Stock::localise($pick, $pid);
       }
     }
     $g['images'] = $images;
