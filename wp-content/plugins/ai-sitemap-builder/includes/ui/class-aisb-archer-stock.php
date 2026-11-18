@@ -15,6 +15,7 @@ if (!defined('ABSPATH')) exit;
 class AISB_Archer_Stock {
 
   const OPTION = 'archer_pexels_key';
+  const OPTION_PIXABAY = 'archer_pixabay_key';
 
   public function init(): void {
     add_action('wp_ajax_aisb_archer_stock_page', [$this, 'ajax_page']);
@@ -32,8 +33,46 @@ class AISB_Archer_Stock {
     return defined('AISB_UNSPLASH_KEY') && AISB_UNSPLASH_KEY ? (string) AISB_UNSPLASH_KEY : '';
   }
 
+  public static function pixabay_key(): string {
+    if (defined('AISB_PIXABAY_KEY') && AISB_PIXABAY_KEY) return (string) AISB_PIXABAY_KEY;
+    return (string) get_option(self::OPTION_PIXABAY, '');
+  }
+
+  /**
+   * De bronnen die een sleutel hebben, in een vaste volgorde: naam => de methode die haar bevraagt.
+   * Alles wat met bronnen werkt loopt hierlangs, zodat er een vierde bij kan zonder dat elke
+   * zoekfunctie opnieuw aangepast moet worden.
+   *
+   * @return array<string,callable>
+   */
+  public static function readers(): array {
+    $out = [];
+    if (self::unsplash_key()) $out['Unsplash'] = [self::class, 'unsplash'];
+    if (self::pexels_key()) $out['Pexels'] = [self::class, 'pexels'];
+    if (self::pixabay_key()) $out['Pixabay'] = [self::class, 'pixabay'];
+    return $out;
+  }
+
   public static function sources(): array {
-    return array_values(array_filter([self::unsplash_key() ? 'Unsplash' : '', self::pexels_key() ? 'Pexels' : '']));
+    return array_keys(self::readers());
+  }
+
+  /**
+   * Elke ingestelde bron bevragen en de lijsten apart teruggeven, zodat mix() ze om beurten
+   * kan nemen. Een bron die niet antwoordt, valt gewoon weg.
+   *
+   * @return array{lists: array<int,array>, pages: int}
+   */
+  private static function fetch(string $q, int $per, int $page): array {
+    $lists = [];
+    $pages = 1;
+    foreach (self::readers() as $lees) {
+      $r = $lees($q, $per, $page);
+      if (is_wp_error($r)) continue;
+      if (!empty($r['images'])) $lists[] = $r['images'];
+      $pages = max($pages, (int) $r['total_pages']);
+    }
+    return ['lists' => $lists, 'pages' => $pages];
   }
 
   /* ───────────────────────── Instellingen ───────────────────────── */
@@ -43,11 +82,17 @@ class AISB_Archer_Stock {
    * settings-groep, zodat de knop "Wijzigingen opslaan" van die pagina het mee bewaart.
    */
   public function register(): void {
-    register_setting('aisb_settings_group', self::OPTION, ['type' => 'string', 'sanitize_callback' => fn($v) => sanitize_text_field((string) $v), 'show_in_rest' => false, 'default' => '']);
+    $schoon = ['type' => 'string', 'sanitize_callback' => fn($v) => sanitize_text_field((string) $v), 'show_in_rest' => false, 'default' => ''];
+    register_setting('aisb_settings_group', self::OPTION, $schoon);
+    register_setting('aisb_settings_group', self::OPTION_PIXABAY, $schoon);
     add_settings_section('aisb_stock', "Stockfoto's", function () {
-      echo '<p>Met een Pexels-sleutel komen de stockfoto\'s in de stap Foto\'s uit Unsplash én Pexels. Een gratis sleutel vraag je aan op <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a>. Leeg laten om alleen Unsplash te gebruiken.</p>';
+      echo '<p>Elke sleutel die je hier invult, komt erbij als bron in de stap Foto\'s: de foto\'s komen dan om beurten uit elke bron. Gratis sleutels vraag je aan op '
+        . '<a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a> en '
+        . '<a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener">pixabay.com/api/docs</a>. Leeg laten om die bron over te slaan.</p>';
+      echo '<p class="description">Pixabay staat niet toe dat een gepubliceerde site rechtstreeks naar hun adressen verwijst, dus hun foto\'s worden naar de mediabibliotheek gehaald. Unsplash verplicht net het omgekeerde en blijft bij de bron.</p>';
     }, 'ai-sitemap-builder');
     add_settings_field('archer_pexels_key', 'Pexels API Key', [$this, 'field'], 'ai-sitemap-builder', 'aisb_stock', ['label_for' => 'archer_pexels_key']);
+    add_settings_field('archer_pixabay_key', 'Pixabay API Key', [$this, 'field_pixabay'], 'ai-sitemap-builder', 'aisb_stock', ['label_for' => 'archer_pixabay_key']);
   }
 
   public function field(): void {
@@ -57,6 +102,16 @@ class AISB_Archer_Stock {
     }
     echo '<input type="password" id="archer_pexels_key" name="' . esc_attr(self::OPTION) . '" value="' . esc_attr((string) get_option(self::OPTION, '')) . '" class="regular-text" autocomplete="off">';
     echo '<p class="description">' . (self::unsplash_key() ? 'Unsplash staat aan (AISB_UNSPLASH_KEY in wp-config.php).' : 'Er is geen Unsplash-sleutel ingesteld.') . '</p>';
+  }
+
+  public function field_pixabay(): void {
+    if (defined('AISB_PIXABAY_KEY') && AISB_PIXABAY_KEY) {
+      echo '<p><strong>Ingesteld in wp-config.php (AISB_PIXABAY_KEY).</strong> Die waarde gaat voor.</p>';
+      return;
+    }
+    echo '<input type="password" id="archer_pixabay_key" name="' . esc_attr(self::OPTION_PIXABAY) . '" value="' . esc_attr((string) get_option(self::OPTION_PIXABAY, '')) . '" class="regular-text" autocomplete="off">';
+    $nu = self::sources();
+    echo '<p class="description">' . ($nu ? 'Bronnen die nu meedoen: ' . esc_html(implode(', ', $nu)) . '.' : 'Er doet nog geen enkele bron mee.') . '</p>';
   }
 
   /* ───────────────────────── Toegang ───────────────────────── */
@@ -112,11 +167,54 @@ class AISB_Archer_Stock {
   }
 
   /**
+   * Pixabay. Twee dingen die hun API vraagt en de andere twee bronnen niet:
+   * - het antwoord moet 24 uur bewaard worden, vandaar de transient;
+   * - naar hun adressen mag een gepubliceerde site niet blijven verwijzen, dus komen hun foto's
+   *   via AISB_Archer_Stock::HOSTING in de mediabibliotheek terecht.
+   * largeImageURL is 1280px breed; fullHD en origineel vragen een goedgekeurd account.
+   *
+   * @return array{images: array, total_pages: int}|WP_Error
+   */
+  private static function pixabay(string $q, int $per, int $page) {
+    $key = self::pixabay_key();
+    if (!$key) return new WP_Error('no_key', 'Geen Pixabay-sleutel');
+    $per = min(200, max(3, $per));
+    $args = ['key' => $key, 'q' => $q, 'image_type' => 'photo', 'orientation' => 'horizontal',
+      'per_page' => $per, 'page' => max(1, $page), 'safesearch' => 'true'];
+    // De sleutel hoort niet in de naam van de transient.
+    $cache = 'aisb_px_' . md5($q . '|' . $per . '|' . $page);
+    $body = get_transient($cache);
+    if (!is_array($body)) {
+      $res = wp_remote_get(add_query_arg($args, 'https://pixabay.com/api/'), ['timeout' => 15]);
+      if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', 'Pixabay gaf geen antwoord');
+      $body = json_decode((string) wp_remote_retrieve_body($res), true);
+      if (!is_array($body)) return new WP_Error('http', 'Pixabay gaf geen bruikbaar antwoord');
+      set_transient($cache, $body, DAY_IN_SECONDS);
+    }
+    $out = [];
+    foreach ((array) ($body['hits'] ?? []) as $p) {
+      $vol = (string) ($p['largeImageURL'] ?? '');
+      if ($vol === '') continue;
+      // tags is "brood, bakkerij, oven": de eerste twee lezen als alt-tekst beter dan alle zes.
+      $tags = array_slice(array_filter(array_map('trim', explode(',', (string) ($p['tags'] ?? '')))), 0, 2);
+      $out[] = ['thumb' => (string) ($p['webformatURL'] ?? $vol), 'full' => $vol,
+        'alt' => $tags ? implode(', ', $tags) : $q,
+        'photographer' => (string) ($p['user'] ?? ''), 'link' => (string) ($p['pageURL'] ?? ''), 'source' => 'Pixabay'];
+    }
+    $total = (int) ($body['totalHits'] ?? 0);
+    return ['images' => $out, 'total_pages' => max(1, (int) ceil($total / $per))];
+  }
+
+  /**
    * Sleutel van een foto: Unsplash geeft dezelfde foto met andere parameters terug (ixid, crop),
    * dus vergelijken op "photo-…" of Pexels "photos/123", niet op het hele adres.
    */
   public static function pkey(string $url): string {
-    return preg_match('#photo-[0-9a-f]+-[0-9a-f]+|photos/\d+#i', $url, $m) ? strtolower($m[0]) : $url;
+    // Unsplash en Pexels geven dezelfde foto met andere parameters terug (ixid, crop), en Pixabay
+    // met een andere maat achteraan (…-1867459_1280.jpg), dus vergelijken op het nummer erin.
+    if (preg_match('#photo-[0-9a-f]+-[0-9a-f]+|photos/\d+#i', $url, $m)) return strtolower($m[0]);
+    if (preg_match('#[-_](\d{5,})_\d{3,4}\.(?:jpe?g|png)#i', $url, $m)) return 'pixabay/' . $m[1];
+    return $url;
   }
 
   /* ───────────────────────── Waar een foto woont ───────────────────────── */
@@ -234,12 +332,21 @@ class AISB_Archer_Stock {
     return $n;
   }
 
-  /** Om en om uit beide lijsten, zonder dubbele foto's. */
-  private static function mix(array $a, array $b, int $max): array {
+  /**
+   * Om beurten uit elke lijst, zonder dubbele foto's. Een lijst die eerder leeg raakt dan de
+   * andere houdt de beurten niet tegen.
+   *
+   * @param array<int,array> $lists
+   */
+  private static function mix(array $lists, int $max): array {
+    $lists = array_values(array_filter($lists, fn($l) => is_array($l) && $l));
     $out = [];
     $seen = [];
-    for ($i = 0; count($out) < $max && ($i < count($a) || $i < count($b)); $i++) {
-      foreach ([$a[$i] ?? null, $b[$i] ?? null] as $img) {
+    $langste = 0;
+    foreach ($lists as $l) $langste = max($langste, count($l));
+    for ($i = 0; $i < $langste && count($out) < $max; $i++) {
+      foreach ($lists as $l) {
+        $img = $l[$i] ?? null;
         if (!$img || empty($img['full']) || isset($seen[self::pkey($img['full'])])) continue;
         $seen[self::pkey($img['full'])] = 1;
         $out[] = $img;
@@ -322,21 +429,14 @@ class AISB_Archer_Stock {
     $skip = array_flip(array_map([self::class, 'pkey'], array_filter(array_map('strval', $exclude))));
     $kw = self::page_keyword($pid, $slug, $title, $sections);
     $want = $need + count($skip) + 4;
-    $u = [];
-    $x = [];
-    $ur = self::unsplash($kw, min(30, $want), 1);
-    if (!is_wp_error($ur)) $u = $ur['images'];
-    $xr = self::pexels($kw, min(80, $want), 1);
-    if (!is_wp_error($xr)) $x = $xr['images'];
-    $pool = array_values(array_filter(self::mix($u, $x, $want + 10), fn($img) => !isset($skip[self::pkey($img['full'])])));
+    $eerste = self::fetch($kw, $want, 1);
+    $pool = array_values(array_filter(self::mix($eerste['lists'], $want + 10), fn($img) => !isset($skip[self::pkey($img['full'])])));
     foreach ($pool as $img) $skip[self::pkey($img['full'])] = 1;
     // Te weinig (veel foto's staan al op andere pagina's): volgende resultaatpagina's, dan het algemene zoekwoord.
     $tries = [[$kw, 2], [$kw, 3], [self::keyword($pid), 1], [self::keyword($pid), 2]];
     foreach ($tries as [$q, $pg]) {
       if (count($pool) >= $need) break;
-      $u2 = self::unsplash($q, 30, $pg);
-      $x2 = self::pexels($q, 40, $pg);
-      $more = self::mix(is_wp_error($u2) ? [] : $u2['images'], is_wp_error($x2) ? [] : $x2['images'], 70);
+      $more = self::mix(self::fetch($q, 40, $pg)['lists'], 70);
       foreach ($more as $img) {
         if (count($pool) >= $need) break;
         if (isset($skip[self::pkey($img['full'])])) continue;
@@ -362,59 +462,48 @@ class AISB_Archer_Stock {
     $q = trim($q);
     if ($q === '') $q = $slug !== '' ? self::page_keyword($pid, $slug, $title, $sections) : self::keyword($pid);
     $page = max(1, min(50, $page));
-    $u = self::unsplash($q, 12, $page);
-    $x = self::pexels($q, 12, $page);
-    $ui = is_wp_error($u) ? [] : $u['images'];
-    $xi = is_wp_error($x) ? [] : $x['images'];
-    if (!$ui && !$xi) return new WP_Error('no_photos', 'Geen foto\'s gevonden voor "' . $q . '".');
-    $pages = max(is_wp_error($u) ? 1 : $u['total_pages'], is_wp_error($x) ? 1 : $x['total_pages']);
-    return ['images' => self::mix($ui, $xi, 24), 'keyword' => $q, 'page' => $page, 'total_pages' => min($pages, 50)];
+    $r = self::fetch($q, 12, $page);
+    if (!$r['lists']) return new WP_Error('no_photos', 'Geen foto\'s gevonden voor "' . $q . '".');
+    return ['images' => self::mix($r['lists'], 24), 'keyword' => $q, 'page' => $page, 'total_pages' => min($r['pages'], 50)];
   }
 
   /* ───────────────────────── AJAX ───────────────────────── */
 
   /** Alle foto's voor de wireframes in één keer (stap Foto's). */
   public function ajax_auto(): void {
-    if (!self::pexels_key()) return; // geen Pexels: de stijlgids doet het zelf
+    // Maar één bron? Dan doet de stijlgids het zelf, zoals vroeger.
+    if (count(self::readers()) < 2) return;
     $pid = $this->guard(true);
     @set_time_limit(60);
     $need = isset($_POST['total_needed']) ? max(1, min(150, (int) $_POST['total_needed'])) : 30;
     $kw = self::keyword($pid);
-    $half = (int) ceil($need / 2) + 4;
-    $u = [];
-    for ($p = 1; count($u) < $half && $p <= 5; $p++) {
-      $r = self::unsplash($kw, 30, $p);
-      if (is_wp_error($r) || !$r['images']) break;
-      $u = array_merge($u, $r['images']);
+    // Elke bron hoeft maar haar deel te leveren, met wat reserve voor de dubbels.
+    $deel = (int) ceil($need / max(1, count(self::readers()))) + 4;
+    $lists = [];
+    foreach (self::readers() as $naam => $lees) {
+      $eigen = [];
+      for ($p = 1; count($eigen) < $deel && $p <= 5; $p++) {
+        $r = $lees($kw, min(80, $deel), $p);
+        if (is_wp_error($r) || !$r['images']) break;
+        $eigen = array_merge($eigen, $r['images']);
+      }
+      if ($eigen) $lists[] = $eigen;
     }
-    $x = [];
-    for ($p = 1; count($x) < $need && $p <= 2; $p++) {
-      $r = self::pexels($kw, 80, $p);
-      if (is_wp_error($r) || !$r['images']) break;
-      $x = array_merge($x, $r['images']);
-    }
-    $images = self::mix($u, $x, $need);
+    $images = self::mix($lists, $need);
     if (!$images) wp_send_json_error(['message' => 'Geen stockfoto\'s gevonden voor "' . $kw . '".']);
     wp_send_json_success(['images' => $images, 'keyword' => $kw, 'sources' => self::sources()]);
   }
 
   /** Andere foto zoeken (venster bij het wisselen van een foto). */
   public function ajax_search(): void {
-    if (!self::pexels_key()) return;
+    if (count(self::readers()) < 2) return;
     $this->guard(false);
     $q = isset($_POST['keyword']) ? sanitize_text_field(wp_unslash($_POST['keyword'])) : '';
     if ($q === '') wp_send_json_error(['message' => 'Geen zoekwoord.'], 400);
     $page = isset($_POST['page']) ? max(1, (int) $_POST['page']) : 1;
     $per = isset($_POST['per_page']) ? max(2, min(30, (int) $_POST['per_page'])) : 12;
-    $half = (int) ceil($per / 2);
-    $u = self::unsplash($q, $half, $page);
-    $x = self::pexels($q, $half, $page);
-    $ui = is_wp_error($u) ? [] : $u['images'];
-    $xi = is_wp_error($x) ? [] : $x['images'];
-    // Valt één bron weg, dan vult de andere de hele pagina.
-    if (!$ui && !is_wp_error($x)) { $r = self::pexels($q, $per, $page); $xi = is_wp_error($r) ? $xi : $r['images']; }
-    if (!$xi && !is_wp_error($u)) { $r = self::unsplash($q, $per, $page); $ui = is_wp_error($r) ? $ui : $r['images']; }
-    $pages = max(is_wp_error($u) ? 1 : $u['total_pages'], is_wp_error($x) ? 1 : $x['total_pages']);
-    wp_send_json_success(['images' => self::mix($ui, $xi, $per), 'page' => $page, 'total_pages' => min($pages, 50)]);
+    // Elke bron vraagt het volle aantal: valt er één weg, dan vullen de andere de pagina.
+    $r = self::fetch($q, $per, $page);
+    wp_send_json_success(['images' => self::mix($r['lists'], $per), 'page' => $page, 'total_pages' => min($r['pages'], 50)]);
   }
 }

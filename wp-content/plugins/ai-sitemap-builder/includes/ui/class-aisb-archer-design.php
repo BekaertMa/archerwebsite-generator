@@ -516,12 +516,12 @@ class AISB_Archer_Design {
     ];
   }
 
-  /** Een stockfoto uit de browser: enkel https-adressen van Unsplash of Pexels, en gekende velden. */
+  /** Een stockfoto uit de browser: enkel https-adressen van de gekende bronnen, en gekende velden. */
   private static function clean_stock(array $p): ?array {
     $ok = function ($u) {
       $u = esc_url_raw((string) $u);
       $host = (string) wp_parse_url($u, PHP_URL_HOST);
-      return (strpos($u, 'https://') === 0 && preg_match('/(^|\.)(unsplash\.com|pexels\.com)$/i', $host)) ? $u : '';
+      return (strpos($u, 'https://') === 0 && preg_match('/(^|\.)(unsplash\.com|pexels\.com|pixabay\.com)$/i', $host)) ? $u : '';
     };
     $full = $ok($p['full'] ?? '');
     if ($full === '') return null;
@@ -531,7 +531,7 @@ class AISB_Archer_Design {
       'alt' => sanitize_text_field((string) ($p['alt'] ?? '')),
       'photographer' => sanitize_text_field((string) ($p['photographer'] ?? '')),
       'link' => esc_url_raw((string) ($p['link'] ?? '')),
-      'source' => in_array(($p['source'] ?? ''), ['Unsplash', 'Pexels'], true) ? $p['source'] : 'Unsplash',
+      'source' => in_array(($p['source'] ?? ''), ['Unsplash', 'Pexels', 'Pixabay'], true) ? $p['source'] : 'Unsplash',
     ];
   }
 
@@ -544,7 +544,7 @@ class AISB_Archer_Design {
   }
 
   private static function is_stock($img): bool {
-    return !self::empty_img($img) && empty($img['uploaded']) && (!empty($img['source']) || preg_match('/unsplash|pexels/i', (string) ($img['full'] ?? '')));
+    return !self::empty_img($img) && empty($img['uploaded']) && (!empty($img['source']) || preg_match('/unsplash|pexels|pixabay/i', (string) ($img['full'] ?? '')));
   }
 
   /* ───────────────────────── Hulp ───────────────────────── */
