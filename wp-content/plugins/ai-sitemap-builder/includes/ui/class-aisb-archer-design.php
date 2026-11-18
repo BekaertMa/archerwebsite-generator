@@ -357,6 +357,16 @@ class AISB_Archer_Design {
       if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
       $g = self::remember_slots($res, self::slots($pid));
       self::save_guide($pid, $g);
+    } elseif ($op === 'fill_many') {
+      // Meerdere pagina's, één schrijfbeurt op de stijlgids.
+      @set_time_limit(180);
+      $slugs = json_decode((string) wp_unslash($_POST['page_slugs'] ?? '[]'), true);
+      $slugs = array_values(array_filter(array_map(fn($s) => sanitize_title((string) $s), (array) $slugs)));
+      if (!$slugs) wp_send_json_error(['message' => 'Geen pagina\'s opgegeven.'], 400);
+      $res = self::fill_pages($pid, $g, array_slice($slugs, 0, 30), !empty($_POST['replace']));
+      if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
+      $g = self::remember_slots($res, self::slots($pid));
+      self::save_guide($pid, $g);
     } elseif ($op === 'set') {
       // Eén fotovak wisselen (fotokiezer op het canvas): een eigen foto, een stockfoto of leeg.
       $slot = (int) ($_POST['slot'] ?? -1);
@@ -401,6 +411,74 @@ class AISB_Archer_Design {
    * Vult de fotovakken van één pagina: eigen foto's eerst (verdeeld over de pagina's), dan stockfoto's
    * als de voorkeur dat toelaat. Met $replace worden ook bestaande stockfoto's vervangen.
    */
+  /**
+   * Meerdere pagina's in één keer vullen. Het verdelen gebeurt hier precies zoals in fill_page -
+   * eigen foto's eerst, dan stock, pagina na pagina zodat niets dubbel komt - maar het wachten
+   * op de AI, op de bronnen en op de downloads is samengenomen in AISB_Archer_Stock::for_pages().
+   *
+   * @param array<int,string> $slugs
+   * @return array|WP_Error de stijlgids met alle pagina's gevuld
+   */
+  private static function fill_pages(int $pid, array $g, array $slugs, bool $replace) {
+    if (!class_exists('AISB_Archer_Stock')) return $g;
+    $slots = self::slots($pid);
+    $images = is_array($g['images'] ?? null) ? array_values($g['images']) : [];
+    while (count($images) < $slots['total']) $images[] = self::empty_slot();
+    if (count($images) > $slots['total']) $images = array_slice($images, 0, $slots['total']);
+
+    $pref = (string) ($g['archerPhotoPref'] ?? 'mix');
+    $own = is_array($g['uploadedImages'] ?? null) ? array_values($g['uploadedImages']) : [];
+    $pages_with = max(1, count(array_filter($slots['pages'], fn($p) => $p['count'] > 0)));
+
+    // 1. Per pagina de lege vakken opzoeken, en de eigen foto's er alvast in (zoals fill_page).
+    $open = [];
+    foreach ($slugs as $slug) {
+      $page = null;
+      foreach ($slots['pages'] as $p) if ($p['slug'] === $slug) $page = $p;
+      if (!$page || !$page['count']) continue;
+      $idx = [];
+      for ($i = $page['start']; $i < $page['start'] + $page['count']; $i++) {
+        if (self::empty_img($images[$i]) || ($replace && self::is_stock($images[$i]))) $idx[] = $i;
+      }
+      if (!$idx) continue;
+      if ($own && !$replace) {
+        $used = [];
+        foreach ($images as $img) if (is_array($img) && !empty($img['attachment_id'])) $used[(int) $img['attachment_id']] = 1;
+        $free = array_values(array_filter($own, fn($o) => !isset($used[(int) ($o['attachment_id'] ?? 0)])));
+        $share = $pref === 'own' ? count($idx) : max(1, (int) ceil(count($own) / $pages_with));
+        if ($pref === 'own' && count($free) < count($idx)) $free = array_merge($free, $own);
+        foreach (array_slice($free, 0, min($share, count($idx))) as $o) $images[array_shift($idx)] = $o;
+      }
+      if ($idx && $pref !== 'own') $open[$slug] = ['page' => $page, 'idx' => $idx];
+    }
+    if (!$open) { $g['images'] = $images; return $g; }
+
+    // 2. Alles tegelijk ophalen.
+    $exclude = [];
+    foreach ($images as $img) if (!self::empty_img($img)) $exclude[] = AISB_Archer_Stock::imgkey($img);
+    $vraag = [];
+    foreach ($open as $slug => $o) {
+      $vraag[] = ['slug' => $slug, 'title' => $o['page']['title'], 'sections' => $o['page']['sections'], 'need' => count($o['idx'])];
+    }
+    $res = AISB_Archer_Stock::for_pages($pid, $vraag, array_slice($exclude, -150));
+
+    // 3. Verdelen, met één gedeelde lijst van wat al vergeven is.
+    $taken = array_flip($exclude);
+    foreach ($open as $slug => $o) {
+      $idx = $o['idx'];
+      foreach ((array) ($res[$slug]['images'] ?? []) as $pick) {
+        if (!$idx) break;
+        if (empty($pick['full'])) continue;
+        $k = AISB_Archer_Stock::imgkey($pick);
+        if (isset($taken[$k])) continue;
+        $taken[$k] = 1;
+        $images[array_shift($idx)] = $pick;
+      }
+    }
+    $g['images'] = $images;
+    return $g;
+  }
+
   private static function fill_page(int $pid, array $g, string $slug, bool $replace) {
     $slots = self::slots($pid);
     $page = null;

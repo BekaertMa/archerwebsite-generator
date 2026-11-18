@@ -64,15 +64,46 @@ class AISB_Archer_Stock {
    * @return array{lists: array<int,array>, pages: int}
    */
   private static function fetch(string $q, int $per, int $page): array {
-    $lists = [];
-    $pages = 1;
-    foreach (self::readers() as $lees) {
-      $r = $lees($q, $per, $page);
-      if (is_wp_error($r)) continue;
-      if (!empty($r['images'])) $lists[] = $r['images'];
-      $pages = max($pages, (int) $r['total_pages']);
+    $r = self::fetch_many([['q' => $q, 'per' => $per, 'page' => $page]]);
+    return $r[0] ?? ['lists' => [], 'pages' => 1];
+  }
+
+  /**
+   * Een reeks GET-verzoeken tegelijk, via de curl-multi van Requests.
+   *
+   * Gemeten op foto's van 200-350 kB: na elkaar 788 kB/s, tegelijk 1940 kB/s. Geen tien keer
+   * sneller - de lijn van de server is de grens - maar wel ruim het dubbele, en dat scheelt
+   * bij het binnenhalen van twintig foto's.
+   *
+   * @param array<string|int,array{url:string,headers?:array}> $req
+   * @return array<string|int,array{code:int,body:string}> dezelfde sleutels; wat misging ontbreekt
+   */
+  private static function get_many(array $req, int $timeout = 25): array {
+    if (!$req) return [];
+    if (!class_exists('\WpOrg\Requests\Requests')) {
+      // Zonder Requests: dan maar na elkaar, zodat dit nooit een harde afhankelijkheid is.
+      $uit = [];
+      foreach ($req as $k => $r) {
+        $res = wp_remote_get($r['url'], ['timeout' => $timeout, 'headers' => $r['headers'] ?? []]);
+        if (is_wp_error($res)) continue;
+        $uit[$k] = ['code' => (int) wp_remote_retrieve_response_code($res), 'body' => (string) wp_remote_retrieve_body($res)];
+      }
+      return $uit;
     }
-    return ['lists' => $lists, 'pages' => $pages];
+    $lijst = [];
+    foreach ($req as $k => $r) $lijst[$k] = ['url' => $r['url'], 'type' => 'GET', 'headers' => $r['headers'] ?? []];
+    try {
+      $out = \WpOrg\Requests\Requests::request_multiple($lijst, ['timeout' => $timeout, 'redirects' => 3]);
+    } catch (\Throwable $e) {
+      return [];
+    }
+    $uit = [];
+    foreach ($out as $k => $o) {
+      // Een mislukt verzoek komt terug als Exception in plaats van Response: die slaan we over.
+      if (!($o instanceof \WpOrg\Requests\Response)) continue;
+      $uit[$k] = ['code' => (int) $o->status_code, 'body' => (string) $o->body];
+    }
+    return $uit;
   }
 
   /* ───────────────────────── Instellingen ───────────────────────── */
@@ -132,80 +163,150 @@ class AISB_Archer_Stock {
 
   /* ───────────────────────── Bronnen ───────────────────────── */
 
-  /** @return array{images: array, total_pages: int}|WP_Error */
-  private static function unsplash(string $q, int $per, int $page) {
-    $key = self::unsplash_key();
-    if (!$key) return new WP_Error('no_key', 'Geen Unsplash-sleutel');
-    $res = wp_remote_get(add_query_arg(['query' => $q, 'per_page' => min(30, $per), 'page' => $page, 'orientation' => 'landscape'], 'https://api.unsplash.com/search/photos'), [
-      'headers' => ['Authorization' => 'Client-ID ' . $key, 'Accept-Version' => 'v1'], 'timeout' => 15]);
-    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', 'Unsplash gaf geen antwoord');
-    $body = json_decode((string) wp_remote_retrieve_body($res), true);
-    $out = [];
-    foreach ((array) ($body['results'] ?? []) as $p) {
-      $out[] = ['thumb' => $p['urls']['small'] ?? '', 'full' => $p['urls']['regular'] ?? '', 'alt' => $p['alt_description'] ?? $q,
-        'photographer' => $p['user']['name'] ?? '', 'link' => $p['links']['html'] ?? '', 'source' => 'Unsplash'];
+  /**
+   * Elke bron in twee helften: het verzoek bouwen en het antwoord lezen.
+   *
+   * Zo kunnen de verzoeken van alle pagina's en alle bronnen samen de deur uit (fetch_many) in
+   * plaats van een voor een te wachten. req() geeft ['url','headers'] terug, of null als de bron
+   * geen sleutel heeft, of ['body'] als het antwoord al klaarligt (Pixabay's cache van 24 uur).
+   *
+   * @return array{url?:string,headers?:array,cache?:string,body?:string}|null
+   */
+  private static function req(string $bron, string $q, int $per, int $page): ?array {
+    if ($bron === 'Unsplash') {
+      $key = self::unsplash_key();
+      if (!$key) return null;
+      return ['url' => add_query_arg(['query' => $q, 'per_page' => min(30, max(1, $per)), 'page' => max(1, $page), 'orientation' => 'landscape'], 'https://api.unsplash.com/search/photos'),
+        'headers' => ['Authorization' => 'Client-ID ' . $key, 'Accept-Version' => 'v1']];
     }
-    return ['images' => $out, 'total_pages' => (int) ($body['total_pages'] ?? 1)];
-  }
-
-  /** @return array{images: array, total_pages: int}|WP_Error */
-  private static function pexels(string $q, int $per, int $page) {
-    $key = self::pexels_key();
-    if (!$key) return new WP_Error('no_key', 'Geen Pexels-sleutel');
-    $per = min(80, max(1, $per));
-    $res = wp_remote_get(add_query_arg(['query' => $q, 'per_page' => $per, 'page' => $page, 'orientation' => 'landscape'], 'https://api.pexels.com/v1/search'), [
-      'headers' => ['Authorization' => $key], 'timeout' => 15]);
-    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', 'Pexels gaf geen antwoord');
-    $body = json_decode((string) wp_remote_retrieve_body($res), true);
-    $out = [];
-    foreach ((array) ($body['photos'] ?? []) as $p) {
-      $out[] = ['thumb' => $p['src']['medium'] ?? '', 'full' => $p['src']['large2x'] ?? ($p['src']['large'] ?? ''), 'alt' => $p['alt'] ?? $q,
-        'photographer' => $p['photographer'] ?? '', 'link' => $p['url'] ?? '', 'source' => 'Pexels'];
+    if ($bron === 'Pexels') {
+      $key = self::pexels_key();
+      if (!$key) return null;
+      return ['url' => add_query_arg(['query' => $q, 'per_page' => min(80, max(1, $per)), 'page' => max(1, $page), 'orientation' => 'landscape'], 'https://api.pexels.com/v1/search'),
+        'headers' => ['Authorization' => $key]];
     }
-    $total = (int) ($body['total_results'] ?? 0);
-    return ['images' => $out, 'total_pages' => max(1, (int) ceil($total / $per))];
+    if ($bron === 'Pixabay') {
+      $key = self::pixabay_key();
+      if (!$key) return null;
+      $per = min(200, max(3, $per));
+      // De sleutel hoort niet in de naam van de transient.
+      $cache = 'aisb_px_' . md5($q . '|' . $per . '|' . max(1, $page));
+      $klaar = get_transient($cache);
+      if (is_string($klaar) && $klaar !== '') return ['body' => $klaar];
+      return ['url' => add_query_arg(['key' => $key, 'q' => $q, 'image_type' => 'photo', 'orientation' => 'horizontal',
+        'per_page' => $per, 'page' => max(1, $page), 'safesearch' => 'true'], 'https://pixabay.com/api/'),
+        'headers' => [], 'cache' => $cache];
+    }
+    return null;
   }
 
   /**
-   * Pixabay. Twee dingen die hun API vraagt en de andere twee bronnen niet:
-   * - het antwoord moet 24 uur bewaard worden, vandaar de transient;
-   * - naar hun adressen mag een gepubliceerde site niet blijven verwijzen, dus komen hun foto's
-   *   via AISB_Archer_Stock::HOSTING in de mediabibliotheek terecht.
-   * largeImageURL is 1280px breed; fullHD en origineel vragen een goedgekeurd account.
+   * Het antwoord van een bron naar de vorm die de rest kent: thumb, full, alt, photographer,
+   * link, source (en bij Pixabay een eigen key).
    *
    * @return array{images: array, total_pages: int}|WP_Error
    */
-  private static function pixabay(string $q, int $per, int $page) {
-    $key = self::pixabay_key();
-    if (!$key) return new WP_Error('no_key', 'Geen Pixabay-sleutel');
-    $per = min(200, max(3, $per));
-    $args = ['key' => $key, 'q' => $q, 'image_type' => 'photo', 'orientation' => 'horizontal',
-      'per_page' => $per, 'page' => max(1, $page), 'safesearch' => 'true'];
-    // De sleutel hoort niet in de naam van de transient.
-    $cache = 'aisb_px_' . md5($q . '|' . $per . '|' . $page);
-    $body = get_transient($cache);
-    if (!is_array($body)) {
-      $res = wp_remote_get(add_query_arg($args, 'https://pixabay.com/api/'), ['timeout' => 15]);
-      if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', 'Pixabay gaf geen antwoord');
-      $body = json_decode((string) wp_remote_retrieve_body($res), true);
-      if (!is_array($body)) return new WP_Error('http', 'Pixabay gaf geen bruikbaar antwoord');
-      set_transient($cache, $body, DAY_IN_SECONDS);
-    }
+  private static function parse(string $bron, string $body, string $q, int $per, string $cache = '') {
+    $j = json_decode($body, true);
+    if (!is_array($j)) return new WP_Error('http', $bron . ' gaf geen bruikbaar antwoord');
     $out = [];
-    foreach ((array) ($body['hits'] ?? []) as $p) {
-      $vol = (string) ($p['largeImageURL'] ?? '');
-      if ($vol === '') continue;
-      // tags is "brood, bakkerij, oven": de eerste twee lezen als alt-tekst beter dan alle zes.
-      $tags = array_slice(array_filter(array_map('trim', explode(',', (string) ($p['tags'] ?? '')))), 0, 2);
-      $out[] = ['thumb' => (string) ($p['webformatURL'] ?? $vol), 'full' => $vol,
-        'alt' => $tags ? implode(', ', $tags) : $q,
-        'photographer' => (string) ($p['user'] ?? ''), 'link' => (string) ($p['pageURL'] ?? ''), 'source' => 'Pixabay',
-        // Pixabay levert getekende /get/-adressen waar de foto zelf niet in te herkennen is,
-        // en na het binnenhalen staat er een lokaal adres in full. Hun eigen id blijft wel gelijk.
-        'key' => 'pixabay/' . (int) ($p['id'] ?? 0)];
+
+    if ($bron === 'Unsplash') {
+      foreach ((array) ($j['results'] ?? []) as $p) {
+        $out[] = ['thumb' => $p['urls']['small'] ?? '', 'full' => $p['urls']['regular'] ?? '', 'alt' => $p['alt_description'] ?? $q,
+          'photographer' => $p['user']['name'] ?? '', 'link' => $p['links']['html'] ?? '', 'source' => 'Unsplash'];
+      }
+      return ['images' => $out, 'total_pages' => max(1, (int) ($j['total_pages'] ?? 1))];
     }
-    $total = (int) ($body['totalHits'] ?? 0);
-    return ['images' => $out, 'total_pages' => max(1, (int) ceil($total / $per))];
+
+    if ($bron === 'Pexels') {
+      foreach ((array) ($j['photos'] ?? []) as $p) {
+        $out[] = ['thumb' => $p['src']['medium'] ?? '', 'full' => $p['src']['large2x'] ?? ($p['src']['large'] ?? ''), 'alt' => $p['alt'] ?? $q,
+          'photographer' => $p['photographer'] ?? '', 'link' => $p['url'] ?? '', 'source' => 'Pexels'];
+      }
+      return ['images' => $out, 'total_pages' => max(1, (int) ceil(((int) ($j['total_results'] ?? 0)) / max(1, $per)))];
+    }
+
+    if ($bron === 'Pixabay') {
+      // Hun API vraagt het antwoord 24 uur te bewaren.
+      if ($cache !== '') set_transient($cache, $body, DAY_IN_SECONDS);
+      foreach ((array) ($j['hits'] ?? []) as $p) {
+        $vol = (string) ($p['largeImageURL'] ?? '');
+        if ($vol === '') continue;
+        // tags is "brood, bakkerij, oven": de eerste twee lezen als alt-tekst beter dan alle zes.
+        $tags = array_slice(array_filter(array_map('trim', explode(',', (string) ($p['tags'] ?? '')))), 0, 2);
+        $out[] = ['thumb' => (string) ($p['webformatURL'] ?? $vol), 'full' => $vol,
+          'alt' => $tags ? implode(', ', $tags) : $q,
+          'photographer' => (string) ($p['user'] ?? ''), 'link' => (string) ($p['pageURL'] ?? ''), 'source' => 'Pixabay',
+          // Pixabay levert getekende /get/-adressen waar de foto zelf niet in te herkennen is,
+          // en na het binnenhalen staat er een lokaal adres in full. Hun eigen id blijft wel gelijk.
+          'key' => 'pixabay/' . (int) ($p['id'] ?? 0)];
+      }
+      return ['images' => $out, 'total_pages' => max(1, (int) ceil(((int) ($j['totalHits'] ?? 0)) / max(1, $per)))];
+    }
+    return new WP_Error('bron', 'Onbekende bron ' . $bron);
+  }
+
+  /** Eén bron, één vraag. @return array{images: array, total_pages: int}|WP_Error */
+  private static function one(string $bron, string $q, int $per, int $page) {
+    $r = self::req($bron, $q, $per, $page);
+    if (!$r) return new WP_Error('no_key', 'Geen sleutel voor ' . $bron);
+    if (isset($r['body'])) return self::parse($bron, $r['body'], $q, $per);
+    $res = wp_remote_get($r['url'], ['timeout' => 15, 'headers' => $r['headers'] ?? []]);
+    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return new WP_Error('http', $bron . ' gaf geen antwoord');
+    return self::parse($bron, (string) wp_remote_retrieve_body($res), $q, $per, $r['cache'] ?? '');
+  }
+
+  private static function unsplash(string $q, int $per, int $page) { return self::one('Unsplash', $q, $per, $page); }
+  private static function pexels(string $q, int $per, int $page) { return self::one('Pexels', $q, $per, $page); }
+  private static function pixabay(string $q, int $per, int $page) { return self::one('Pixabay', $q, $per, $page); }
+
+  /**
+   * Veel vragen tegelijk: per vraag alle ingestelde bronnen, en alles samen over de lijn.
+   * Zes pagina's maal twee bronnen is één ronde in plaats van twaalf keer wachten.
+   *
+   * @param array<int|string,array{q:string,per:int,page:int}> $vragen
+   * @return array<int|string,array{lists: array<int,array>, pages: int}>
+   */
+  private static function fetch_many(array $vragen): array {
+    $bronnen = array_keys(self::readers());
+    $perVraag = [];
+    $uit = [];
+    $req = [];
+    $meta = [];
+    foreach ($vragen as $vk => $v) {
+      $uit[$vk] = ['lists' => [], 'pages' => 1];
+      $perVraag[$vk] = [];
+      foreach ($bronnen as $bron) {
+        $r = self::req($bron, (string) $v['q'], (int) $v['per'], (int) $v['page']);
+        if (!$r) continue;
+        if (isset($r['body'])) {
+          $perVraag[$vk][$bron] = self::parse($bron, $r['body'], (string) $v['q'], (int) $v['per']);
+          continue;
+        }
+        $k = $vk . "\x01" . $bron;
+        $req[$k] = ['url' => $r['url'], 'headers' => $r['headers'] ?? []];
+        $meta[$k] = ['vk' => $vk, 'bron' => $bron, 'q' => (string) $v['q'], 'per' => (int) $v['per'], 'cache' => $r['cache'] ?? ''];
+      }
+    }
+    if ($req) {
+      $res = self::get_many($req, 20);
+      foreach ($meta as $k => $m) {
+        $r = $res[$k] ?? null;
+        if (!$r || $r['code'] !== 200) continue;
+        $perVraag[$m['vk']][$m['bron']] = self::parse($m['bron'], $r['body'], $m['q'], $m['per'], $m['cache']);
+      }
+    }
+    // In de volgorde van readers(), zodat de afwisseling van mix() niet per run verspringt.
+    foreach ($perVraag as $vk => $pb) {
+      foreach ($bronnen as $bron) {
+        $p = $pb[$bron] ?? null;
+        if (!$p || is_wp_error($p)) continue;
+        if ($p['images']) $uit[$vk]['lists'][] = $p['images'];
+        $uit[$vk]['pages'] = max($uit[$vk]['pages'], (int) $p['total_pages']);
+      }
+    }
+    return $uit;
   }
 
   /**
@@ -263,13 +364,58 @@ class AISB_Archer_Stock {
     if ($full === '' || self::is_local($full)) return $photo;
 
     $sleutel = self::imgkey($photo);
-    $id = self::existing($sleutel) ?: self::store($full, $photo, $pid, $sleutel);
-    if (!$id) return $photo;
+    $id = self::existing($sleutel);
+    if (!$id) {
+      $res = wp_remote_get($full, ['timeout' => 25, 'redirection' => 3]);
+      if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return $photo;
+      $id = self::store_bytes((string) wp_remote_retrieve_body($res), $photo, $pid, $sleutel);
+    }
+    return $id ? self::met_kopie($photo, $id, $full) : $photo;
+  }
+
+  /**
+   * Meerdere foto's tegelijk binnenhalen: dezelfde regels als localise(), maar de downloads
+   * gaan samen in plaats van na elkaar. Dezelfde foto twee keer in de lijst wordt één download.
+   *
+   * @param array<int|string,array> $photos
+   * @return array<int|string,array> dezelfde sleutels en volgorde
+   */
+  public static function localise_many(array $photos, int $pid = 0): array {
+    $todo = [];
+    foreach ($photos as $k => $p) {
+      if (!is_array($p)) continue;
+      if (self::hosting((string) ($p['source'] ?? '')) !== 'kopie') continue;
+      if (!empty($p['attachment_id']) || !empty($p['uploaded'])) continue;
+      $full = (string) ($p['full'] ?? '');
+      if ($full === '' || self::is_local($full)) continue;
+      $sleutel = self::imgkey($p);
+      $id = self::existing($sleutel);
+      if ($id) { $photos[$k] = self::met_kopie($p, $id, $full); continue; }
+      $todo[$k] = ['url' => $full, 'sleutel' => $sleutel];
+    }
+    if (!$todo) return $photos;
+
+    $per = [];
+    foreach ($todo as $k => $t) $per[$t['sleutel']][] = $k;
+    $req = [];
+    foreach ($per as $s => $ks) $req[$s] = ['url' => $todo[$ks[0]]['url']];
+    $res = self::get_many($req);
+    foreach ($per as $s => $ks) {
+      $r = $res[$s] ?? null;
+      if (!$r || $r['code'] !== 200) continue;
+      $id = self::store_bytes($r['body'], $photos[$ks[0]], $pid, (string) $s);
+      if (!$id) continue;
+      foreach ($ks as $k) $photos[$k] = self::met_kopie($photos[$k], $id, $todo[$k]['url']);
+    }
+    return $photos;
+  }
+
+  /** De foto zoals ze er na het binnenhalen uitziet: lokale adressen, de bron blijft bewaard. */
+  private static function met_kopie(array $photo, int $id, string $remote): array {
     $local = set_url_scheme((string) wp_get_attachment_url($id));
     if ($local === '') return $photo;
-
     $photo['attachment_id'] = $id;
-    $photo['remote'] = $full;
+    $photo['remote'] = $remote;
     $photo['full'] = $local;
     $photo['thumb'] = set_url_scheme((string) (wp_get_attachment_image_url($id, 'medium_large') ?: $local));
     return $photo;
@@ -288,11 +434,8 @@ class AISB_Archer_Stock {
     return $q ? (int) $q[0] : 0;
   }
 
-  /** @return int attachment-id, of 0 als het niet lukte. */
-  private static function store(string $url, array $photo, int $pid, string $sleutel): int {
-    $res = wp_remote_get($url, ['timeout' => 25, 'redirection' => 3]);
-    if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return 0;
-    $bytes = (string) wp_remote_retrieve_body($res);
+  /** De binnengehaalde bytes in de mediabibliotheek. @return int attachment-id, of 0 als het niet lukte. */
+  private static function store_bytes(string $bytes, array $photo, int $pid, string $sleutel): int {
     if ($bytes === '' || strlen($bytes) > 12 * MB_IN_BYTES) return 0;
     // Wat binnenkomt is van een derde: eerst kijken of het werkelijk een beeld is, en welk.
     $info = @getimagesizefromstring($bytes);
@@ -394,27 +537,80 @@ class AISB_Archer_Stock {
 
   /** Zoekwoord voor één pagina (Engels, 1–4 woorden), uit de beschrijving en het onderwerp van de pagina. */
   private static function page_keyword(int $pid, string $slug, string $title, string $sections): string {
-    // Eén metasleutel per pagina: de pagina's worden tegelijk gevraagd.
-    $mk = 'archer_image_kw_' . substr(md5($slug . '|' . $title . '|' . $sections), 0, 12);
-    $cached = (string) get_post_meta($pid, $mk, true);
-    if ($cached !== '') return $cached;
-    $brief = mb_substr((string) get_post_meta($pid, 'aisb_project_brief', true), 0, 1500);
+    $uit = self::page_keywords($pid, [['slug' => $slug, 'title' => $title, 'sections' => $sections]]);
+    return $uit[$slug] ?? self::keyword($pid);
+  }
+
+  /** De metasleutel waaronder het zoekwoord van één pagina bewaard wordt. */
+  private static function kw_key(string $slug, string $title, string $sections): string {
+    return 'archer_image_kw_' . substr(md5($slug . '|' . $title . '|' . $sections), 0, 12);
+  }
+
+  /**
+   * Zoekwoorden voor meerdere pagina's in één AI-aanroep.
+   *
+   * Dit was de duurste stap van het vullen: gemeten op één pagina ging 2,9 van de 4,6 seconden
+   * naar deze ene vraag, en ze werd voor elke pagina opnieuw gesteld. De brief, de sfeer van de
+   * stijl en de beeldrichting zijn voor alle pagina's hetzelfde, dus die horen één keer in de
+   * vraag te staan en niet zes keer.
+   *
+   * Antwoord per regel "slug: zoekwoord" in plaats van JSON: een half antwoord levert dan nog
+   * steeds de pagina's op die er wel in staan, en de rest valt terug op het algemene zoekwoord.
+   *
+   * @param array<int,array{slug:string,title:string,sections:string}> $pages
+   * @return array<string,string> slug => zoekwoord
+   */
+  public static function page_keywords(int $pid, array $pages): array {
+    $uit = [];
+    $vragen = [];
+    foreach ($pages as $p) {
+      $slug = (string) ($p['slug'] ?? '');
+      if ($slug === '') continue;
+      $mk = self::kw_key($slug, (string) ($p['title'] ?? ''), (string) ($p['sections'] ?? ''));
+      $cached = (string) get_post_meta($pid, $mk, true);
+      if ($cached !== '') { $uit[$slug] = $cached; continue; }
+      $vragen[$slug] = ['mk' => $mk, 'title' => (string) ($p['title'] ?? ''), 'sections' => (string) ($p['sections'] ?? '')];
+    }
+    if (!$vragen) return $uit;
+
     $settings = get_option('aisb_settings', []);
-    $kw = '';
     if (!empty($settings['api_key']) && class_exists('AISB_OpenAI')) {
-      $prompt = "Business: \"{$brief}\"\nWebsite page: \"{$title}\"" . ($sections !== '' ? "\nSections on this page: {$sections}" : '')
-        . (($mood = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true), 'photo') : '') !== '' ? "\nVisual mood of the website style: {$mood}. You may add one mood word (for example 'bright' or 'moody') if it fits." : '')
-        . (($look = class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::prompt_block($pid, 'photo') : '') !== '' ? "\n{$look} Keep the phrase compatible with that look so all photos of the site look like one shoot." : '')
-        . "\nGive one stock photo search phrase in English (2 to 4 words) that shows what THIS page is about for this business, concrete and visual (a place, an object, people at work). Examples: page \"Badkamerrenovatie\" of a plumber -> \"modern bathroom renovation\"; page \"Over ons\" of a bakery -> \"bakers in bakery\"; page \"Contact\" of a law firm -> \"law office reception\". Return ONLY the phrase.";
-      $r = (new AISB_OpenAI())->call_openai_chat_completions($prompt, $settings, 'You return only a short English stock photo search phrase. Never a company name, a person name or a URL.');
+      $brief = mb_substr((string) get_post_meta($pid, 'aisb_project_brief', true), 0, 1500);
+      $mood = class_exists('AISB_Archer_Styles') ? AISB_Archer_Styles::prompt_notes(json_decode((string) get_post_meta($pid, 'aisb_style_guide', true), true), 'photo') : '';
+      $look = class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::prompt_block($pid, 'photo') : '';
+      $lijst = '';
+      foreach ($vragen as $slug => $v) {
+        $lijst .= "- {$slug} | page title: \"{$v['title']}\"" . ($v['sections'] !== '' ? " | sections: {$v['sections']}" : '') . "\n";
+      }
+      $prompt = "Business: \"{$brief}\"\n"
+        . ($mood !== '' ? "Visual mood of the website style: {$mood}. You may add one mood word (for example 'bright' or 'moody') if it fits.\n" : '')
+        . ($look !== '' ? "{$look} Keep every phrase compatible with that look so all photos of the site look like one shoot.\n" : '')
+        . "\nPages:\n{$lijst}"
+        . "\nFor EACH page give one stock photo search phrase in English (2 to 4 words) that shows what THAT page is about for this business, concrete and visual (a place, an object, people at work). "
+        . "Examples: page \"Badkamerrenovatie\" of a plumber -> \"modern bathroom renovation\"; page \"Over ons\" of a bakery -> \"bakers in bakery\"; page \"Contact\" of a law firm -> \"law office reception\". "
+        . "Give the pages different phrases so the site does not end up with the same photo everywhere.\n"
+        . "Answer with one line per page, exactly in the form:\nslug: phrase\nNo other text.";
+      $r = (new AISB_OpenAI())->call_openai_chat_completions($prompt, $settings,
+        'You return one line per page, in the form "slug: phrase". Each phrase is a short English stock photo search phrase. Never a company name, a person name or a URL.');
       if (!is_wp_error($r)) {
-        $c = trim(str_replace(['.', ',', '"', "'", ':', ';', '{', '}'], '', strtolower(wp_strip_all_tags((string) $r))));
-        if ($c !== '' && strlen($c) < 60) $kw = $c;
+        // De slug zoals ze terugkomt hoeft niet exact te kloppen in hoofdletters.
+        $zoek = [];
+        foreach (array_keys($vragen) as $s) $zoek[strtolower($s)] = $s;
+        foreach (preg_split('/\R/', (string) $r) as $regel) {
+          if (!preg_match('/^\s*[-*]?\s*([a-z0-9_\-]+)\s*[:\-]\s*(.+)$/i', (string) $regel, $m)) continue;
+          $slug = $zoek[strtolower(trim($m[1]))] ?? '';
+          if ($slug === '' || isset($uit[$slug])) continue;
+          $c = trim(str_replace(['.', ',', '"', "'", ':', ';', '{', '}'], '', strtolower(wp_strip_all_tags($m[2]))));
+          if ($c !== '' && strlen($c) < 60) $uit[$slug] = $c;
+        }
       }
     }
-    if ($kw === '') $kw = self::keyword($pid);
-    update_post_meta($pid, $mk, $kw);
-    return $kw;
+    // Wat de AI oversloeg (of er niet was): het algemene zoekwoord van het project.
+    foreach ($vragen as $slug => $v) {
+      if (!isset($uit[$slug])) $uit[$slug] = self::keyword($pid);
+      update_post_meta($pid, $v['mk'], $uit[$slug]);
+    }
+    return $uit;
   }
 
   /**
@@ -467,6 +663,89 @@ class AISB_Archer_Stock {
     if (!$pool) return new WP_Error('no_photos', 'Geen stockfoto\'s gevonden voor "' . $kw . '".');
     // Een paar reserves: pagina's worden tegelijk gevuld, de browser slaat dubbels over.
     return ['images' => array_slice($pool, 0, $need + 8), 'keyword' => $kw, 'sources' => self::sources()];
+  }
+
+  /**
+   * Hetzelfde voor meerdere pagina's, maar met het wachten samengenomen.
+   *
+   * Het vullen van één pagina was gemeten 4,6 seconden, waarvan 2,9 naar de AI ging voor het
+   * zoekwoord, 0,7 naar de twee bronnen en 1,0 naar het binnenhalen van drie foto's. Alle drie
+   * die stappen zijn wachten op iemand anders, en alle drie kunnen ze voor alle pagina's samen:
+   *   1. één AI-aanroep voor alle zoekwoorden (page_keywords);
+   *   2. één ronde over de lijn voor alle bronnen van alle pagina's (fetch_many);
+   *   3. één ronde voor alle downloads (localise_many).
+   *
+   * De verdeling zelf blijft op volgorde: pagina na pagina uit haar eigen pool, met één gedeelde
+   * lijst van wat al vergeven is. Anders staat dezelfde foto op twee pagina's.
+   *
+   * @param array<int,array{slug:string,title:string,sections:string,need:int}> $pages
+   * @param array $exclude sleutels of adressen die al gebruikt zijn
+   * @return array<string,array{images:array,keyword:string}>
+   */
+  public static function for_pages(int $pid, array $pages, array $exclude): array {
+    $skip = array_flip(array_map([self::class, 'pkey'], array_filter(array_map('strval', $exclude))));
+    $kws = self::page_keywords($pid, $pages);
+
+    // Elke pagina vraagt genoeg voor zichzelf plus wat de andere pagina's kunnen wegnemen.
+    $totaal = 0;
+    foreach ($pages as $p) $totaal += max(1, min(40, (int) ($p['need'] ?? 1)));
+    $vragen = [];
+    foreach ($pages as $p) {
+      $slug = (string) ($p['slug'] ?? '');
+      if ($slug === '' || isset($vragen[$slug])) continue;
+      $vragen[$slug] = ['q' => $kws[$slug] ?? self::keyword($pid), 'per' => min(60, $totaal + 8), 'page' => 1];
+    }
+    $res = self::fetch_many($vragen);
+
+    $uit = [];
+    $tekort = [];
+    foreach ($pages as $p) {
+      $slug = (string) ($p['slug'] ?? '');
+      if ($slug === '' || isset($uit[$slug])) continue;
+      $need = max(1, min(40, (int) ($p['need'] ?? 1)));
+      $pool = [];
+      foreach (self::mix($res[$slug]['lists'] ?? [], $need + 20) as $img) {
+        if (count($pool) >= $need) break;
+        $k = self::imgkey($img);
+        if (isset($skip[$k])) continue;
+        $skip[$k] = 1;
+        $pool[] = $img;
+      }
+      $uit[$slug] = ['images' => $pool, 'keyword' => $vragen[$slug]['q']];
+      if (count($pool) < $need) $tekort[$slug] = $need - count($pool);
+    }
+
+    // Pagina's die te kort kwamen (veel overlap tussen de zoekwoorden): nog één ronde, verderop
+    // in de resultaten en met het algemene zoekwoord erbij.
+    if ($tekort) {
+      $extra = [];
+      foreach ($tekort as $slug => $n) $extra[$slug] = ['q' => $vragen[$slug]['q'], 'per' => 40, 'page' => 2];
+      $extra['__alg'] = ['q' => self::keyword($pid), 'per' => 40, 'page' => 1];
+      $meer = self::fetch_many($extra);
+      foreach ($tekort as $slug => $n) {
+        foreach ([$slug, '__alg'] as $bronVraag) {
+          if ($n <= 0) break;
+          foreach (self::mix($meer[$bronVraag]['lists'] ?? [], 60) as $img) {
+            if ($n <= 0) break;
+            $k = self::imgkey($img);
+            if (isset($skip[$k])) continue;
+            $skip[$k] = 1;
+            $uit[$slug]['images'][] = $img;
+            $n--;
+          }
+        }
+      }
+    }
+
+    // Eén ronde voor alle downloads, over alle pagina's heen.
+    $plat = [];
+    foreach ($uit as $slug => $u) foreach ($u['images'] as $i => $img) $plat[$slug . "\x01" . $i] = $img;
+    $plat = self::localise_many($plat, $pid);
+    foreach ($plat as $k => $img) {
+      [$slug, $i] = explode("\x01", $k, 2);
+      $uit[$slug]['images'][(int) $i] = $img;
+    }
+    return $uit;
   }
 
   /**

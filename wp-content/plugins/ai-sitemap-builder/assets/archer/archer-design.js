@@ -609,17 +609,20 @@
       let done = 0;
       const api = { onPage: null };
 
+      // Alles wat op dit moment klaar staat, gaat in één verzoek mee: de server neemt het
+      // wachten op de AI, op de bronnen en op de downloads dan voor alle pagina's samen.
+      // Tijdens de opbouw zijn dat er een paar tegelijk, aan het eind de rest in één keer.
       const drain = async () => {
         while (queue.length) {
-          const slug = queue.shift();
-          done++;
-          const page = (wf.state.pages || []).find((p) => p.slug === slug) || { slug, title: slug };
-          if (api.onPage) api.onPage(done, done + queue.length, page);
+          const batch = queue.splice(0, queue.length);
+          done += batch.length;
+          const eerste = (wf.state.pages || []).find((p) => p.slug === batch[0]) || { slug: batch[0], title: batch[0] };
+          if (api.onPage) api.onPage(done, done + queue.length, eerste, batch.length);
           try {
             if (UI.flushAll) await UI.flushAll();
-            await photoOp({ op: "fill", page_slug: slug });
+            await photoOp({ op: "fill_many", page_slugs: JSON.stringify(batch) });
           } catch (e) {
-            errors++;
+            errors += batch.length;
           }
         }
         worker = null;
@@ -937,7 +940,9 @@
       });
       renderLeft();
       dockShow("photos", fotoNu ? `Foto's voor ${fotoNu}…` : "Foto's plaatsen…", 78);
-      stream.onPage = (d, n, p) => dockShow("photos", `Foto's voor ${p.title} (${d} van ${n})…`, 78 + Math.round((d / n) * 20));
+      stream.onPage = (d, n, p, hoeveel) => dockShow("photos",
+        hoeveel > 1 ? `Foto's voor ${hoeveel} pagina's (${d} van ${n})…` : `Foto's voor ${p.title} (${d} van ${n})…`,
+        78 + Math.round((d / n) * 20));
       const errors = await stream.finish();
       const url = new URL(window.location.href);
       url.searchParams.delete("aisb_build");
