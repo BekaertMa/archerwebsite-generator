@@ -586,8 +586,13 @@
     /**
      * Hetzelfde, maar zonder te wachten tot alle pagina's er staan: zodra de opbouw van één
      * pagina klaar is, gaat die pagina de rij in en worden haar foto's gezocht terwijl de
-     * volgende pagina's nog geschreven worden. Dat scheelt de hele fotostap behalve die van
-     * de laatste pagina.
+     * volgende pagina's nog geschreven worden.
+     *
+     * Hoeveel dat scheelt hangt af van hoe lang de opbouw daarna nog duurt. Gemeten op zes
+     * pagina's: de opbouw was klaar na 29 s, het fotowerk duurde samen 35 s, en daarvan viel
+     * 9 s binnen de opbouw — 65 s werd 56 s. Meer zit er niet in zolang de foto's een voor een
+     * gaan en samen langer duren dan de opbouw; wie verder wil, moet meerdere pagina's in één
+     * verzoek laten vullen (één schrijver, maar de bronnen parallel bevraagd).
      *
      * Eén pagina tegelijk, en dat blijft zo: de server herschrijft bij elke vulling de hele
      * stijlgids (één schrijver), en de foto's van de vorige pagina moeten al meetellen, anders
