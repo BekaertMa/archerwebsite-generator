@@ -190,7 +190,11 @@ class AISB_Archer_Styles {
     $n = self::notes($s['id']);
     if (!$n) return '';
     if ($kind === 'photo') return (string) ($n['photo'] ?? '');
-    return 'STYLE "' . $s['name'] . '" (DESIGN.md): ' . ($n['theme'] ?? '') . "\nVOICE: " . ($n['voice'] ?? '') . "\n";
+    // De stem van een hallmark-thema noemt de woorden die het weigert, en die staan er in het Engels.
+    // Zonder deze regel schreef de bakkerij "Ambachtelijke bakkerij" als titel terwijl de stem
+    // "never artisanal ... as a hollow badge" zegt: het verbod kwam wel mee, maar niet in het Nederlands.
+    return 'STYLE "' . $s['name'] . '" (DESIGN.md): ' . ($n['theme'] ?? '') . "\nVOICE: " . ($n['voice'] ?? '') . "\n"
+      . "The VOICE names the words this style refuses. They are written in English but they hold in the language of the site: a word it refuses is refused in its Dutch or French equivalent too (artisanal = ambachtelijk, curated, handcrafted, premium). When the brief itself uses such a word to describe the business, keep it out of the headline and out of the claim; name the concrete thing it stands for instead (the sourdough, the hour the bread comes out, what is not bought in).\n";
   }
 
   public static function design_md_url(string $id): string {
@@ -287,6 +291,31 @@ class AISB_Archer_Styles {
     return $css;
   }
 
+  /**
+   * Schreefloos, schreef of mono: de terugvalletters achter de webfont.
+   *
+   * De naam van een letter verraadt haar soort niet. Vollkorn, Prata, Boska en Sentient zijn schreven
+   * zonder het woord "serif" in hun naam, en met vijftig hallmark-thema's zijn dat er genoeg om het
+   * uit te schrijven. Hallmark zelf zet het in de frontmatter (display: roman-serif Sentient); deze
+   * lijst komt daaruit. Staat een letter er niet bij, dan beslist de naam, zoals vroeger.
+   */
+  const SERIF_FACES = ['Bodoni Moda', 'Boska', 'Grenze Gotisch', 'Hedvig Letters Serif', 'Instrument Serif',
+    'Libre Caslon Display', 'Literata', 'Newsreader', 'Prata', 'Sentient', 'Spectral', 'Ultra',
+    'Vollkorn', 'Yeseva One', 'Young Serif', 'Zilla Slab'];
+  const MONO_FACES = ['Chivo Mono', 'Geist Mono', 'Martian Mono'];
+
+  public static function stack(string $family): string {
+    $q = "'" . $family . "'";
+    if (in_array($family, self::MONO_FACES, true) || preg_match('/\bmono\b/i', $family)) {
+      return $q . ', ui-monospace, SFMono-Regular, Menlo, monospace';
+    }
+    if (in_array($family, self::SERIF_FACES, true)
+      || (preg_match('/serif|garamond|cormorant|fraunces|caslon|bodoni|didone|slab/i', $family) && !preg_match('/sans/i', $family))) {
+      return $q . ', ui-serif, Georgia, serif';
+    }
+    return $q . ', ui-sans-serif, system-ui, sans-serif';
+  }
+
   /** @return array{0: array<string,string>, 1: array} de variabelen en de stijl met de lettertypes uit de stijlgids */
   private static function tokens(array $s, $guide = null): array {
     $c = $s['colours'];
@@ -314,11 +343,8 @@ class AISB_Archer_Styles {
     if (isset(self::RADII[$gr]) && $gr !== (string) ($s['radiusBucket'] ?? '')) $r = self::RADII[$gr];
     $px = fn($v) => (int) $v . 'px';
     $link = self::contrast($c['accent'], $c['base']) >= 4.5 ? $c['accent'] : $c['ink'];
-    $hf = "'" . $f['heading']['family'] . "', ui-sans-serif, system-ui, sans-serif";
-    $bf = "'" . $f['body']['family'] . "', ui-sans-serif, system-ui, sans-serif";
-    if (preg_match('/serif|garamond|cormorant|fraunces/i', $f['heading']['family']) && !preg_match('/sans/i', $f['heading']['family'])) {
-      $hf = "'" . $f['heading']['family'] . "', ui-serif, Georgia, serif";
-    }
+    $hf = self::stack($f['heading']['family']);
+    $bf = self::stack($f['body']['family']);
 
     $v = [
       // Archer-tokens
