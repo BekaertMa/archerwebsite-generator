@@ -27,8 +27,9 @@
   const LABELS = {
     business_name: "Naam", existing_site: "Website", activity: "Activiteit", services: "Diensten",
     region: "Regio", service_area: "Werkgebied", founded: "Sinds", team: "Team", opening_hours: "Open",
-    audience: "Doelgroep", main_goal: "Doel", booking: "Boeken", price_info: "Prijzen",
-    usp: "Troef", reviews: "Reviews", references: "Referenties", certifications: "Erkenningen", guarantees: "Garantie",
+    audience: "Doelgroep", customer_need: "Klantvraag", main_goal: "Doel", booking: "Boeken", price_info: "Prijzen",
+    voice_note: "Eigen verhaal",
+    usp: "Troef", reviews: "Reviews", references: "Referenties", certifications: "Erkenningen", guarantees: "Garantie", objections: "Twijfels",
     must_pages: "Pagina's", page_count: "Aantal", page_notes: "Per pagina", faq_topics: "FAQ",
     tone: "Toon", languages: "Talen", style_id: "Stijl", style_mood: "Sfeer", brand_colors: "Kleur",
     logo: "Logo", photos: "Foto's", own_photos: "Eigen foto's", examples: "Voorbeelden", dislikes: "Liever niet", contact: "Contact",
@@ -48,6 +49,7 @@
     if (k === "style_id") return styleName(v);
     if (k === "logo") return typeof v === "object" ? "opgeladen" : String(v);
     if (k === "own_photos") return Array.isArray(v) ? v.length + " opgeladen" : "";
+    if (k === "voice_note") return "ingesproken";
     return Array.isArray(v) ? v.join(", ") : String(v);
   };
 
@@ -90,16 +92,21 @@
         </div>
         <div class="archer-intake-hello" data-intake-hello>
           <div class="archer-intake-orb" aria-hidden="true"></div>
-          <h1 class="archer-intake-title">Hoi! Zin in een nieuwe website?</h1>
-          <p class="archer-intake-lead">Ik ben Archer. Vertel me over je zaak, je klanten en wat je mooi vindt, en ik bouw intussen mee. Je ziet je website groeien bij elk antwoord.</p>
-          <p class="archer-intake-lead archer-small">Zullen we beginnen? Hoe heet je zaak? (Of plak het adres van je huidige website.)</p>
+          <h1 class="archer-intake-title">Laten we je website maken.</h1>
+          <p class="archer-intake-lead">Ik ben de assistent van Archer. Ik stel je een reeks korte vragen over je zaak, je klanten, je pagina's en je stijl. Bij elk antwoord zie je je website groeien.</p>
+          <p class="archer-intake-lead archer-small">Begin met de naam van je zaak of het adres van je huidige website. Liever vertellen? Klik op de microfoon en vertel in twee minuten over je zaak: dat levert de site meer op dan tien antwoorden.</p>
         </div>
         <div class="archer-intake-log" data-intake-log aria-live="polite"></div>
         <div class="archer-intake-ready" data-intake-ready hidden>
-          <span>Ik kan al iets moois bouwen. Nog wat vertellen? Dan wordt het nog beter.</span>
+          <span>Genoeg voor een eerste versie. Hoe meer je vertelt, hoe beter ze wordt.</span>
           <button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-intake-go-early>Bouw mijn website →</button>
         </div>
         <form class="archer-intake-composer" data-intake-form>
+          <button type="button" class="archer-intake-mic" data-intake-mic title="Vertel over je zaak in 2 minuten">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
+            <span class="archer-intake-mic-time" data-intake-mic-time hidden>0:00</span>
+            <span class="archer-sr-only">Vertel over je zaak</span>
+          </button>
           <label class="archer-intake-attach" title="Logo of foto's opladen">
             <input type="file" accept="image/*" multiple data-intake-attach hidden>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -131,9 +138,12 @@
       ready: $("[data-intake-ready]", root),
       preview: $("[data-intake-preview]", root),
       attach: $("[data-intake-attach]", root),
+      mic: $("[data-intake-mic]", root),
+      micTime: $("[data-intake-mic-time]", root),
     };
 
-    let state = { messages: [], brief: {}, progress: { have: 0, need: 8, blocks: [] }, done: false, ready: false, summary: [] };
+    const newDraft = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    let state = { messages: [], brief: {}, progress: { have: 0, need: 8, blocks: [] }, done: false, ready: false, summary: [], draft: newDraft(), dirResearch: false, dirStrategy: false };
     let busy = false;
     let peek = null; // stijl of kleur waar de muis op staat (voorbeeld, nog niet gekozen)
 
@@ -145,7 +155,29 @@
         const s = JSON.parse(sessionStorage.getItem(STORE) || "null");
         if (s && Array.isArray(s.messages) && s.messages.length) state = Object.assign(state, s);
       } catch (e) { /* niets bewaard */ }
+      if (!state.draft) state.draft = newDraft();
     };
+
+    /*
+     * Ontwerprichting (ADR-0033), op de achtergrond: het onderzoek zodra naam, activiteit en regio er zijn,
+     * de strategie zodra het doel bekend is en de intake bij de pagina's of de stijl is. Niet wachten: de
+     * server bewaart het resultaat per intake (draft) en de generatie gebruikt wat er dan is.
+     */
+    function maybeDirection() {
+      const b = state.brief;
+      const has = (k) => b[k] && b[k] !== "-" && (!Array.isArray(b[k]) || b[k].length);
+      if (!state.dirResearch && has("business_name") && has("activity") && has("region")) {
+        state.dirResearch = true;
+        save();
+        post("aisb_archer_direction_research", { draft: state.draft, brief: JSON.stringify(b) }).catch(() => { /* niet nodig om verder te gaan */ });
+      }
+      // Pas als de pagina's gekozen zijn: de vragen aan de eigenaar gaan over wat die pagina's nodig hebben.
+      if (!state.dirStrategy && has("main_goal") && (has("must_pages") || state.ready)) {
+        state.dirStrategy = true;
+        save();
+        post("aisb_archer_direction_strategy", { draft: state.draft, brief: JSON.stringify(b) }).catch(() => { state.dirStrategy = false; save(); });
+      }
+    }
 
     /* ── Stijlen (voor kaarten en voorbeeld) ─────────────── */
 
@@ -163,13 +195,18 @@
       } catch (e) { /* voorbeeld zonder stijl */ }
     }
     const fontLoaded = {};
+    // Een hallmark-stijl kan twee bronnen hebben (Google Fonts en Fontshare).
     const loadFont = (s) => {
-      if (!s || !s.fontUrl || fontLoaded[s.fontUrl]) return;
-      fontLoaded[s.fontUrl] = 1;
-      const l = document.createElement("link");
-      l.rel = "stylesheet";
-      l.href = s.fontUrl;
-      document.head.appendChild(l);
+      if (!s) return;
+      const urls = s.fontUrls && s.fontUrls.length ? s.fontUrls : (s.fontUrl ? [s.fontUrl] : []);
+      urls.forEach((u) => {
+        if (!u || fontLoaded[u]) return;
+        fontLoaded[u] = 1;
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+        l.href = u;
+        document.head.appendChild(l);
+      });
     };
 
     /* ── Weergave: gesprek ───────────────────────────────── */
@@ -218,7 +255,7 @@
             b.setAttribute("aria-pressed", String(b.classList.contains("is-on")));
             return;
           }
-          if (/^iets anders$/i.test(o)) { el.input.focus(); el.input.placeholder = "Vertel maar…"; return; }
+          if (/^iets anders$/i.test(o)) { el.input.focus(); el.input.placeholder = "Typ je antwoord"; return; }
           m.picked = [o];
           send(o);
         }),
@@ -264,7 +301,7 @@
       }
       host.innerHTML =
         `<div class="archer-ic-style-grid">${(c.items || []).map((s) => styleTile(s, s.id === chosen)).join("")}</div>` +
-        ((c.more || []).length ? `<details class="archer-ic-more"><summary>Nog meer stijlen (${all.length})</summary><div class="archer-ic-style-grid">${c.more.map((s) => styleTile(s, s.id === chosen)).join("")}</div></details>` : "");
+        ((c.more || []).length ? `<details class="archer-ic-more"><summary>Toon alle ${all.length} stijlen</summary><div class="archer-ic-style-grid">${c.more.map((s) => styleTile(s, s.id === chosen)).join("")}</div></details>` : "");
       $$("[data-style]", host).forEach((b) => {
         const id = b.getAttribute("data-style");
         b.addEventListener("mouseenter", () => { peek = { style_id: id }; renderPreview(); });
@@ -332,8 +369,8 @@
         <div class="archer-ic-status archer-small" data-upstatus aria-live="polite"></div>
         <div class="archer-ic-row">
           ${isLogo
-            ? `<button type="button" class="archer-link-btn" data-none>Nog geen logo, geen probleem</button>`
-            : `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-done ${current.length ? "" : "hidden"}>Dat zijn ze!</button>`}
+            ? `<button type="button" class="archer-link-btn" data-none>Ik heb (nog) geen logo</button>`
+            : `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-done ${current.length ? "" : "hidden"}>Klaar met opladen</button>`}
         </div>`;
       const drop = $("[data-drop]", host);
       const file = $("[data-file]", host);
@@ -390,7 +427,7 @@
             <label><input type="checkbox" data-page="${i}" ${it.on ? "checked" : ""} ${it.fixed ? "disabled" : ""}> <span>${esc(it.title)}</span>${it.fixed ? ' <em>altijd</em>' : ""}</label></li>`).join("")}</ul>` +
           `<div class="archer-ic-row"><input type="text" class="archer-input archer-ic-add" placeholder="Andere pagina, bv. Vacatures" data-page-add-in>` +
           `<button type="button" class="archer-btn archer-btn-outline archer-btn-sm" data-page-add>Toevoegen</button>` +
-          `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-pages-ok>Dit wordt 'm</button></div>`;
+          `<button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-pages-ok>Deze pagina's</button></div>`;
         $$("[data-page]", host).forEach((cb) => cb.addEventListener("change", () => {
           items[Number(cb.getAttribute("data-page"))].on = cb.checked;
           peek = { must_pages: items.filter((x) => x.on).map((x) => x.title) };
@@ -464,12 +501,12 @@
       d.className = "archer-intake-msg is-agent";
       d.setAttribute("data-intake-review", "");
       d.innerHTML =
-        `<div class="archer-intake-text">Kijk eens wat ik allemaal van je weet:</div>` +
+        `<div class="archer-intake-text">Dit heb je me verteld:</div>` +
         `<table class="archer-intake-review"><tbody>` +
         state.summary.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td>${esc(r.value)}</td></tr>`).join("") +
         `</tbody></table>` +
-        `<p class="archer-muted archer-small">Klopt er iets niet? Zeg het gewoon, bv. "de regio is Lokeren en omstreken", en ik pas het aan.</p>` +
-        `<p class="archer-small">Druk op de knop en ik maak in één ruk je pagina's, de opbouw, de teksten, de stijl en de foto's. Daarna kan je alles naar hartenlust bijschaven.</p>` +
+        `<p class="archer-muted archer-small">Iets niet juist? Typ het gewoon, bijvoorbeeld "de regio is Lokeren en omstreken".</p>` +
+        `<p class="archer-small">Ik maak nu in één keer je pagina's, de opbouw, de teksten, de stijl en de foto's. Daarna pas je alles aan in één scherm.</p>` +
         `<div class="archer-intake-actions"><button type="button" class="archer-btn archer-btn-primary" data-intake-go>Bouw mijn website →</button></div>` +
         `<div class="archer-status" data-intake-error aria-live="polite"></div>`;
       el.log.appendChild(d);
@@ -483,7 +520,7 @@
       renderSetup();
       renderReview();
       renderPreview();
-      el.input.placeholder = state.messages.length ? "Vertel maar…" : "Bv. Bakkerij Janssens of www.jouwzaak.be";
+      el.input.placeholder = state.messages.length ? "Typ je antwoord…" : "Bv. Bakkerij Janssens of www.jouwzaak.be";
       scrollDown();
     }
 
@@ -517,7 +554,7 @@
       const services = (b.services || []).slice(0, 3);
       const photos = b.own_photos || [];
       const logo = b.logo && typeof b.logo === "object" ? b.logo.thumb || b.logo.url : "";
-      const head = b.usp && b.usp !== "-" ? b.usp : b.activity ? b.activity : "Hier komt iets moois";
+      const head = b.usp && b.usp !== "-" ? b.usp : b.activity ? b.activity : "Hier komt je website";
       const sub = [b.activity && b.usp ? b.activity : "", b.region ? "in " + b.region + (b.service_area && b.service_area !== "-" ? " (" + b.service_area + ")" : "") : ""].filter(Boolean).join(" ");
       const trust = [
         b.reviews && b.reviews !== "-" ? "★ " + b.reviews : "",
@@ -592,6 +629,7 @@
           brief: JSON.stringify(state.brief),
           set: JSON.stringify(set || {}),
           answering,
+          draft: state.draft,
         });
         state.brief = d.brief || state.brief;
         state.progress = d.progress || state.progress;
@@ -600,13 +638,14 @@
         state.summary = d.summary || [];
         state.messages.push({ role: "agent", text: d.reply || "Genoteerd.", options: d.options || [], multi: !!d.multi, card: d.card || null, ask: d.ask || "" });
       } catch (err) {
-        state.messages.push({ role: "agent", text: (err && err.message) || "Oei, daar haperde iets aan mijn kant. Probeer je het nog eens?" });
+        state.messages.push({ role: "agent", text: (err && err.message) || "Er ging iets mis. Probeer het nog eens." });
       } finally {
         typing(false);
         busy = false;
         save();
         renderAll();
         refreshStyles();
+        maybeDirection();
         el.input.focus();
       }
     }
@@ -646,6 +685,81 @@
       }
     });
 
+    /* ── Microfoon: de eigenaar vertelt zijn zaak ─────────────────────────
+       Een formulier levert wat de vraag uitlokt; een verteld verhaal levert wat alleen hij weet
+       (hoe lang, waarom, de specialiteit, de zin die hij altijd tegen klanten zegt) en hoe hij praat.
+       De opname gaat naar de transcriptie en wordt daarna weggegooid; enkel de tekst blijft. */
+    const MIC_MAX = 120;
+    let rec = null, recChunks = [], recTimer = null, recSecs = 0, recStream = null;
+
+    const micLang = () => ({ Dutch: "nl", French: "fr", English: "en", German: "de" }[(state.brief.languages || [])[0]] || "nl");
+
+    function micPaint(on) {
+      el.mic.classList.toggle("is-recording", on);
+      el.micTime.hidden = !on;
+      el.mic.title = on ? "Klaar? Klik om te stoppen" : "Vertel over je zaak in 2 minuten";
+      if (on) el.micTime.textContent = Math.floor(recSecs / 60) + ":" + String(recSecs % 60).padStart(2, "0");
+    }
+
+    function micSay(text) {
+      state.messages.push({ role: "agent", text: text });
+      renderAll();
+    }
+
+    function micStop() {
+      if (rec && rec.state !== "inactive") rec.stop();
+    }
+
+    async function micStart() {
+      if (busy) return;
+      try {
+        recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        return micSay("Ik kan de microfoon niet gebruiken. Geef toestemming in je browser, of typ je verhaal gewoon.");
+      }
+      const type = ["audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+      rec = new MediaRecorder(recStream, type ? { mimeType: type } : undefined);
+      recChunks = [];
+      recSecs = 0;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+      rec.onstop = async () => {
+        clearInterval(recTimer);
+        recStream.getTracks().forEach((t) => t.stop());
+        micPaint(false);
+        const mime = rec.mimeType || "audio/webm";
+        const blob = new Blob(recChunks, { type: mime });
+        recChunks = [];
+        if (blob.size < 2000) return micSay("Dat was te kort om uit te schrijven. Probeer het nog eens.");
+        const ext = mime.indexOf("mp4") > -1 ? "mp4" : mime.indexOf("ogg") > -1 ? "ogg" : "webm";
+        try {
+          busy = true;
+          typing(true);
+          const d = await post("aisb_archer_intake_voice", { language: micLang() }, [new File([blob], "opname." + ext, { type: mime })]);
+          busy = false;
+          typing(false);
+          // De uitgeschreven tekst gaat als gewoon antwoord naar de agent (die haalt er velden uit)
+          // én apart in de brief, waar het stemprofiel hem volledig leest.
+          send(d.text, { voice_note: d.text });
+        } catch (err) {
+          busy = false;
+          typing(false);
+          micSay(err.message || "Uitschrijven lukte niet.");
+        }
+      };
+      rec.start();
+      micPaint(true);
+      recTimer = setInterval(() => {
+        recSecs++;
+        micPaint(true);
+        if (recSecs >= MIC_MAX) micStop();
+      }, 1000);
+    }
+
+    el.mic.addEventListener("click", () => {
+      if (!navigator.mediaDevices || !window.MediaRecorder) return micSay("Deze browser kan niet opnemen. Typ je verhaal gerust.");
+      if (rec && rec.state === "recording") micStop(); else micStart();
+    });
+
     $("[data-intake-legacy]", root).addEventListener("click", () => {
       start.classList.remove("archer-intake-on");
       document.body.classList.remove("archer-intake-mode");
@@ -673,6 +787,7 @@
         line("Team", "team"),
         line("Openingsuren", "opening_hours"),
         line("Doelgroep", "audience"),
+        line("Waarmee klanten komen (hun probleem of wens, in hun woorden)", "customer_need"),
         line("Wat een bezoeker moet doen (hoofddoel, de knop in de header)", "main_goal"),
         v("booking") ? `Online boeken via: ${v("booking")} (externe link of widget, geen agendakoppeling).` : "",
         line("Prijzen", "price_info"),
@@ -681,6 +796,7 @@
         line("Referenties", "references"),
         line("Erkenningen en labels", "certifications"),
         line("Garanties", "guarantees"),
+        line("Twijfels van klanten (beantwoorden op de site)", "objections"),
         line("Toon van de teksten", "tone"),
         line("Pagina's die zeker moeten (maak precies deze pagina's, plus Home en Contact)", "must_pages"),
         line("Afspraken per pagina", "page_notes"),
@@ -688,15 +804,17 @@
         line("Gewenste sfeer", "style_mood"),
         line("Voorbeeldsites", "examples"),
         line("Liever niet", "dislikes"),
+        // Het ingesproken verhaal, ingekort: het stemprofiel leest het later volledig.
+        b.voice_note ? "De eigenaar vertelde zelf over zijn zaak (uitgeschreven opname; hier staan details die nergens anders staan, en zo praat hij):\n" + String(b.voice_note).slice(0, 1500) : "",
       ].filter(Boolean).join("\n");
     }
 
     /** Overlay met de stappen van de run; gedeeld met archer-design.js via sessionStorage. */
     const BUILD_STEPS = [
-      { key: "sitemap", label: "Pagina's uittekenen" },
-      { key: "style", label: "Kleuren, letters en logo klaarleggen" },
+      { key: "sitemap", label: "Pagina's en secties bepalen" },
+      { key: "style", label: "Stijl, logo en foto's klaarzetten" },
       { key: "wireframes", label: "Elke pagina opbouwen en teksten schrijven" },
-      { key: "photos", label: "Foto's ophangen" },
+      { key: "photos", label: "Foto's plaatsen" },
     ];
     function overlay(stepKey, note) {
       let o = $("[data-archer-build]");
@@ -710,8 +828,8 @@
       const idx = BUILD_STEPS.findIndex((s) => s.key === stepKey);
       o.innerHTML = `<div class="archer-build-card">
         <div class="archer-intake-orb" aria-hidden="true"></div>
-        <h2>Mouwen opgestroopt, ik bouw!</h2>
-        <p class="archer-muted">${esc(state.brief.business_name || "")} · even geduld, dit duurt een minuutje of twee. Laat dit venster gerust open.</p>
+        <h2>Je website wordt gebouwd</h2>
+        <p class="archer-muted">${esc(state.brief.business_name || "")} · dit duurt een minuut of twee. Laat dit venster open.</p>
         <ol>${BUILD_STEPS.map((s, i) => `<li class="${i < idx ? "is-done" : i === idx ? "is-active" : ""}"><span aria-hidden="true"></span>${esc(s.label)}</li>`).join("")}</ol>
         <p class="archer-small archer-muted" data-build-note>${esc(note || "")}</p>
       </div>`;
@@ -737,9 +855,10 @@
         languages: (b.languages && b.languages.length ? b.languages : ["Dutch"]).slice(0, 1),
         pageCount: b.page_count || "5-10",
         contact: { address: c.address || "", phone: c.phone || "", email: c.email || "", socials: c.socials || "" },
+        direction: state.draft || "",
       };
       $$("[data-intake-go], [data-intake-go-early]").forEach((btn) => { btn.disabled = true; });
-      overlay("sitemap", "Ik teken welke pagina's er komen en wat er op elke pagina staat.");
+      overlay("sitemap", "Ik bepaal welke pagina's er komen en wat er op elke pagina staat.");
       try {
         await UI.fastGenerate(opts);
         const pid = app.state && app.state.projectId;
@@ -751,7 +870,7 @@
           sessionStorage.removeItem(STORE);
           sessionStorage.setItem("archer_build_" + pid, JSON.stringify({ at: Date.now(), name: b.business_name || "" }));
         } catch (e) { /* niets */ }
-        overlay("wireframes", "Daar gaan we: in het volgende scherm zie je elke pagina verschijnen.");
+        overlay("wireframes", "In het volgende scherm zie je elke pagina verschijnen.");
         // Ontwerp: wireframes en foto's worden daar verder gemaakt (aisb_build=1).
         const url = new URL(window.location.href);
         url.searchParams.set("aisb_step", "2");
@@ -768,7 +887,7 @@
         const target = errEl || el.ready;
         if (target) {
           target.hidden = false;
-          target.insertAdjacentHTML("beforeend", '<div class="aisb-error">Oei, dat liep mis: ' + esc(err.message || "") + " Probeer je het nog eens?</div>");
+          target.insertAdjacentHTML("beforeend", '<div class="aisb-error">Het opzetten lukte niet: ' + esc(err.message || "") + " Probeer opnieuw.</div>");
         }
       }
     }

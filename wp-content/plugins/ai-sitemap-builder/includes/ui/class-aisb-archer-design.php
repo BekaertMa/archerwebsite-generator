@@ -357,6 +357,50 @@ class AISB_Archer_Design {
       if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
       $g = self::remember_slots($res, self::slots($pid));
       self::save_guide($pid, $g);
+    } elseif ($op === 'fill_many') {
+      // Meerdere pagina's, één schrijfbeurt op de stijlgids.
+      @set_time_limit(180);
+      $slugs = json_decode((string) wp_unslash($_POST['page_slugs'] ?? '[]'), true);
+      $slugs = array_values(array_filter(array_map(fn($s) => sanitize_title((string) $s), (array) $slugs)));
+      if (!$slugs) wp_send_json_error(['message' => 'Geen pagina\'s opgegeven.'], 400);
+      $res = self::fill_pages($pid, $g, array_slice($slugs, 0, 30), !empty($_POST['replace']));
+      if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
+      $g = self::remember_slots($res, self::slots($pid));
+      self::save_guide($pid, $g);
+    } elseif ($op === 'set') {
+      // Eén fotovak wisselen (fotokiezer op het canvas): een eigen foto, een stockfoto of leeg.
+      $slot = (int) ($_POST['slot'] ?? -1);
+      $slots = self::slots($pid);
+      if ($slot < 0 || $slot >= $slots['total']) wp_send_json_error(['message' => 'Dit fotovak bestaat niet (meer). Herlaad de pagina.'], 400);
+      $images = is_array($g['images'] ?? null) ? array_values($g['images']) : [];
+      while (count($images) < $slots['total']) $images[] = self::empty_slot();
+      $pick = json_decode((string) wp_unslash($_POST['image'] ?? 'null'), true);
+      if (!is_array($pick)) {
+        $images[$slot] = self::empty_slot();
+      } elseif (!empty($pick['attachment_id'])) {
+        $id = (int) $pick['attachment_id'];
+        if (!self::own_attachment($id) || !wp_attachment_is_image($id)) wp_send_json_error(['message' => 'Deze foto mag je niet gebruiken.'], 403);
+        $images[$slot] = self::own_item($id);
+        // Nieuwe eigen foto: ook bij de eigen foto's zetten.
+        $have = array_flip(array_map(fn($i) => (int) ($i['attachment_id'] ?? 0), $own));
+        if (!isset($have[$id])) { $own[] = self::own_item($id); $g['uploadedImages'] = $own; }
+      } else {
+        $img = self::clean_stock($pick);
+        if (!$img) wp_send_json_error(['message' => 'Ongeldige foto.'], 400);
+        // Naar de mediabibliotheek als de bron dat toelaat (AISB_Archer_Stock::HOSTING).
+        $images[$slot] = class_exists('AISB_Archer_Stock') ? AISB_Archer_Stock::localise($img, $pid) : $img;
+      }
+      $g['images'] = array_slice($images, 0, $slots['total']);
+      $g = self::remember_slots($g, $slots);
+      self::save_guide($pid, $g);
+    } elseif ($op === 'search') {
+      if (!class_exists('AISB_Archer_Stock')) wp_send_json_error(['message' => 'Stockfoto\'s zijn niet beschikbaar.'], 400);
+      $slug = sanitize_title(wp_unslash((string) ($_POST['page_slug'] ?? '')));
+      $title = ''; $sections = '';
+      foreach (self::slots($pid)['pages'] as $p) if ($p['slug'] === $slug) { $title = $p['title']; $sections = $p['sections']; }
+      $r = AISB_Archer_Stock::search_for($pid, sanitize_text_field(wp_unslash((string) ($_POST['q'] ?? ''))), $slug, $title, $sections, (int) ($_POST['page'] ?? 1));
+      if (is_wp_error($r)) wp_send_json_error(['message' => $r->get_error_message()], 404);
+      wp_send_json_success(['search' => $r]);
     } elseif ($op !== 'state') {
       wp_send_json_error(['message' => 'Onbekende actie.'], 400);
     }
@@ -367,6 +411,74 @@ class AISB_Archer_Design {
    * Vult de fotovakken van één pagina: eigen foto's eerst (verdeeld over de pagina's), dan stockfoto's
    * als de voorkeur dat toelaat. Met $replace worden ook bestaande stockfoto's vervangen.
    */
+  /**
+   * Meerdere pagina's in één keer vullen. Het verdelen gebeurt hier precies zoals in fill_page -
+   * eigen foto's eerst, dan stock, pagina na pagina zodat niets dubbel komt - maar het wachten
+   * op de AI, op de bronnen en op de downloads is samengenomen in AISB_Archer_Stock::for_pages().
+   *
+   * @param array<int,string> $slugs
+   * @return array|WP_Error de stijlgids met alle pagina's gevuld
+   */
+  private static function fill_pages(int $pid, array $g, array $slugs, bool $replace) {
+    if (!class_exists('AISB_Archer_Stock')) return $g;
+    $slots = self::slots($pid);
+    $images = is_array($g['images'] ?? null) ? array_values($g['images']) : [];
+    while (count($images) < $slots['total']) $images[] = self::empty_slot();
+    if (count($images) > $slots['total']) $images = array_slice($images, 0, $slots['total']);
+
+    $pref = (string) ($g['archerPhotoPref'] ?? 'mix');
+    $own = is_array($g['uploadedImages'] ?? null) ? array_values($g['uploadedImages']) : [];
+    $pages_with = max(1, count(array_filter($slots['pages'], fn($p) => $p['count'] > 0)));
+
+    // 1. Per pagina de lege vakken opzoeken, en de eigen foto's er alvast in (zoals fill_page).
+    $open = [];
+    foreach ($slugs as $slug) {
+      $page = null;
+      foreach ($slots['pages'] as $p) if ($p['slug'] === $slug) $page = $p;
+      if (!$page || !$page['count']) continue;
+      $idx = [];
+      for ($i = $page['start']; $i < $page['start'] + $page['count']; $i++) {
+        if (self::empty_img($images[$i]) || ($replace && self::is_stock($images[$i]))) $idx[] = $i;
+      }
+      if (!$idx) continue;
+      if ($own && !$replace) {
+        $used = [];
+        foreach ($images as $img) if (is_array($img) && !empty($img['attachment_id'])) $used[(int) $img['attachment_id']] = 1;
+        $free = array_values(array_filter($own, fn($o) => !isset($used[(int) ($o['attachment_id'] ?? 0)])));
+        $share = $pref === 'own' ? count($idx) : max(1, (int) ceil(count($own) / $pages_with));
+        if ($pref === 'own' && count($free) < count($idx)) $free = array_merge($free, $own);
+        foreach (array_slice($free, 0, min($share, count($idx))) as $o) $images[array_shift($idx)] = $o;
+      }
+      if ($idx && $pref !== 'own') $open[$slug] = ['page' => $page, 'idx' => $idx];
+    }
+    if (!$open) { $g['images'] = $images; return $g; }
+
+    // 2. Alles tegelijk ophalen.
+    $exclude = [];
+    foreach ($images as $img) if (!self::empty_img($img)) $exclude[] = AISB_Archer_Stock::imgkey($img);
+    $vraag = [];
+    foreach ($open as $slug => $o) {
+      $vraag[] = ['slug' => $slug, 'title' => $o['page']['title'], 'sections' => $o['page']['sections'], 'need' => count($o['idx'])];
+    }
+    $res = AISB_Archer_Stock::for_pages($pid, $vraag, array_slice($exclude, -150));
+
+    // 3. Verdelen, met één gedeelde lijst van wat al vergeven is.
+    $taken = array_flip($exclude);
+    foreach ($open as $slug => $o) {
+      $idx = $o['idx'];
+      foreach ((array) ($res[$slug]['images'] ?? []) as $pick) {
+        if (!$idx) break;
+        if (empty($pick['full'])) continue;
+        $k = AISB_Archer_Stock::imgkey($pick);
+        if (isset($taken[$k])) continue;
+        $taken[$k] = 1;
+        $images[array_shift($idx)] = $pick;
+      }
+    }
+    $g['images'] = $images;
+    return $g;
+  }
+
   private static function fill_page(int $pid, array $g, string $slug, bool $replace) {
     $slots = self::slots($pid);
     $page = null;
@@ -402,19 +514,22 @@ class AISB_Archer_Design {
       }
     }
     if ($idx && $pref !== 'own' && class_exists('AISB_Archer_Stock')) {
+      // Uitsluiten op de sleutel van de foto, niet op haar adres: een binnengehaalde foto draagt
+      // een lokaal adres en zou anders op een tweede pagina gewoon opnieuw gekozen worden.
       $exclude = [];
-      foreach ($images as $img) if (!self::empty_img($img)) $exclude[] = (string) ($img['full'] ?? '');
+      foreach ($images as $img) if (!self::empty_img($img)) $exclude[] = AISB_Archer_Stock::imgkey($img);
       $r = AISB_Archer_Stock::for_page($pid, $page['slug'], $page['title'], $page['sections'], count($idx), array_slice($exclude, -150));
       if (is_wp_error($r)) {
         $g['images'] = $images;
         return $r;
       }
-      $taken = array_flip(array_map([AISB_Archer_Stock::class, 'pkey'], $exclude));
+      $taken = array_flip($exclude);
       foreach ((array) ($r['images'] ?? []) as $pick) {
         if (!$idx) break;
-        if (empty($pick['full']) || isset($taken[AISB_Archer_Stock::pkey($pick['full'])])) continue;
-        $taken[AISB_Archer_Stock::pkey($pick['full'])] = 1;
-        $images[array_shift($idx)] = $pick;
+        if (empty($pick['full']) || isset($taken[AISB_Archer_Stock::imgkey($pick)])) continue;
+        $taken[AISB_Archer_Stock::imgkey($pick)] = 1;
+        // Het adres bij de bron blijft de sleutel tegen dubbels; wat in de gids komt, is de kopie.
+        $images[array_shift($idx)] = AISB_Archer_Stock::localise($pick, $pid);
       }
     }
     $g['images'] = $images;
@@ -481,6 +596,29 @@ class AISB_Archer_Design {
     ];
   }
 
+  /** Een stockfoto uit de browser: enkel https-adressen van de gekende bronnen, en gekende velden. */
+  private static function clean_stock(array $p): ?array {
+    $ok = function ($u) {
+      $u = esc_url_raw((string) $u);
+      $host = (string) wp_parse_url($u, PHP_URL_HOST);
+      return (strpos($u, 'https://') === 0 && preg_match('/(^|\.)(unsplash\.com|pexels\.com|pixabay\.com)$/i', $host)) ? $u : '';
+    };
+    $full = $ok($p['full'] ?? '');
+    if ($full === '') return null;
+    // De eigen sleutel van de bron (Pixabay geeft "pixabay/1281053" mee) blijft bewaard: na het
+    // binnenhalen staat er een lokaal adres in full en is de foto daar niet meer aan te herkennen.
+    $key = preg_match('#^[a-z]+/\d+$#', (string) ($p['key'] ?? '')) ? (string) $p['key'] : '';
+    return [
+      'thumb' => $ok($p['thumb'] ?? '') ?: $full,
+      'full' => $full,
+      'key' => $key,
+      'alt' => sanitize_text_field((string) ($p['alt'] ?? '')),
+      'photographer' => sanitize_text_field((string) ($p['photographer'] ?? '')),
+      'link' => esc_url_raw((string) ($p['link'] ?? '')),
+      'source' => in_array(($p['source'] ?? ''), ['Unsplash', 'Pexels', 'Pixabay'], true) ? $p['source'] : 'Unsplash',
+    ];
+  }
+
   private static function empty_slot(): array {
     return ['full' => '', 'thumb' => '', 'alt' => '', 'archerEmpty' => true];
   }
@@ -490,7 +628,7 @@ class AISB_Archer_Design {
   }
 
   private static function is_stock($img): bool {
-    return !self::empty_img($img) && empty($img['uploaded']) && (!empty($img['source']) || preg_match('/unsplash|pexels/i', (string) ($img['full'] ?? '')));
+    return !self::empty_img($img) && empty($img['uploaded']) && (!empty($img['source']) || preg_match('/unsplash|pexels|pixabay/i', (string) ($img['full'] ?? '')));
   }
 
   /* ───────────────────────── Hulp ───────────────────────── */

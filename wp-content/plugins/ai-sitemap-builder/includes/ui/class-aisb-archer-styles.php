@@ -127,18 +127,46 @@ class AISB_Archer_Styles {
 
   /* ───────────────────────── CSS ───────────────────────── */
 
-  public static function font_url(array $s): string {
-    $fam = [];
+  /**
+   * De stylesheets voor de letters van een stijl. De hallmark-thema's halen hun letters bij twee
+   * bronnen: de meeste bij Google Fonts, acht gezichten (Sentient, Ranade, Gambarino, General Sans,
+   * Chillax, Boska, Switzer, Cabinet Grotesk) bij Fontshare. Een stijl kan er dus twee nodig hebben.
+   *
+   * @return array<int,string>
+   */
+  public static function font_urls(array $s): array {
+    $g = [];
+    $fs = [];
     foreach (['heading', 'body'] as $k) {
-      $f = $s['fonts'][$k];
-      $fam[$f['family']] = array_unique(array_merge($fam[$f['family']] ?? [], array_map('intval', (array) $f['weights'])));
+      $f = $s['fonts'][$k] ?? null;
+      if (!is_array($f) || empty($f['family'])) continue;
+      $fam = (string) $f['family'];
+      $w = array_map('intval', (array) ($f['weights'] ?? [400]));
+      if ((string) ($f['source'] ?? 'google') === 'fontshare') {
+        $slug = strtolower(str_replace(' ', '-', $fam));
+        $fs[$slug] = array_unique(array_merge($fs[$slug] ?? [], $w));
+      } else {
+        $g[$fam] = array_unique(array_merge($g[$fam] ?? [], $w));
+      }
     }
-    $q = [];
-    foreach ($fam as $name => $w) {
-      sort($w);
-      $q[] = 'family=' . str_replace(' ', '+', $name) . ':wght@' . implode(';', $w);
+    $out = [];
+    if ($g) {
+      $q = [];
+      foreach ($g as $name => $w) { sort($w); $q[] = 'family=' . str_replace(' ', '+', $name) . ':wght@' . implode(';', $w); }
+      $out[] = 'https://fonts.googleapis.com/css2?' . implode('&', $q) . '&display=swap';
     }
-    return 'https://fonts.googleapis.com/css2?' . implode('&', $q) . '&display=swap';
+    if ($fs) {
+      $q = [];
+      foreach ($fs as $slug => $w) { sort($w); $q[] = 'f[]=' . rawurlencode($slug) . '@' . implode(',', $w); }
+      $out[] = 'https://api.fontshare.com/v2/css?' . implode('&', $q) . '&display=swap';
+    }
+    return $out;
+  }
+
+  /** De eerste stylesheet, voor wie er maar één kan gebruiken. Zie font_urls() voor alle. */
+  public static function font_url(array $s): string {
+    $u = self::font_urls($s);
+    return $u ? $u[0] : '';
   }
 
   /**
@@ -162,7 +190,11 @@ class AISB_Archer_Styles {
     $n = self::notes($s['id']);
     if (!$n) return '';
     if ($kind === 'photo') return (string) ($n['photo'] ?? '');
-    return 'STYLE "' . $s['name'] . '" (DESIGN.md): ' . ($n['theme'] ?? '') . "\nVOICE: " . ($n['voice'] ?? '') . "\n";
+    // De stem van een hallmark-thema noemt de woorden die het weigert, en die staan er in het Engels.
+    // Zonder deze regel schreef de bakkerij "Ambachtelijke bakkerij" als titel terwijl de stem
+    // "never artisanal ... as a hollow badge" zegt: het verbod kwam wel mee, maar niet in het Nederlands.
+    return 'STYLE "' . $s['name'] . '" (DESIGN.md): ' . ($n['theme'] ?? '') . "\nVOICE: " . ($n['voice'] ?? '') . "\n"
+      . "The VOICE names the words this style refuses. They are written in English but they hold in the language of the site: a word it refuses is refused in its Dutch or French equivalent too (artisanal = ambachtelijk, curated, handcrafted, premium). When the brief itself uses such a word to describe the business, keep it out of the headline and out of the claim; name the concrete thing it stands for instead (the sourdough, the hour the bread comes out, what is not bought in).\n";
   }
 
   public static function design_md_url(string $id): string {
@@ -198,7 +230,52 @@ class AISB_Archer_Styles {
    * wisselen, zonder de voorbeelden opnieuw te laden.
    */
   public static function css(array $s, $guide = null): string {
-    return self::theme_css($s, $guide) . self::base_css();
+    return self::theme_css($s, $guide) . self::base_css() . self::craft_css($s);
+  }
+
+  /**
+   * Het vakmanschap van een hallmark-thema dat Brixies wél kan tonen: de korrel over de pagina,
+   * het karton en de schaduw van een kaart, en de dikte van een haarlijn. Wat er niet in zit, zit er
+   * bewust niet in: het WebGL-veld achter de pagina en de eigen componenten van een thema (staaltjes
+   * aan een klinknagel, een letterpress-kaart) vragen eigen HTML, en Archer zet bestaande secties.
+   */
+  public static function craft_css(array $s): string {
+    $c = $s['craft'] ?? null;
+    if (!is_array($c) || !apply_filters('archer_style_craft', true, $s['id'] ?? '')) return '';
+    $css = '';
+
+    // Korrel: één feTurbulence als data-URI, vast over de pagina, nooit in de weg voor de muis.
+    if (!empty($c['grain']) && is_array($c['grain'])) {
+      $g = $c['grain'];
+      $size = max(60, min(400, (int) ($g['size'] ?? 180)));
+      $op = max(0.01, min(0.4, (float) ($g['opacity'] ?? 0.12)));
+      $blend = in_array((string) ($g['blend'] ?? ''), ['multiply', 'screen', 'overlay', 'soft-light'], true) ? $g['blend'] : 'multiply';
+      $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '">'
+        . '<filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/>'
+        . '<feColorMatrix type="saturate" values="0"/></filter>'
+        . '<rect width="100%" height="100%" filter="url(#g)"/></svg>';
+      $css .= 'html body::after{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;'
+        . 'background-image:url("data:image/svg+xml,' . rawurlencode($svg) . '");background-size:' . $size . 'px;'
+        . 'opacity:' . rtrim(rtrim(number_format($op, 3, '.', ''), '0'), '.') . ';mix-blend-mode:' . $blend . ';}';
+    }
+
+    // De kaart: één schaduw, of een haarlijn, nooit allebei (hallmark craft.md).
+    $sel = 'html body :is([class*="__card"]:not([class*="__card-"]),.brxe-block[class*="card"]:not([class*="card-"]))';
+    $shadow = trim((string) ($c['shadow'] ?? ''));
+    if ($shadow !== '' && preg_match('/^[0-9a-zA-Z#(),.\s\/%-]{3,400}$/', $shadow)) {
+      $css .= $sel . '{box-shadow:' . $shadow . ';}';
+      // Karton: een lichtval van linksboven en een geperste rand, zoals de stock-thema's vragen.
+      if (!empty($c['card']['stock'])) {
+        $css .= $sel . '{background-image:linear-gradient(160deg,var(--a-base),var(--a-surface) 60%);}';
+      }
+      if (!empty($c['card']['pressed'])) {
+        $css .= $sel . '{box-shadow:' . $shadow . ',inset 1px 1px 0 rgba(255,255,255,.55);}';
+      }
+    }
+    $hair = (float) ($c['hairline'] ?? 1);
+    if ($hair > 0 && $hair <= 4) $css .= ':root{--a-rule-hair:' . rtrim(rtrim(number_format($hair, 2, '.', ''), '0'), '.') . 'px;}';
+
+    return $css;
   }
 
   /** Letters (@import) en het :root-blok met alle variabelen van deze stijl, met de aanpassingen uit de stijlgids. */
@@ -206,10 +283,50 @@ class AISB_Archer_Styles {
     [$v, $s] = self::tokens($s, $guide);
     $root = '';
     foreach ($v as $k => $val) $root .= $k . ':' . $val . ';';
-    $css = "@import url('" . self::font_url($s) . "');" . ':root{' . $root . '}';
+    $imports = '';
+    foreach (self::font_urls($s) as $u) $imports .= "@import url('" . $u . "');";
+    $css = $imports . ':root{' . $root . '}';
     // Donkere stijl: de grijze transparanten zijn daar licht, dus een foto-overlay zou de foto wit waas geven.
     if (!empty($s['dark'])) $css .= 'html body [class*="__overlay"]:not(.brxe-button){background-color:var(--a-overlay-dark) !important;}';
     return $css;
+  }
+
+  /**
+   * Schreefloos, schreef of mono: de terugvalletters achter de webfont.
+   *
+   * De naam van een letter verraadt haar soort niet. Vollkorn, Prata, Boska en Sentient zijn schreven
+   * zonder het woord "serif" in hun naam, en met vijftig hallmark-thema's zijn dat er genoeg om het
+   * uit te schrijven. Hallmark zelf zet het in de frontmatter (display: roman-serif Sentient); deze
+   * lijst komt daaruit. Staat een letter er niet bij, dan beslist de naam, zoals vroeger.
+   */
+  const SERIF_FACES = ['Bodoni Moda', 'Boska', 'Grenze Gotisch', 'Hedvig Letters Serif', 'Instrument Serif',
+    'Libre Caslon Display', 'Literata', 'Newsreader', 'Prata', 'Sentient', 'Spectral', 'Ultra',
+    'Vollkorn', 'Yeseva One', 'Young Serif', 'Zilla Slab'];
+  const MONO_FACES = ['Chivo Mono', 'Geist Mono', 'Martian Mono'];
+
+  /**
+   * Dezelfde keuze in de browser (assets/js/font-stack.js → window.AISB_fontStack).
+   * Drie lagen zetten de letter — het thema, de stijlgidsoverride en de eigen keuze in Ontwerp —
+   * en die moeten alle drie dezelfde terugval nemen. De lijsten gaan mee, zodat ze hier blijven.
+   */
+  public static function enqueue_stack_js(): void {
+    if (wp_script_is('aisb-font-stack', 'enqueued')) return;
+    $p = AISB_PLUGIN_DIR . 'assets/js/font-stack.js';
+    wp_enqueue_script('aisb-font-stack', AISB_PLUGIN_URL . 'assets/js/font-stack.js', [],
+      file_exists($p) ? (string) filemtime($p) : AISB_VERSION, false);
+    wp_localize_script('aisb-font-stack', 'AISB_FONTS', ['serif' => self::SERIF_FACES, 'mono' => self::MONO_FACES]);
+  }
+
+  public static function stack(string $family): string {
+    $q = "'" . $family . "'";
+    if (in_array($family, self::MONO_FACES, true) || preg_match('/\bmono\b/i', $family)) {
+      return $q . ', ui-monospace, SFMono-Regular, Menlo, monospace';
+    }
+    if (in_array($family, self::SERIF_FACES, true)
+      || (preg_match('/serif|garamond|cormorant|fraunces|caslon|bodoni|didone|slab/i', $family) && !preg_match('/sans/i', $family))) {
+      return $q . ', ui-serif, Georgia, serif';
+    }
+    return $q . ', ui-sans-serif, system-ui, sans-serif';
   }
 
   /** @return array{0: array<string,string>, 1: array} de variabelen en de stijl met de lettertypes uit de stijlgids */
@@ -239,11 +356,8 @@ class AISB_Archer_Styles {
     if (isset(self::RADII[$gr]) && $gr !== (string) ($s['radiusBucket'] ?? '')) $r = self::RADII[$gr];
     $px = fn($v) => (int) $v . 'px';
     $link = self::contrast($c['accent'], $c['base']) >= 4.5 ? $c['accent'] : $c['ink'];
-    $hf = "'" . $f['heading']['family'] . "', ui-sans-serif, system-ui, sans-serif";
-    $bf = "'" . $f['body']['family'] . "', ui-sans-serif, system-ui, sans-serif";
-    if (preg_match('/serif|garamond|cormorant|fraunces/i', $f['heading']['family']) && !preg_match('/sans/i', $f['heading']['family'])) {
-      $hf = "'" . $f['heading']['family'] . "', ui-serif, Georgia, serif";
-    }
+    $hf = self::stack($f['heading']['family']);
+    $bf = self::stack($f['body']['family']);
 
     $v = [
       // Archer-tokens
@@ -433,6 +547,7 @@ class AISB_Archer_Styles {
         'radius' => $s['radius'],
         'bands' => $s['bands'],
         'fontUrl' => self::font_url($s),
+        'fontUrls' => self::font_urls($s),
         'css' => self::css($s),
         'guide' => self::guide_patch($s),
         'designMd' => self::design_md_url($s['id']),

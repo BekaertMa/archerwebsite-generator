@@ -62,11 +62,14 @@ class AISB_Style_Guide {
       true
     );
 
+    // Terugvalletters: core.js zet de letter met !important en moet dezelfde reserve nemen als de stijl.
+    if (class_exists('AISB_Archer_Styles')) AISB_Archer_Styles::enqueue_stack_js();
+
     // Hoofdscripts voor logo-upload, kleuren, typografie, afbeeldingen, AI en live preview.
     wp_enqueue_script(
       'aisb-sg-core',
       AISB_PLUGIN_URL . 'assets/js/styleguide/core.js',
-      ['color-thief'],
+      ['color-thief', 'aisb-font-stack'],
       AISB_VERSION,
       true
     );

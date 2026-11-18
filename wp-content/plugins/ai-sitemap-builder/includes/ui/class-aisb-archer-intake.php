@@ -40,15 +40,18 @@ class AISB_Archer_Intake {
     'opening_hours' => 'Openingsuren',
     // 2. Klanten en doel
     'audience'      => 'Doelgroep',
+    'customer_need' => 'Waarmee klanten komen',
     'main_goal'     => 'Doel van de website',
     'booking'       => 'Online boeken',
     'price_info'    => 'Prijzen',
     // 3. Vertrouwen
+    'voice_note'    => 'In eigen woorden',
     'usp'           => 'Wat jullie onderscheidt',
     'reviews'       => 'Reviews',
     'references'    => 'Referenties',
     'certifications'=> 'Erkenningen',
     'guarantees'    => 'Garanties',
+    'objections'    => 'Twijfels van klanten',
     // 4. Pagina's
     'must_pages'    => "Pagina's",
     'page_count'    => "Aantal pagina's",
@@ -71,14 +74,14 @@ class AISB_Archer_Intake {
   /** Blokken van de agenda (voor de voortgang in de interface). */
   public const BLOCKS = [
     'zaak'       => ['label' => 'De zaak',          'fields' => ['business_name', 'activity', 'services', 'region', 'founded', 'team', 'opening_hours']],
-    'klant'      => ['label' => 'Klanten en doel',  'fields' => ['audience', 'main_goal', 'price_info']],
-    'vertrouwen' => ['label' => 'Vertrouwen',       'fields' => ['usp', 'reviews', 'references', 'certifications']],
+    'klant'      => ['label' => 'Klanten en doel',  'fields' => ['audience', 'customer_need', 'main_goal', 'price_info']],
+    'vertrouwen' => ['label' => 'Vertrouwen',       'fields' => ['usp', 'reviews', 'references', 'certifications', 'objections']],
     'paginas'    => ['label' => "Pagina's",         'fields' => ['must_pages', 'page_notes']],
     'stijl'      => ['label' => 'Stijl en beeld',   'fields' => ['tone', 'languages', 'style_id', 'brand_colors', 'logo', 'photos', 'contact']],
   ];
 
   /** Lijstvelden. */
-  private const LISTS = ['services', 'must_pages', 'languages', 'page_notes', 'faq_topics', 'references', 'certifications'];
+  private const LISTS = ['services', 'must_pages', 'languages', 'page_notes', 'faq_topics', 'references', 'certifications', 'objections'];
 
   /** Zonder deze velden start de generatie niet. */
   public const REQUIRED = ['business_name', 'activity', 'audience', 'region', 'main_goal', 'tone', 'languages', 'style_id'];
@@ -90,6 +93,7 @@ class AISB_Archer_Intake {
     add_action('wp_ajax_aisb_archer_intake_turn', [$this, 'ajax_turn']);
     add_action('wp_ajax_aisb_archer_intake_styles', [$this, 'ajax_styles']);
     add_action('wp_ajax_aisb_archer_intake_upload', [$this, 'ajax_upload']);
+    add_action('wp_ajax_aisb_archer_intake_voice', [$this, 'ajax_voice']);
     add_action('wp_ajax_aisb_archer_intake_save', [$this, 'ajax_save']);
   }
 
@@ -107,6 +111,19 @@ class AISB_Archer_Intake {
     $brief = self::clean_brief(is_array($brief) ? $brief : []);
     if (is_array($set) && $set) $brief = self::clean_brief(array_merge($brief, $set));
     if (!$messages) wp_send_json_error(['message' => 'Er is nog geen bericht.'], 400);
+
+    // Ontwerpvragen (ADR-0033): het antwoord bewaren en zonder AI-vraag naar de volgende vraag of het einde.
+    $draft = class_exists('AISB_Archer_Direction') ? AISB_Archer_Direction::clean_draft(wp_unslash($_POST['draft'] ?? '')) : '';
+    $answering_cp = sanitize_key((string) wp_unslash($_POST['answering'] ?? ''));
+    if ($draft !== '' && strpos($answering_cp, 'checkpoint_') === 0) {
+      $last = '';
+      for ($i = count($messages) - 1; $i >= 0; $i--) if ($messages[$i]['role'] === 'user') { $last = $messages[$i]['text']; break; }
+      // Een wedervraag is geen antwoord: die gaat naar de agent, de vraag komt daarna terug.
+      if (!preg_match('/\?\s*$/u', $last)) {
+        AISB_Archer_Direction::answer($draft, substr($answering_cp, strlen('checkpoint_')), $last);
+        $this->checkpoint_or_done($draft, $brief, 'Dank je, dat is alles wat ik nodig heb. Kijk de samenvatting nog even na.');
+      }
+    }
 
     // Een bestaande website lezen we één keer (homepagina), zodat de agent niet vraagt wat er al staat.
     $site_excerpt = '';
@@ -140,6 +157,9 @@ class AISB_Archer_Intake {
       return mb_substr(trim(wp_strip_all_tags((string) $o)), 0, 60);
     }, (array) ($out['options'] ?? [])), 'strlen'));
 
+    // Klaar volgens de agent: eerst de open ontwerpvragen van de strategie (hoogstens 3).
+    if ($done && $draft !== '') $this->checkpoint_or_done($draft, $new_brief, (string) ($out['reply'] ?? ''), true);
+
     $ask = sanitize_key((string) ($out['ask'] ?? ''));
     $card = $done ? null : self::card_for($ask, $new_brief);
 
@@ -157,6 +177,33 @@ class AISB_Archer_Intake {
       'missing'  => $missing,
       'summary'  => (!$missing) ? self::summary($new_brief) : [],
       'progress' => self::progress($new_brief),
+    ]);
+  }
+
+  /**
+   * Stelt de volgende open ontwerpvraag, of rondt af. Stuurt het antwoord zelf (wp_send_json_success).
+   * $only_if_question: enkel antwoorden als er een vraag is (anders loopt ajax_turn gewoon verder).
+   */
+  private function checkpoint_or_done(string $draft, array $brief, string $done_reply, bool $only_if_question = false): void {
+    // Einde van de intake: wacht hoogstens 40 s op vragen die nog gemaakt worden.
+    $q = AISB_Archer_Direction::next_question($draft, $only_if_question ? 40 : 0);
+    if (!$q && $only_if_question) return;
+    $missing = self::missing($brief);
+    if ($q) {
+      $strategy = (array) AISB_Archer_Direction::part($draft, 'strategy');
+      $turn = AISB_Archer_Direction::question_turn($q, (int) $q['index'] === 0, $strategy);
+      wp_send_json_success([
+        'reply' => $turn['reply'], 'options' => $turn['options'], 'multi' => false, 'input' => 'text',
+        'ask' => $turn['ask'], 'card' => null, 'brief' => $brief, 'done' => false,
+        'ready' => !$missing, 'missing' => $missing, 'summary' => [], 'progress' => self::progress($brief),
+        'checkpoint' => ['index' => (int) $q['index'] + 1, 'total' => (int) $q['total']],
+      ]);
+    }
+    wp_send_json_success([
+      'reply' => $done_reply !== '' ? mb_substr(trim(wp_strip_all_tags($done_reply)), 0, 700) : 'Dat is alles wat ik nodig heb.',
+      'options' => [], 'multi' => false, 'input' => 'text', 'ask' => '', 'card' => null, 'brief' => $brief,
+      'done' => !$missing, 'ready' => !$missing, 'missing' => $missing,
+      'summary' => !$missing ? self::summary($brief) : [], 'progress' => self::progress($brief),
     ]);
   }
 
@@ -239,6 +286,78 @@ class AISB_Archer_Intake {
     wp_send_json_success(['kind' => $kind, 'items' => $items, 'errors' => $errors]);
   }
 
+  /**
+   * De eigenaar vertelt zijn zaak in twee minuten, de opname wordt uitgeschreven.
+   *
+   * Dit is de rijkste invoer die de intake kan krijgen: een formulier levert wat de vraag uitlokt,
+   * een verteld verhaal levert de details die alleen hij kent (hoe lang, waarom, de specialiteit,
+   * de zin die hij altijd tegen klanten zegt) én de manier waarop hij praat. AISB_Archer_Voice
+   * maakt daar het stemprofiel van.
+   *
+   * De opname zelf wordt niet bewaard: ze gaat naar de transcriptie en daarna weg. Enkel de tekst blijft.
+   */
+  public function ajax_voice(): void {
+    $this->check();
+    @set_time_limit(180);
+    if (empty($_FILES['files'])) wp_send_json_error(['message' => 'Geen opname ontvangen.'], 400);
+    $f = $_FILES['files'];
+    $file = [
+      'name' => is_array($f['name']) ? ($f['name'][0] ?? '') : $f['name'],
+      'type' => is_array($f['type']) ? ($f['type'][0] ?? '') : $f['type'],
+      'tmp_name' => is_array($f['tmp_name']) ? ($f['tmp_name'][0] ?? '') : $f['tmp_name'],
+      'size' => (int) (is_array($f['size']) ? ($f['size'][0] ?? 0) : $f['size']),
+    ];
+    if (!$file['tmp_name'] || !is_uploaded_file($file['tmp_name'])) wp_send_json_error(['message' => 'De opname kwam niet door.'], 400);
+    // OpenAI neemt tot 25 MB; twee minuten spraak is een fractie daarvan.
+    if ($file['size'] > 25 * 1024 * 1024) wp_send_json_error(['message' => 'De opname is te lang.'], 400);
+    if ($file['size'] < 2000) wp_send_json_error(['message' => 'De opname is te kort. Vertel iets langer.'], 400);
+    $ext = ['audio/webm' => 'webm', 'video/webm' => 'webm', 'audio/ogg' => 'ogg', 'audio/mp4' => 'mp4', 'audio/x-m4a' => 'm4a', 'audio/mpeg' => 'mp3', 'audio/wav' => 'wav', 'audio/wave' => 'wav', 'audio/x-wav' => 'wav'][strtolower(explode(';', (string) $file['type'])[0])] ?? '';
+    if ($ext === '') wp_send_json_error(['message' => 'Dit soort opname kunnen we niet uitschrijven.'], 400);
+
+    $settings = class_exists('AISB_Settings') ? (array) (new AISB_Settings())->get_settings() : (array) get_option('aisb_settings', []);
+    $key = (string) ($settings['api_key'] ?? '');
+    if ($key === '') wp_send_json_error(['message' => 'Er is geen AI-sleutel ingesteld.'], 400);
+    $model = (string) apply_filters('archer_ai_transcribe_model', 'gpt-4o-transcribe');
+    $lang = sanitize_text_field((string) ($_POST['language'] ?? 'nl'));
+    $lang = preg_match('/^[a-z]{2}$/', $lang) ? $lang : 'nl';
+
+    $audio = file_get_contents($file['tmp_name']);
+    if ($audio === false) wp_send_json_error(['message' => 'De opname kon niet gelezen worden.'], 500);
+    $bound = 'archer' . wp_generate_password(16, false);
+    $body = '';
+    foreach (['model' => $model, 'language' => $lang, 'response_format' => 'text'] as $k => $v) {
+      $body .= "--{$bound}\r\nContent-Disposition: form-data; name=\"{$k}\"\r\n\r\n{$v}\r\n";
+    }
+    $body .= "--{$bound}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"opname.{$ext}\"\r\n"
+      . "Content-Type: " . $file['type'] . "\r\n\r\n" . $audio . "\r\n--{$bound}--\r\n";
+    unset($audio);
+
+    $res = wp_remote_post('https://api.openai.com/v1/audio/transcriptions', [
+      'timeout' => 150,
+      'headers' => ['Content-Type' => 'multipart/form-data; boundary=' . $bound, 'Authorization' => 'Bearer ' . $key],
+      'body' => $body,
+    ]);
+    @unlink($file['tmp_name']);
+    if (is_wp_error($res)) wp_send_json_error(['message' => $res->get_error_message()], 502);
+    $code = (int) wp_remote_retrieve_response_code($res);
+    $raw = trim((string) wp_remote_retrieve_body($res));
+    if ($code < 200 || $code >= 300) {
+      $j = json_decode($raw, true);
+      wp_send_json_error(['message' => (string) ($j['error']['message'] ?? 'Uitschrijven lukte niet (' . $code . ').')], 502);
+    }
+    // response_format=text geeft kale tekst; sommige modellen geven toch JSON terug.
+    $text = $raw;
+    if (strpos($raw, '{') === 0) {
+      $j = json_decode($raw, true);
+      $text = (string) ($j['text'] ?? '');
+    }
+    $text = trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags($text)));
+    if (mb_strlen($text) < 20) wp_send_json_error(['message' => 'We hoorden te weinig. Probeer het nog eens in een stillere ruimte.'], 400);
+    $text = mb_substr($text, 0, 8000);
+    error_log(sprintf('[AISB] Archer opname uitgeschreven: %d tekens, %d kB audio.', mb_strlen($text), (int) round($file['size'] / 1024)));
+    wp_send_json_success(['text' => $text, 'words' => count(preg_split('/\s+/u', $text))]);
+  }
+
   public function ajax_save(): void {
     $this->check();
     $project_id = (int) ($_POST['project_id'] ?? 0);
@@ -263,7 +382,16 @@ class AISB_Archer_Intake {
       update_post_meta($project_id, 'archer_contact', wp_slash(wp_json_encode($new, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
     }
     $design = self::apply_design($project_id, $brief);
-    wp_send_json_success(['saved' => true, 'design' => $design]);
+    // Het stemprofiel van deze klant (AISB_Archer_Voice): hier gemaakt, want hier is de brief compleet,
+    // inclusief het ingesproken verhaal. Alles wat daarna tekst maakt of nakijkt, leest eruit.
+    $voice = ['has' => false];
+    if (class_exists('AISB_Archer_Voice') && AISB_Archer_Voice::on()) {
+      $langs = (array) ($brief['languages'] ?? []);
+      $v = AISB_Archer_Voice::build($project_id, $brief, self::prompt_text($brief), (string) ($langs[0] ?? 'Dutch'));
+      if (is_wp_error($v)) error_log('[AISB] Archer stemprofiel mislukt: ' . $v->get_error_message());
+      $voice = AISB_Archer_Voice::summary($project_id);
+    }
+    wp_send_json_success(['saved' => true, 'design' => $design, 'voice' => $voice]);
   }
 
   /** De bevestigde brief van een project (leeg als het project zonder intake gemaakt is). */
@@ -409,6 +537,7 @@ class AISB_Archer_Intake {
         'radius' => $s['radius'],
         'dark' => !empty($s['dark']),
         'fontUrl' => AISB_Archer_Styles::font_url($s),
+        'fontUrls' => AISB_Archer_Styles::font_urls($s),
         '_score' => ($order[$s['id']] ?? 0) - $i * 0.001,
       ];
     }
@@ -544,28 +673,28 @@ class AISB_Archer_Intake {
     return <<<'TXT'
 You are Archer's onboarding agent. You set up a website for a small local business (hairdresser, baker, restaurant, physiotherapist, contractor, accountant, ...) through a conversation instead of a form. You are thorough but quick: the better the brief, the better the website, and every answer must feel easy. Write in the language the user writes in; default to Belgian Dutch (Flemish), informal "je".
 
-PERSONALITY: playful
-- You are a cheerful, curious maker who clearly enjoys building this website with them. Warm, light and a bit cheeky, like a friendly local web designer chatting over a coffee. Never sarcastic, never childish, never at the user's expense.
-- React to what they tell you with a short, specific reaction about THEIR business before the next question (3 to 10 words): "Zuurdesem en lokale bloem? Daar sta ik voor op.", "Sinds 1987, dat is een mooi verhaal voor je Over ons.", "Een kapsalon met koffie erbij, slim!". Make it about the content, not generic praise.
-- Never start two replies the same way. Avoid the stock words "Genoteerd", "Top", "Super", "Perfect" and "Mooi" as openers; vary freely.
-- Phrase questions with a light touch: "Vertel eens: sinds wanneer staan jullie achter de toonbank, en met hoeveel?", "Wie loopt er straks het liefst binnen via je website?". The quoted questions in the agenda below give the MEANING; always write them in your own playful words, adapted to their business (a baker gets bakery words, a plumber plumbing words).
-- Show progress now and then in a fun way when a block is done: "Zo, de basis staat. Nu het leukste deel: hoe gaat het eruitzien?"
-- At most one emoji in about every third message, only where it adds warmth (🥐 for a baker, ✂️ for a hairdresser, 🎨 at the style questions). Never in options, never two in a row.
-- Options stay short and clear (1 to 4 words); a little wink is allowed but they must still be obvious answers ("Liever niet", "Doe maar stock").
-- Playful never means slower: still one question per turn, still at most two short sentences plus the reaction.
-- If the user writes formally ("u"), stay friendly but switch to "u" and tone the jokes down.
+PERSONALITY: friendly and warm, lightly playful
+- You sound like a friendly, competent local web designer: warm, clear and positive, with a light touch. Professional first; a small smile now and then, never jokes, puns or exaggeration. Never sarcastic or childish.
+- You may start with a short, specific acknowledgement of their answer (2 to 8 words) when it adds something: "Sinds 1987, mooi voor je Over ons-pagina.", "Zuurdesem en lokale bloem, sterk punt.", "Duidelijk, dan zet ik bestellen centraal." Skip it when there is nothing useful to say. No generic praise.
+- Vary your openers; do not start every reply the same way (avoid repeating "Genoteerd").
+- Phrase questions naturally and simply, adapted to their business: "Sinds wanneer bestaan jullie, en met hoeveel zijn jullie?", "Wat moet een bezoeker vooral doen op je website?". The quoted questions in the agenda below give the MEANING; write them in your own words.
+- When a block of the agenda is done, you may say so briefly: "De basis staat. Nu de stijl van je website."
+- No emojis.
+- Options are short and plain (1 to 4 words).
+- Still one question per turn, at most two short sentences plus the optional acknowledgement.
+- If the user writes formally ("u"), switch to "u".
 
 HOW YOU TALK
-- One question per turn, one or two short sentences, after a short reaction to the previous answer.
+- One question per turn, one or two short sentences.
 - When the answer is a choice, give 2 to 5 short options (1 to 4 words each) in "options". Add "Iets anders" as last option when the list may not cover it. For optional questions, add "Sla over" as an option.
 - Set "multi": true only when several options can be picked at once.
 - Always set "ask" to the brief field your question is about. For these fields the interface shows a card under your message, so do NOT list the choices yourself and give no options:
   style_id (style cards), brand_colors (colour swatches), logo (upload box), own_photos (upload box), must_pages (page checklist).
-- If the user corrects something ("eigenlijk...", "nee, het is..."), update that field, confirm in a few light words ("Oeps, aangepast: Lokeren dus.") and continue.
+- If the user corrects something ("eigenlijk...", "nee, het is..."), update that field, confirm in a few words ("Aangepast: Lokeren.") and continue.
 - Never ask for something the brief or the current website already answers. Never ask two things at once. Never ask for a field that has a value, unless you confirm a fact from the website.
 - If the user asks a question, answer it in one sentence, then continue.
 - ALWAYS write what the user just told you into "brief" (the field you asked about, plus any other facts in the answer). A turn without "brief" loses the answer.
-- Messages like "Stijl gekozen: Ambacht" or "Logo opgeladen" or "Pagina's gekozen: ..." come from a card: the brief already has the value. React in a few playful words about the choice ("Ambacht, warm en eerlijk, dat past bij jullie brood.") and move on.
+- Messages like "Stijl gekozen: Ambacht" or "Logo opgeladen" or "Pagina's gekozen: ..." come from a card: the brief already has the value. Confirm briefly ("Ambacht, warm en eerlijk: goede keuze voor een bakkerij.") and move on.
 
 AGENDA, in this order. Skip what is known. Required fields are marked *.
 1. DE ZAAK
@@ -576,6 +705,7 @@ AGENDA, in this order. Skip what is known. Required fields are marked *.
    opening_hours: only for a shop, salon, practice, restaurant or other place people visit.
 2. KLANTEN EN DOEL
    audience*: "B2C", "B2B" or "B2B en B2C", plus who exactly if they say.
+   customer_need: why customers come to them, in the customer's words: the problem they want solved or what they want to get ("Waarmee komen klanten meestal bij jullie?"). One or two short sentences; "Sla over" allowed. This is the core of the website's message, so ask it unless the brief or website already answers it.
    main_goal*: what a visitor must do: "Bellen", "Offerte aanvragen", "Afspraak boeken", "Reserveren", "Langskomen", "Bestellen", "Contactformulier".
    booking: only if main_goal is booking or reservation: "Calendly", "Eigen boekingssysteem (link)", "Nog geen", or the tool name. Archer links to an external tool; it does not sync calendars.
    price_info: show prices? "Vaste prijzen tonen", "Vanaf-prijzen", "Prijs op aanvraag".
@@ -583,6 +713,7 @@ AGENDA, in this order. Skip what is known. Required fields are marked *.
    usp: what sets them apart (one or two sentences).
    reviews: Google rating and number of reviews, or a short customer quote; "Sla over" allowed.
    references: known clients or projects they may show; certifications: labels, federations, diplomas; guarantees: warranty or promise. Ask references and certifications in one question if the business is B2B or a trade; skip guarantees unless it fits (trades, repairs, products).
+   objections: what makes people hesitate before they call, book or buy ("Waarover twijfelen mensen voor ze beslissen?", for example price, waiting time, whether it is for them). A short list; "Sla over" allowed. If the user answers this, do not ask faq_topics again later unless they want a FAQ page.
 4. PAGINA'S
    must_pages: ask "Welke pagina's wil je op je website?" with ask "must_pages" (the checklist card). page_count is inferred from it (one of "1", "2-5", "5-10", "10-15", "15+"); never ask it.
    page_notes: per-page depth. After must_pages, ask ONE OR TWO focused follow-ups about the most important pages, for example:
@@ -603,12 +734,12 @@ AGENDA, in this order. Skip what is known. Required fields are marked *.
    contact: object with address, phone, email, socials. Ask once, in one turn ("Welk adres, telefoonnummer en e-mail mogen op de website?"); the user may skip. If they skip, set contact to {"skipped": true}.
 
 FINISHING
-- When all required fields are filled and the agenda is covered (or the user wants to stop: "genoeg", "maak de website", "start maar"), set "done": true and reply with one cheerful sentence like "Dat was het! Ik heb alles om iets moois te bouwen. Kijk nog even mee?" Do not list the summary yourself.
+- When all required fields are filled and the agenda is covered (or the user wants to stop: "genoeg", "maak de website", "start maar"), set "done": true and reply with one sentence like "Dat is alles wat ik nodig heb. Kijk de samenvatting nog even na." Do not list the summary yourself.
 - When you are near the turn limit, make sensible choices yourself for optional fields and finish.
 
 OUTPUT: only a JSON object:
 {"reply": string, "ask": string, "options": [string], "multi": boolean, "input": "text"|"url"|"none", "brief": {only the fields you add or change in this turn}, "done": boolean}
-Field types: strings, except services, must_pages, languages, page_notes, faq_topics, references, certifications (arrays of strings) and contact (object with address, phone, email, socials as strings). Never write the fields style_id, logo or own_photos yourself: the cards set them. Keep values short and factual, in the user's words. Never invent facts the user did not give or the website does not show. "Sla over" means: store nothing for that field and never ask it again (store "-" to mark it as asked).
+Field types: strings, except services, must_pages, languages, page_notes, faq_topics, references, certifications, objections (arrays of strings) and contact (object with address, phone, email, socials as strings). Never write the fields style_id, logo or own_photos yourself: the cards set them. Keep values short and factual, in the user's words. Never invent facts the user did not give or the website does not show. "Sla over" means: store nothing for that field and never ask it again (store "-" to mark it as asked).
 TXT;
   }
 
@@ -657,6 +788,10 @@ TXT;
         } elseif (is_string($v) && trim($v) !== '') {
           $out[$k] = mb_substr(trim(wp_strip_all_tags($v)), 0, 60);
         }
+      } elseif ($k === 'voice_note') {
+        // Het verhaal van de eigenaar: langer dan de andere velden, want daar zit de waarde in.
+        $s = trim(preg_replace('/[ \t]+/u', ' ', wp_strip_all_tags(is_array($v) ? implode(' ', $v) : (string) $v)));
+        if (mb_strlen($s) >= 20) $out[$k] = mb_substr($s, 0, 8000);
       } elseif ($k === 'own_photos') {
         $list = [];
         foreach ((array) $v as $ph) {
@@ -746,6 +881,7 @@ TXT;
       $line('Team', 'team'),
       $line('Openingsuren', 'opening_hours'),
       $line('Doelgroep', 'audience'),
+      $line('Waarmee klanten komen (hun probleem of wens, in hun woorden)', 'customer_need'),
       $line('Wat een bezoeker moet doen (hoofddoel, de knop in de header)', 'main_goal'),
       !empty($b['booking']) && $b['booking'] !== '-' ? 'Online boeken via: ' . $b['booking'] . ' (externe link of widget, geen agendakoppeling).' : '',
       $line('Prijzen', 'price_info'),
@@ -754,6 +890,7 @@ TXT;
       $line('Referenties', 'references'),
       $line('Erkenningen en labels', 'certifications'),
       $line('Garanties', 'guarantees'),
+      $line('Twijfels van klanten (beantwoorden op de site)', 'objections'),
       $line('Toon van de teksten', 'tone'),
       $line("Pagina's die zeker moeten", 'must_pages'),
       $line('Afspraken per pagina', 'page_notes'),
@@ -761,6 +898,8 @@ TXT;
       $line('Gewenste sfeer', 'style_mood'),
       $line('Voorbeeldsites', 'examples'),
       $line('Liever niet', 'dislikes'),
+      // Het ingesproken verhaal staat achteraan en ingekort: het stemprofiel krijgt het volledig.
+      !empty($b['voice_note']) ? "De eigenaar vertelde zelf over zijn zaak (uitgeschreven opname; hier staan details die nergens anders staan, en zo praat hij):\n" . mb_substr((string) $b['voice_note'], 0, 1500) : '',
     ]));
   }
 

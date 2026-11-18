@@ -311,7 +311,8 @@
       const g = S.guide || {};
       const cur = g.style;
       const styles = S.styles || [];
-      styles.forEach((s) => loadFont(s.fontUrl));
+      // Een hallmark-stijl kan twee bronnen hebben (Google Fonts en Fontshare).
+      styles.forEach((s) => (s.fontUrls && s.fontUrls.length ? s.fontUrls : [s.fontUrl]).forEach(loadFont));
       const brand = /^#[0-9A-F]{6}$/i.test(g.brand || "") ? g.brand.toUpperCase() : "";
       const swatches = ["#1F3A5F", "#2152E8", "#0E6E72", "#2F5A46", "#6B8F3E", "#C2410C", "#D21F14", "#B4235A", "#6D28D9", "#191917"];
       return `
@@ -374,7 +375,7 @@
           </label>
           <div class="archer-ds-own">${own.map((o) => `<span class="archer-ds-own-item"><img src="${esc(sameScheme(o.thumb || o.full))}" alt="" loading="lazy"><button type="button" data-ds-own-remove="${Number(o.id)}" aria-label="Foto weghalen">✕</button></span>`).join("")}</div>
         </section>
-        <a class="archer-dp-more" href="${esc(links.photos)}" data-archer-nav>Foto per foto wisselen (alle opties) →</a>`;
+        <p class="archer-ds-note">Eén foto wisselen? Klik erop in de sectie.</p>`;
     }
 
     right.addEventListener("click", async (e) => {
@@ -582,6 +583,72 @@
       return errors;
     }
 
+    /**
+     * Hetzelfde, maar zonder te wachten tot alle pagina's er staan: zodra de opbouw van één
+     * pagina klaar is, gaat die pagina de rij in en worden haar foto's gezocht terwijl de
+     * volgende pagina's nog geschreven worden.
+     *
+     * Hoeveel dat scheelt hangt af van hoe lang de opbouw daarna nog duurt. Gemeten op zes
+     * pagina's: de opbouw was klaar na 29 s, het fotowerk duurde samen 35 s, en daarvan viel
+     * 9 s binnen de opbouw — 65 s werd 56 s. Meer zit er niet in zolang de foto's een voor een
+     * gaan en samen langer duren dan de opbouw; wie verder wil, moet meerdere pagina's in één
+     * verzoek laten vullen (één schrijver, maar de bronnen parallel bevraagd).
+     *
+     * Eén pagina tegelijk, en dat blijft zo: de server herschrijft bij elke vulling de hele
+     * stijlgids (één schrijver), en de foto's van de vorige pagina moeten al meetellen, anders
+     * staat dezelfde foto twee keer op de site.
+     *
+     * De wireframe staat op de server bewaard voor het antwoord terugkomt, dus op het moment
+     * dat archer:wf-progress afgaat kent de server de fotovakken van die pagina al.
+     */
+    function photoStreamer(only) {
+      const queue = [];
+      const seen = new Set();
+      let worker = null;
+      let errors = 0;
+      let done = 0;
+      const api = { onPage: null };
+
+      // Alles wat op dit moment klaar staat, gaat in één verzoek mee: de server neemt het
+      // wachten op de AI, op de bronnen en op de downloads dan voor alle pagina's samen.
+      // Tijdens de opbouw zijn dat er een paar tegelijk, aan het eind de rest in één keer.
+      const drain = async () => {
+        while (queue.length) {
+          const batch = queue.splice(0, queue.length);
+          done += batch.length;
+          const eerste = (wf.state.pages || []).find((p) => p.slug === batch[0]) || { slug: batch[0], title: batch[0] };
+          if (api.onPage) api.onPage(done, done + queue.length, eerste, batch.length);
+          try {
+            if (UI.flushAll) await UI.flushAll();
+            await photoOp({ op: "fill_many", page_slugs: JSON.stringify(batch) });
+          } catch (e) {
+            errors += batch.length;
+          }
+        }
+        worker = null;
+      };
+
+      // Pagina's die intussen klaar zijn, in de rij. Mislukte pagina's hebben geen model en
+      // blijven dus vanzelf liggen.
+      api.sweep = () => {
+        for (const p of wf.state.pages || []) {
+          if (only && !only.has(p.slug)) continue;
+          if (seen.has(p.slug) || !sectionsOf(p.slug)) continue;
+          seen.add(p.slug);
+          queue.push(p.slug);
+        }
+        if (queue.length && !worker) worker = drain();
+      };
+      api.finish = async () => {
+        document.removeEventListener("archer:wf-progress", api.sweep);
+        api.sweep();
+        while (worker) await worker;
+        return errors;
+      };
+      document.addEventListener("archer:wf-progress", api.sweep);
+      return api;
+    }
+
     /* ── Foto's en stijl op het canvas ────────────────── */
 
     // Eigen foto's van deze site in https als de pagina https is (WordPress geeft hier http-adressen).
@@ -597,6 +664,11 @@
       if (!doc || !doc.body) return;
       const imgs = Array.from(doc.querySelectorAll("img")).filter((img) => !isLogoImg(img));
       imgs.forEach((img) => { if (!img.hasAttribute("data-archer-orig")) img.setAttribute("data-archer-orig", img.getAttribute("src") || ""); });
+      // Fotovakken klikbaar maken (archer.js opent dan de fotokiezer); de rest is deel van het sjabloon.
+      imgs.forEach((img, i) => {
+        if (range && i < range.count) img.setAttribute("data-archer-slot", String(range.start + i));
+        else img.removeAttribute("data-archer-slot");
+      });
       if (!range || !range.count) return;
       const list = (S.photos.images || []).slice(range.start, range.start + range.count);
       imgs.forEach((img, i) => {
@@ -623,6 +695,164 @@
       }
     }, true);
 
+
+    /* ── Fotokiezer: klik op een foto in een sectie ─────────────────────
+     * archer.js stuurt archer:image-click met het fotovak (data-archer-slot). Kies een stockfoto
+     * (zoeken), een eigen foto (of laad er een op), of laat het vak leeg. Meteen zichtbaar, daarna bewaard. */
+    let picker = null;
+    function closePicker() {
+      if (!picker) return;
+      picker.el.remove();
+      picker = null;
+    }
+    function pickerPos(img, iframe) {
+      const r = iframe.getBoundingClientRect();
+      const k = r.width / (iframe.offsetWidth || 1200);
+      const ir = img.getBoundingClientRect();
+      return { left: r.left + ir.left * k, top: r.top + ir.top * k, width: ir.width * k, height: ir.height * k };
+    }
+    function placePicker() {
+      if (!picker) return;
+      const box = picker.el.getBoundingClientRect();
+      const a = pickerPos(picker.img, picker.iframe);
+      let left = a.left + a.width + 12;
+      if (left + box.width > window.innerWidth - 12) left = a.left - box.width - 12;
+      if (left < 12) left = Math.max(12, Math.min(window.innerWidth - box.width - 12, a.left + a.width / 2 - box.width / 2));
+      const top = Math.max(12, Math.min(window.innerHeight - box.height - 12, a.top));
+      picker.el.style.left = left + "px";
+      picker.el.style.top = top + "px";
+    }
+    const pageOfSlot = (slot) => (S.photos.pages || []).find((p) => slot >= p.start && slot < p.start + p.count) || null;
+    function pickerGrid(list, kind) {
+      if (!list.length) return `<p class="archer-pk-empty">${kind === "own" ? "Nog geen eigen foto's. Laad er hierboven een op." : "Niets gevonden. Probeer een ander woord."}</p>`;
+      return `<div class="archer-pk-grid">${list.map((it, i) => `<button type="button" class="archer-pk-item" data-pk-${kind}="${i}" title="${esc(it.alt || it.photographer || "")}"><img src="${esc(sameScheme(it.thumb || it.full))}" alt="${esc(it.alt || "")}" loading="lazy"></button>`).join("")}</div>`;
+    }
+    function renderPicker() {
+      if (!picker) return;
+      const P = picker;
+      const cur = (S.photos.images || [])[P.slot];
+      const own = (S.photos.own || []).map((o) => ({ thumb: o.thumb, full: o.full, attachment_id: o.id }));
+      P.ownList = own;
+      P.el.innerHTML =
+        `<div class="archer-pk-head"><strong>Foto wisselen</strong>${P.page ? `<span>${esc(P.page.title)}</span>` : ""}<button type="button" class="archer-pk-x" data-pk-close aria-label="Sluiten">✕</button></div>` +
+        `<div class="archer-pk-tabs" role="tablist">` +
+        `<button type="button" role="tab" class="${P.tab === "stock" ? "is-on" : ""}" data-pk-tab="stock" aria-selected="${P.tab === "stock"}">Stockfoto's</button>` +
+        `<button type="button" role="tab" class="${P.tab === "own" ? "is-on" : ""}" data-pk-tab="own" aria-selected="${P.tab === "own"}">Eigen foto's <span>${own.length}</span></button></div>` +
+        (P.tab === "stock"
+          ? `<form class="archer-pk-search" data-pk-search><input type="search" class="archer-input" placeholder="Zoek, bv. verse croissants" value="${esc(P.q || "")}" aria-label="Zoek een foto"><button type="submit" class="archer-btn archer-btn-primary archer-btn-sm">Zoek</button></form>` +
+            (P.loading ? `<p class="archer-pk-empty">Foto's zoeken…</p>` : P.error ? `<p class="archer-pk-empty">${esc(P.error)}</p>` : pickerGrid(P.results || [], "stock")) +
+            (P.results && P.results.length && P.pageNo < (P.totalPages || 1) && !P.loading ? `<button type="button" class="archer-link-btn archer-pk-more" data-pk-more>Meer foto's</button>` : "")
+          : `<label class="archer-pk-upload"><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden data-pk-upload><span>+ Foto's opladen</span></label>` + pickerGrid(own, "own")) +
+        `<div class="archer-pk-foot">${cur && cur.full ? `<button type="button" class="archer-link-btn" data-pk-clear>Fotovak leeg laten</button>` : `<span class="archer-muted">Dit fotovak is nog leeg.</span>`}<span class="archer-pk-status" data-pk-status aria-live="polite"></span></div>`;
+      requestAnimationFrame(placePicker);
+    }
+    async function pickerSearch(more) {
+      if (!picker) return;
+      const P = picker;
+      P.loading = true;
+      P.error = "";
+      if (!more) { P.results = []; P.pageNo = 1; }
+      renderPicker();
+      try {
+        const d = await post("aisb_archer_design_photos", { project_id: String(pid), op: "search", q: P.q || "", page_slug: P.page ? P.page.slug : "", page: String(P.pageNo || 1) });
+        if (picker !== P) return;
+        P.q = P.q || d.search.keyword;
+        P.results = (P.results || []).concat(d.search.images || []);
+        P.totalPages = d.search.total_pages || 1;
+      } catch (err) {
+        if (picker !== P) return;
+        P.error = err.message;
+      }
+      P.loading = false;
+      renderPicker();
+    }
+    /** Kies een foto voor het vak: meteen tonen, dan bewaren. */
+    async function pickPhoto(image) {
+      if (!picker) return;
+      const P = picker;
+      const prev = P.img.getAttribute("src");
+      if (image) { P.img.src = sameScheme(image.full); P.img.srcset = ""; P.img.style.objectFit = "cover"; }
+      else { const o = P.img.getAttribute("data-archer-orig"); if (o !== null) { P.img.src = o; P.img.srcset = ""; } }
+      const st = $("[data-pk-status]", P.el);
+      if (st) st.textContent = "Bewaren…";
+      saving(true);
+      try {
+        const d = await post("aisb_archer_design_photos", { project_id: String(pid), op: "set", slot: String(P.slot), image: JSON.stringify(image || null) });
+        S.photos = d.photos;
+        injectAll();
+        renderRight();
+        saving(false);
+        closePicker();
+        toast(image ? "Foto gewisseld." : "Fotovak leeggemaakt.");
+      } catch (err) {
+        P.img.src = prev;
+        saving(false);
+        if (st) st.textContent = err.message;
+        else toast(err.message, "err");
+      }
+    }
+    document.addEventListener("archer:image-click", (e) => {
+      const { img, iframe, slot } = e.detail || {};
+      if (!img || !iframe || !(slot >= 0)) return;
+      closePicker();
+      const el = document.createElement("div");
+      el.className = "archer-picker";
+      el.setAttribute("role", "dialog");
+      el.setAttribute("aria-label", "Foto wisselen");
+      document.body.appendChild(el);
+      picker = { el, img, iframe, slot, page: pageOfSlot(slot), tab: (S.photos.pref === "own" && (S.photos.own || []).length) ? "own" : "stock", q: "", results: [], pageNo: 1 };
+      renderPicker();
+      if (picker.tab === "stock") pickerSearch(false);
+    });
+    document.addEventListener("click", async (e) => {
+      if (!picker) return;
+      const P = picker;
+      if (!P.el.contains(e.target)) return;
+      let b;
+      if (e.target.closest("[data-pk-close]")) return closePicker();
+      if ((b = e.target.closest("[data-pk-tab]"))) {
+        P.tab = b.getAttribute("data-pk-tab");
+        renderPicker();
+        if (P.tab === "stock" && !(P.results || []).length && !P.loading) pickerSearch(false);
+        return;
+      }
+      if (e.target.closest("[data-pk-more]")) { P.pageNo = (P.pageNo || 1) + 1; return pickerSearch(true); }
+      if ((b = e.target.closest("[data-pk-stock]"))) return pickPhoto((P.results || [])[Number(b.getAttribute("data-pk-stock"))]);
+      if ((b = e.target.closest("[data-pk-own]"))) return pickPhoto((P.ownList || [])[Number(b.getAttribute("data-pk-own"))]);
+      if (e.target.closest("[data-pk-clear]")) return pickPhoto(null);
+    });
+    document.addEventListener("submit", (e) => {
+      if (!picker || !e.target.matches("[data-pk-search]")) return;
+      e.preventDefault();
+      picker.q = ($("input", e.target).value || "").trim();
+      pickerSearch(false);
+    });
+    document.addEventListener("change", async (e) => {
+      if (!picker || !e.target.matches("[data-pk-upload]")) return;
+      const files = Array.from(e.target.files || []).filter((f) => /^image\//.test(f.type)).slice(0, 30);
+      if (!files.length) return;
+      const st = $("[data-pk-status]", picker.el);
+      if (st) st.textContent = "Opladen…";
+      try {
+        const up = await post("aisb_archer_intake_upload", { kind: "photos" }, files);
+        const d = await post("aisb_archer_design_photos", { project_id: String(pid), op: "own_add", ids: JSON.stringify(up.items.map((it) => it.id)) });
+        S.photos = d.photos;
+        renderRight();
+        if (files.length === 1 && picker) {
+          // Eén foto opgeladen: meteen in dit vak.
+          return pickPhoto({ attachment_id: up.items[0].id, full: up.items[0].url, thumb: up.items[0].thumb });
+        }
+        renderPicker();
+      } catch (err) {
+        if (st) st.textContent = err.message;
+      }
+    });
+    // Sluiten: Escape, buiten de kiezer klikken (niet op een andere foto: die opent een nieuwe kiezer).
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picker) closePicker(); });
+    document.addEventListener("mousedown", (e) => { if (picker && !picker.el.contains(e.target)) closePicker(); }, true);
+    window.addEventListener("resize", () => picker && placePicker());
+    // Het canvas verschuift of zoomt: de kiezer blijft bij zijn foto.
+    (function follow() { if (picker) placePicker(); requestAnimationFrame(follow); })();
 
     /* ── Opbouw veranderd (sectie erbij, weg of verplaatst): foto's laten volgen ── */
     let layoutSig = "";
@@ -666,7 +896,7 @@
     function dockDone(text) {
       if (!dock) return;
       dock.classList.add("is-done");
-      dock.innerHTML = `<div class="archer-build-dock-text"><strong>${esc(text)}</strong></div><div class="archer-build-dock-actions"><button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-dock-close>Laat zien!</button></div>`;
+      dock.innerHTML = `<div class="archer-build-dock-text"><strong>${esc(text)}</strong></div><div class="archer-build-dock-actions"><button type="button" class="archer-btn archer-btn-primary archer-btn-sm" data-dock-close>Bekijk je website</button></div>`;
       $("[data-dock-close]", dock).addEventListener("click", () => { dock.remove(); dock = null; });
       setTimeout(() => { if (dock) { dock.remove(); dock = null; } }, 12000);
     }
@@ -691,19 +921,29 @@
     }
 
     async function runBuild() {
-      dockShow("wireframes", "Ik zet elke pagina in elkaar en schrijf de teksten. Kijk maar mee…", 35);
+      dockShow("wireframes", "Ik bouw elke pagina op en schrijf de teksten…", 35);
       await waitCanvas();
       // Pagina's zonder wireframe (bv. na herladen tijdens de run): alsnog maken.
       const missing = wf.state.pages.filter((p) => !sectionsOf(p.slug)).map((p) => p.slug);
       const st0 = UI.wfGenState ? UI.wfGenState() : { pending: 0 };
       if (missing.length && !st0.pending && UI.generateWireframes) UI.generateWireframes(missing);
       await sleep(400);
+      // De foto's lopen mee met de opbouw: elke pagina die klaar is, krijgt er meteen.
+      const stream = photoStreamer();
+      let fotoNu = "";
+      stream.onPage = (d, n, p) => { fotoNu = p.title || p.slug; };
+      stream.sweep();
       const st = await waitWireframes((s) => {
-        if (s.total) dockShow("wireframes", `${s.done} van ${s.total} pagina's staan er al, nog even…`, 35 + Math.round((s.done / s.total) * 40));
+        if (!s.total) return;
+        dockShow("wireframes", `Pagina's opbouwen: ${s.done} van ${s.total} klaar…${fotoNu ? ` · foto's voor ${fotoNu}` : ""}`,
+          35 + Math.round((s.done / s.total) * 40));
       });
       renderLeft();
-      dockShow("photos", "Nu de foto's aan de muur…", 78);
-      const errors = await fillPhotos(false, (i, n, p) => dockShow("photos", `Foto's ophangen op ${p.title} (${i} van ${n})…`, 78 + Math.round((i / n) * 20)));
+      dockShow("photos", fotoNu ? `Foto's voor ${fotoNu}…` : "Foto's plaatsen…", 78);
+      stream.onPage = (d, n, p, hoeveel) => dockShow("photos",
+        hoeveel > 1 ? `Foto's voor ${hoeveel} pagina's (${d} van ${n})…` : `Foto's voor ${p.title} (${d} van ${n})…`,
+        78 + Math.round((d / n) * 20));
+      const errors = await stream.finish();
       const url = new URL(window.location.href);
       url.searchParams.delete("aisb_build");
       window.history.replaceState({}, "", url.toString());
@@ -711,7 +951,7 @@
       const failed = (st && st.failed && st.failed.length) || 0;
       dockDone(failed || errors
         ? `Je website staat er. ${failed ? failed + " pagina('s) lukten niet: klik er links op en kies opnieuw proberen. " : ""}${errors ? "Niet alle foto's zijn geplaatst." : ""}`
-        : "Tadaa, je website staat er! Schaaf bij wat je wil en zet hem online.");
+        : "Je website staat klaar. Pas aan wat je wil en publiceer.");
     }
 
     async function runTask() {
@@ -729,11 +969,13 @@
         UI.generateWireframes(todo);
         focusPage(todo[0]);
         await sleep(400);
+        // Ook hier lopen de foto's mee: bij één pagina verandert er niets, bij meer wel.
+        // Alleen de nieuwe pagina's: de rest heeft haar foto's al.
+        const stream = photoStreamer(new Set(todo));
+        stream.sweep();
         await waitWireframes();
         renderLeft();
-        // Foto's voor de nieuwe pagina.
-        await photoOp({ op: "state" }).catch(() => {});
-        for (const slug of todo) await photoOp({ op: "fill", page_slug: slug }).catch(() => {});
+        await stream.finish();
         toast("De nieuwe pagina is klaar.");
       }
     }

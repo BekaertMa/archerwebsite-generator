@@ -1,58 +1,851 @@
 {
-  "atelier": {
-    "theme": "Editorial and calm, like a well-made print magazine. Big serif headlines carry the page; the rest steps back. Lots of white space, black as the only accent, thin rules instead of boxes. Feels considered and quietly premium.",
-    "voice": "Calm, precise and understated. Short sentences, concrete nouns, no exclamation marks. Let the work speak; never oversell.",
-    "photo": "natural light, quiet interiors, materials and details, few people, muted colours",
-    "do": ["Give one big serif headline per section room to breathe", "Use thin lines (hairlines) and whitespace to separate content", "Keep body text short and set in the sans", "Show large, calm photography with generous margins"],
-    "dont": ["Do not add coloured accents next to the black", "Do not box content in filled cards", "Do not use more than one serif size per section", "Do not crowd the page with icons or badges"]
+  "almanac": {
+    "theme": "The register of a reference book: cool slate stock, blue-black ink, Hanken Grotesk heads over Newsreader prose, figures in mono lined up to the decimal, rules in two weights, and one deep magenta, the colour a sea chart prints its lights in, kept small. It reads as exact because the rules and the numerals hold the authority, not colour or ornament. It is not a dashboard on grey and not a warm editorial page.",
+    "voice": "Declarative, dated, exact: cite the figure, the edition, the source, the unit. Never a hype adjective.",
+    "photo": "muted colours, even light, nothing oversaturated",
+    "do": [
+      "Display: Hanken Grotesk 600 for every head, line-height 1.05, sentence case, roman; the hero head tightens to -0.035em at line-height 0.95.",
+      "Body: Newsreader 400 and 500 with optical sizing, line-height 1.55; italic is in-paragraph emphasis only.",
+      "A magenta filled control ( on ) beside a hairline-outlined control in ink, both Hanken Grotesk 500 at the 2px radius.",
+      "Links in ink with a 1px magenta underline at a 0.15em offset that thickens on hover; inputs square with a 1px edge."
+    ],
+    "dont": [
+      "Never a hot pink or a violet; the magenta holds at L 44, hue 350, deep enough to read as a chart's print.",
+      "Never warm or white paper; slate at hue 245, always tinted.",
+      "Never a boxed card or a drop shadow; two rule weights carry every surface.",
+      "Never a giant count as the hero, a page of small charts, or one mark for each day or port: one chart, set large, carries the data."
+    ]
   },
-  "nordic": {
-    "theme": "Light, clear and trustworthy. A tight sans-serif, soft green accent and quiet pale surfaces. Feels modern, competent and easy to read, without trying to impress.",
-    "voice": "Clear and friendly-professional. Explain what you do in plain words, one idea per sentence.",
-    "photo": "bright daylight, clean spaces, people at work, soft natural colours",
-    "do": ["Use the soft surface for cards and bands, the ground for everything else", "Keep one green accent for the main action", "Prefer short lists and clear headings over long paragraphs", "Align everything to the container grid"],
-    "dont": ["Do not use more than one accent colour", "Do not use dark sections except the footer", "Do not add shadows or gradients", "Do not set headings in all caps"]
+  "arcade": {
+    "theme": "A late-night cabinet: an aubergine ground under a CRT screen, Bungee capitals split in RGB over Chivo, Silkscreen figures, hard offset shadows, two loud inks that take turns like two players. Photographs come through the screen, tinted in the lead. It is loud through colour, lettering, light and press physics, never drawn props; not a neon synthwave poster, not a pixel-art game page.",
+    "voice": "Coin-op plain, said over the noise: the night, the hour, the door price, the machines. Short lines, verbs first, no nostalgia.",
+    "photo": "photographs tinted toward the accent colour, graphic and high contrast",
+    "do": [
+      "Display: Bungee 400, uppercase, untracked, line-height 1.02, for the h1, one statement line and the wordmark, each under 28 characters.",
+      "Heads and body: Chivo; section heads 900 at -0.02em and line-height 1, sentence case; prose 400 at 1.6.",
+      "The press surface: an ember fill, Chivo 700, a ink border and the acid offset, beside the same surface unfilled.",
+      "Links in ink with a 2px acid underline; inputs 52px, square, a border in."
+    ],
+    "dont": [
+      "Never magenta and cyan as the pair, never a starfield; the screen is the texture.",
+      "Never a soft shadow, a phosphor glow or a gradient on a button.",
+      "Never a drawn sprite, joystick, controller or pixel character; the night is photographed.",
+      "Never a page of tinted photographs back to back: an ember picture beside an ember picture is one orange wall."
+    ]
+  },
+  "atelier": {
+    "theme": "The register of a maker's catalogue held in still air: limewash paper with a slow, luminous haze moving behind it, deep umber ink, Sentient light in heads and statements, Hanken Grotesk for reading, hairlines, one slate signal nearly as dark as the ink. The things a house hands you (a sample strip, a card, a numbered print) are built on cotton stock, lit from the top left, with pressed type and fibre.",
+    "voice": "Hand-set, object-precise: the object, the material, the number made, the days the door is open. No superlatives, never \"shop now\" or \"discover\".",
+    "photo": "warm daylight, soft shadows, natural materials",
+    "do": [
+      "Display and statement: Sentient 300 for every head and for a sentence or a figure at or larger, line-height 1.02 to 1.1, sentence case, roman.",
+      "Small serif: Sentient 400 for h3, a name on a card, a day, an entry numeral; never under 16px, never a paragraph.",
+      "A hairline-outlined control in ink at 3px (hover fills ink, paper text) beside an underlined link with a slate underline. No colour-filled control.",
+      "Choices on card stock are pressed in: inset shade top left, lit edge below; chosen takes a 1px ink ring. Fields on a card are a label over a ruled line."
+    ],
+    "dont": [
+      "Never a warm accent; the signal is cool slate under chroma 0.09.",
+      "Never a bold or high-contrast head; Sentient light carries the voice.",
+      "Never serif running text.",
+      "Never a flat white card or a blurred glass panel; card stock has fibre, a lit edge and one light from the top left."
+    ]
+  },
+  "bloom": {
+    "theme": "Daylight on a working sheet: warm off-white paper with a faint grain, the medium's own grid (a piano roll, a timeline, a ruler) printed into the ground and fading out from the stage, umber ink, Ranade with one roman Gambarino moment. The making happens on the grid in rounded clips; the parts you touch are physical: a rubber cap in a bezel, cases slid from a stack.",
+    "voice": "Warm, daylight, specific: the verb (hum, make, listen), the output (song, part, scene), and where.",
+    "photo": "warm daylight, soft shadows, natural materials",
+    "do": [
+      "Display: Ranade 600 for every head, line-height 1.04 to 1.08, sentence case, one colour: the ink.",
+      "Body: Ranade 400 at 17 to 18px, line-height 1.55; 500 for labels and controls. Three weights in all.",
+      "The primary is a rubber cap in a recessed bezel: a domed radial gradient lit from the top, grain, set in a well with an inset shade; it sits at the left of a pill with.",
+      "Secondary: a sheet pill with a shade ring and a lit top edge, or an pill."
+    ],
+    "dont": [
+      "Never a dark canvas, a neon glow or a third bloom.",
+      "Never a terracotta field or card; terracotta is rubber, a link, a lane.",
+      "Never a grid at full strength across a whole section; it fades from the stage.",
+      "Never an italic serif, and never the serif in a head or in two places."
+    ]
+  },
+  "blueprint": {
+    "theme": "A drafting sheet as a material: Prussian-blue paper, a white line for ink, Chakra Petch drafted capitals over IBM Plex Sans, mono measurements with their units, keylines instead of cards, and photographs printed as cyanotypes, the sheet's blue in the shadows and its white in the light. It reads technical because everything is a line, a dimension or a print on one ground and the line is the only signal.",
+    "voice": "Specification voice: the building type, the stage, the year, the format, a unit on every figure; nothing a drawing note could not carry.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Chakra Petch 600 for every head, roman, one weight a head: the h1 and h2 uppercase at line-height 1.02, the h3 in sentence case.",
+      "Body: IBM Plex Sans 400 for prose and 500 for labels and controls; reversed on the sheet, nothing lighter than 400.",
+      "An ink-filled primary with sheet-coloured text beside a 1px-outlined secondary in ink, both square, 48px, IBM Plex Sans 500.",
+      "Links in ink with a 1px underline that clears on hover; inputs square, 48px, a 1px keyline on, the white focus ring, never a glow."
+    ],
+    "dont": [
+      "Never a filled card, a blur or a lifted panel; the sheet has lines, not layers.",
+      "Never a second colour on the cyanotype, in type or in a photograph; the red pencil belongs to the brownline sheet.",
+      "Never a building, frame or section drawn to stand in for a project, and never a dimension string with an invented value; a drawing is real project data or it is absent.",
+      "Never the grid as wallpaper behind prose, and never a lowercase h1 or h2."
+    ]
+  },
+  "broadside": {
+    "theme": "A printer's bill: grained buff stock, near-black ink, Six Caps fitted to the measure over Bevan, Archivo Narrow small print, rules at one point or five, one vermilion. It is loud because the capitals are tall and the rules heavy, never because anything is drawn; photographs print plainly in the ink, like the plate on a sale bill. Not a western pastiche, nor a soft cream editorial page.",
+    "voice": "A sale bill read aloud: the date, the place, the lot and the hour, each said once. Shouted in capitals, explained in the small print, in the words of the trade it sells to.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Six Caps 400, uppercase, line-height 0.88, for the h1, big figures and fitted lines. It is fitted, not stepped: each line its own element that never wraps (white-space:.",
+      "Bevan 400 for section heads, item titles, the wordmark and short lines of fact; uppercase, untracked, line-height 1.",
+      "An ink-filled block in Archivo Narrow 600, untracked capitals (legal under an uppercase display), beside the same block as an unfilled double-rule frame; square, 48px,.",
+      "Links in ink, underlined, vermilion on hover; inputs square, 48px, a 1px ink border."
+    ],
+    "dont": [
+      "Never a ragged big line; a Six Caps line that does not fill its measure is fitted or cut.",
+      "Never a fourth face outside code: the case is Six Caps, Bevan and the narrow.",
+      "Never a rounded corner; frames, controls and photographs are square.",
+      "Never a second colour, in type or in a picture; photographs print in the ink."
+    ]
+  },
+  "brutal": {
+    "theme": "A raw, engineered sheet: near-white poster stock, near-black ink that arrives as 3px rules, boxed cells and solid fills, Libre Franklin at its blackest in tight capitals, zero radius, and one acid yellow that only ever fills. The grid is drawn, not implied: cells share their rules, and a number or a word set big inside a box is the page's ornament. Photographs print hard in the ink.",
+    "voice": "Blunt, declarative: capitals in the heads, sentence case everywhere else; the trade's own words, no hedging, no hype. Say the thing flat.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Libre Franklin 900, uppercase, line-height 1.0 (the floor for capitals that wrap), one weight per head.",
+      "Body: Libre Franklin 400 at 17 to 18px, line-height 1.5, sentence case, in ink; item titles and controls at 700, sentence case. Three weights in all: 400, 700, 900.",
+      "The pair: a bordered paper button beside a solid ink button with paper text, Libre Franklin 700 in sentence case, 48 to 52px; hover inverts either in one frame.",
+      "Links are ink, underlined; hover fills yellow under the ink. Inputs: zero radius, a border, ink on paper, 52px."
+    ],
+    "dont": [
+      "Never a rounded corner or a shadow, blurred or hard-offset; depth is border and fill.",
+      "Never an ornament, a fleuron or a layered offset stack; Brutal is raw, not decorated.",
+      "Never black paper; this is a light sheet with black structure.",
+      "Never a second colour: photographs print in the ink, and the yellow only fills."
+    ]
+  },
+  "carnival": {
+    "theme": "A loud, screen-printed register: tinted paper, deep warm ink, Big Shoulders Display capitals over Golos Text, a hard ink shadow and two accents that compete. Every surface is a flat fill with a hard edge, like a print pinned to a wall, and photographs come close and hot, framed the same way. The loudest thing on a page is a fact in the capitals at poster size, not a picture.",
+    "voice": "Loud, short, funny by being exact: the count, the price, the date, one joke a screen. Heads in capitals, six words or fewer, ending in a full stop; body in sentence case and the present tense, numerals over words.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Big Shoulders Display 800, capitals, line-height 1.0 where a head can wrap; a lone word on one nowrap line may run at -0.005em and 0.9.",
+      "Body: Golos Text 400 and 500, sentence case, full ink.",
+      "The pair: a first-accent fill beside the same block outlined in ink on paper, both on the hard shadow and in the display face's capitals, untracked.",
+      "Links are ink, underlined in; inputs take a ink border on paper and no shadow."
+    ],
+    "dont": [
+      "Never a soft shadow; hard offset or none.",
+      "Never both accents inside one surface; blending kills the duo-tone read.",
+      "Never sentence-case heads, and never loose tracking.",
+      "Never a grey or ghost button; the secondary is the outlined ink block."
+    ]
+  },
+  "cobalt": {
+    "theme": "An exact, technical register: cool near-white paper ruled with hairlines, Familjen Grotesk heads over IBM Plex Sans, and a ground made of characters, a generated ASCII field snapped to an 8 by 16 cell that shows the product's own traffic in cobalt tints. Panels are cut on two opposite corners, buttons are keycaps with a real bottom edge, code runs on graphite.",
+    "voice": "Declarative and specific, like a good changelog: the event, the endpoint, the status code. No hype adjectives.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Familjen Grotesk 600 on heads and figures, 500 on item titles, line-height 1.02, sentence case, tabular figures; a count at 60px and over is the loudest type.",
+      "Body: IBM Plex Sans 400 and 500.",
+      "Keycaps: a key-face button on a 3px bottom edge that lifts 1px on hover and sinks on press; the one primary is a solid cobalt key.",
+      "A command is a cut chip with a working copy key. Links take a cobalt underline on hover. Inputs are cut, border, cobalt focus."
+    ],
+    "dont": [
+      "Never a warm accent, a pill or a gradient button.",
+      "Never noise for its own sake: the field maps traffic or state the product has, and no type sits on its densest cells.",
+      "Never fake code: a snippet compiles or returns; with no host in the prompt, call example.com."
+    ]
+  },
+  "console": {
+    "theme": "An instrument kept by careful people: a graphite ground stepped in three lightnesses, hairline panels cut from one surface, Host Grotesk for what a person reads, Atkinson Hyperlegible Mono for what an instrument measured, amber for a person and cool blue for an instrument. The ground is neutral so both meanings sit on it at equal weight, and nothing glows.",
+    "voice": "A lab notebook kept by a careful person: the value, its unit, the time, who signed. A number without a unit or a time is nothing.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Host Grotesk 500, line-height 1.02 to 1.05, sentence case, roman; calm at size, never 700.",
+      "Body: Host Grotesk 400 at 16 to 17px, line-height 1.55, in; the lede in.",
+      "The pair: an amber fill with beside a 1px outline on, both at 6px, Host Grotesk 500.",
+      "A chip carries state only: the label face inside a 1px rule at 4px radius, tinted or by meaning."
+    ],
+    "dont": [
+      "Never swap the meanings; an amber reading or a cool deviation is the theme lying.",
+      "Never a floating card with a shadow under it.",
+      "Never a third signal or a photograph in colour.",
+      "Never mono on a label, a head or a button; mono is what an instrument wrote."
+    ]
+  },
+  "coral": {
+    "theme": "A warm, plain product voice made physical: fine stationery on a felt desk, seen from above in one daylight from the left. Records are cotton sheets, envelopes and index cards with real edges; controls are letterpress cards; one coral ink is pressed in where something is settled. General Sans throughout.",
+    "voice": "Plain, warm second-person sentences about the work and the money: who, how much, when, what the product did. Never cute.",
+    "photo": "muted colours, even light, nothing oversaturated",
+    "do": [
+      "Display: General Sans 600, line-height 1.02 to 1.08, sentence case, roman. A lone price sets at two to three times, tracked -0.05em, line-height 0.85, its unit beside it.",
+      "Body: General Sans 400 and 500. On stock,; on board.",
+      "Letterpress cards, not pills: 8px radius, 48px tall, cotton stock with and and the label pressed in (a lit text shadow below it); the primary is ink board with the label.",
+      "A choice of two to four is a groove pressed into cotton (, 12px radius) with a cotton card riding in it to the chosen stop."
+    ],
+    "dont": [
+      "Never cool paper, a blue signal or a second light; every shadow falls right.",
+      "Never a pill button or a flat square button; controls are pressed cards.",
+      "Never a photograph of paper; stationery is built in CSS.",
+      "Never coral as a band, a fill behind text or a head; it is the pressed ink of one settled state."
+    ]
+  },
+  "darkroom": {
+    "theme": "A print room with the lights off: a warm black ground a step lighter than a print's own black, so a photograph sits on it as an object; fibre-white ink; hairline extra-condensed capitals over Barlow; one amber safelight. Photographs are black and white, printed deep and large, and the type carries the rest. It is not a film-strip costume, a moody gradient, flat screen black or a white-matted gallery.",
+    "voice": "Lab notes and a collector's sheet: series, plate, place, month, edition, paper. Exact numbers, short lines, no adjectives about light or soul.",
+    "photo": "black and white, strong contrast, visible grain",
+    "do": [
+      "Display: Sofia Sans Extra Condensed in capitals, 200 on the hero, section heads and figures, 400 on an item title and a control, line-height 1.0, roman.",
+      "Body: Barlow 400 for prose at 17px and 1.6, so the reading text holds on the dark; Barlow 300 only at lead size and above.",
+      "The pair: a 1px ink-outlined secondary beside an amber-filled primary in, both display capitals at 400, untracked, radius 0, 48px tall.",
+      "Links are ink, underlined in; the underline turns amber on hover. Inputs: radius 0, a 1px border on the ground, a steady outline on focus."
+    ],
+    "dont": [
+      "Never an amber wash, band, glow or amber head; the safelight lights a control or a number, never a section.",
+      "Never a sprocket hole, a film strip, a grease-pencil ring or a drawn frame.",
+      "Never Sofia Sans Extra Condensed above 400 for a head, and never a figure in anything but the 200.",
+      "Never sepia, duotone or a tint on a picture, and never flat screen black under the prints."
+    ]
+  },
+  "dose": {
+    "theme": "Translucent plastic and daylight: warm morning paper with a fine fibre grain, window light falling across it, bands of soft tinted plastic like a pill organiser, green-black ink, Schibsted Grotesk heads over Instrument Sans, and DM Mono for the time and the dose, set like a pharmacy label. One pharmacy green does every signal.",
+    "voice": "A pharmacist's plainness, spoken by a family: the name, the dose, the time, who gave it, in the words a son or daughter uses (Mum, your brother). Never a journey, never a warning in red.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Schibsted Grotesk 700, line-height 1.02, sentence case, lining tabular figures.",
+      "Body: Instrument Sans 400 and 500, 16 to 18px, line-height 1.5.",
+      "Moulded plastic: a 52px control at 10px with a 1px rim, a 3px rim below, a bevel of on top and a soft cast shadow; it sinks 3px on press.",
+      "Choices are plastic keys, mint when checked. Links underline in green on hover. Inputs: 52px at 10px with a 1px border."
+    ],
+    "dont": [
+      "Never red or amber for a missed or late state; it is grey.",
+      "Never a plastic tint as a signal or a second brand colour; the green does every signal.",
+      "Never clinical stock: spilled pills, blister packs in close-up, white coats.",
+      "Never glossy toy plastic: tints stay pale, light is daylight, no gradients beyond the glint and the shade."
+    ]
+  },
+  "dusk": {
+    "theme": "Money software at the calm end of the day: a real photograph of land at dusk behind the hero, the head set dark on its palest part, the product beside it in smoked glass. Below, the page turns to slate and light surfaces are bone wells. It reads as expensive and unhurried, never a neon trading screen or a dashboard of tiles.",
+    "voice": "Calm and exact: what ran, when, what is left.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Wix Madefor Display 500, line-height 1.02 to 1.1, sentence case. Heads stay modest; the photograph and the product are the loud parts.",
+      "Body: Wix Madefor Text 400 and 500 at 17px, line-height 1.55; leads in or.",
+      "One periwinkle pill ( under, a light inset top edge); hover lifts to with a soft periwinkle ring. A ghost pill beside it in at 4%.",
+      "An email field and its button share one pill: frosted fog over a photograph, smoked glass on slate."
+    ],
+    "dont": [
+      "Never a drawn or generated sky, and never text on the busy part of a photograph.",
+      "Never a gradient button, a third signal colour or a red debit.",
+      "Never a grid of stat tiles; figures live in rows, lists and one ruled tally.",
+      "Never glass on glass, never a glow behind glass, never glass without its lit edge."
+    ]
+  },
+  "editorial": {
+    "theme": "A contemporary magazine voice: warm white uncoated stock, a printed black with a faint cool tilt that runs through the reading text too, Bricolage Grotesque at 800 squeezed to width 75 for every head, Source Serif 4 for reading and the standfirst, square corners, a heavy ink rule over 1px hairlines, one printer's green. The condensed head, the serif standfirst and the rule carry it, not ornament.",
+    "voice": "Contemporary, lightly literary, exact. Name the issue, the page count, the date; a head reads like a cover line, a standfirst says the argument in one breath.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Bricolage Grotesque 800 with \"wdth\" 75, \"opsz\" 96, sentence case, roman. Line-height 0.92 at hero size, 1.0 for heads.",
+      "Body: Source Serif 4 400 and its italic at 18px, optical size automatic, line-height 1.55, oldstyle figures in running text, in.",
+      "An ink-filled square block ( on ) beside a 1px ink-outlined block, both in the label face, 48px tall; a tag may be the one filled green rectangle.",
+      "Links carry a hairline underline that turns green on hover; inputs and selects are square, 52px tall, with a 1px border that turns ink on focus."
+    ],
+    "dont": [
+      "Never a serif head; Source Serif 4 sets reading text, standfirsts and quotations, never an h1 to h3.",
+      "Never Bricolage at its default width; without \"wdth\" 75 the head loses the magazine proportion.",
+      "Never a rounded corner, a pill, a shadow, or a rule in green.",
+      "Never two picture sections in a row; follow each with rows, a standfirst or the figures."
+    ]
+  },
+  "formwork": {
+    "theme": "A site-office voice: warm grey concrete for paper, near-black ink, Oswald 700 capitals over Archivo, square cast edges, hard shadows and one safety orange. It feels heavy and exact because the surface is poured, every edge is straight and the photographs show the concrete itself in black and white, so the orange is the only colour on the page.",
+    "voice": "A foreman's plain talk: what was poured, where, for whom and when it opens. Short lines, every figure with its unit.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Oswald 700, uppercase, roman; line-height 1.0 to 1.05, 0.9 only on a line that cannot wrap. One colour per head.",
+      "Body: Archivo 400 and 500, 16 to 17px, line-height 1.5, in.",
+      "The pair: an orange primary raised on a hard 0 3px 0 shadow in that presses down 3px on:active, beside a pressed-in secondary (inset 0 2px 3px, a 2px ink border).",
+      "Links are ink, underlined, orange on hover; inputs are pressed in like the secondary."
+    ],
+    "dont": [
+      "Never a rounded corner, a blurred shadow or a second accent; the hard shadow and the orange are the material.",
+      "Never draw the concrete (board seams, tie holes, cracks, a hazard stripe); photograph it.",
+      "Never a colour photograph beside the orange; pictures print in black and white.",
+      "Never Oswald in lowercase or at a light weight; it is 700 capitals."
+    ]
+  },
+  "furrow": {
+    "theme": "A working records voice drawn on the land itself: warm manila paper, near-black ink, and the place the work happens generated as a survey map (contours, hedges, walls, water, the holding edged in tangerine like a title plan) with the records pinned where they happened. Entries open as waterproof notebook pages; the rest is ruled lists, figures with their units and moulded keys.",
+    "voice": "Plain and unit-bearing: 3.6 ha, 10 ml, 28 days, a pound sign on a price. Never a number without its unit, never a pastoral adjective.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Red Hat Display 600, line-height 1.0, sentence case; a price that is the offer sets in it at display size; an entry's time in it at 44px, tabular.",
+      "Body: Red Hat Text 400, line-height 1.55,; 500 for a row's title.",
+      "Moulded keys at 6px, 48px tall: the primary tangerine with ink text, a lit inset top edge and a shaded inset bottom; the secondary white with a 1px border and the same.",
+      "Fields hold their label inside the box, small and muted at the top left, the value beneath; white, 52px, a 1px border; a figure field sets in mono."
+    ],
+    "dont": [
+      "Never tangerine as type; it is a fill with ink on it.",
+      "Never a map tile, a satellite photograph or a pin-drop icon; the land is a generated survey.",
+      "Never grain or creases outside the map.",
+      "Never mono on a label, a chip or a head."
+    ]
+  },
+  "garden": {
+    "theme": "A grower's voice: warm oat paper, a near-black green ink, Vollkorn heads and old-style figures over Hanken Grotesk, hairlines, soft moss and clay tints, the place photographed in daylight, one leaf-green signal. It feels honest and seasonal because every neutral leans green, the fruit keeps its real colour and nothing is boxed, glossy or grey.",
+    "voice": "Warm, honest, seasonal, unhurried. Say the field, the variety, the month, the acreage, the number of jars, only as the prompt gives them; never artisanal, curated or small-batch as a hollow badge.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Vollkorn 600, roman, sentence case, line-height 1.04; one weight for every head, never italic.",
+      "Body: Hanken Grotesk 400 and 500 with oldstyle-nums; tables take lining tabular numerals, display figures keep Vollkorn's old-style ones.",
+      "One flat leaf-green pill with text beside a hairline-outlined pill in.",
+      "Links in ink, underlined, the line turning leaf green on hover; inputs at 4px with a 1px border on oat."
+    ],
+    "dont": [
+      "Never grey-sage or slate paper; the ground is warm oat, hue 92.",
+      "Never a cool teal or corporate emerald; the green is chlorophyll, hue 140.",
+      "Never italic or faux-bold Vollkorn; load the real 600, and never mix it with 700 on one page.",
+      "Never clay on a control or a head, and never a gradient on the leaf-green pill."
+    ]
+  },
+  "grid": {
+    "theme": "Swiss international style as it is practised now: a white sheet, a blue-black ink, one neo-grotesque in two optical cuts, and two flat colours with separate jobs, an ultramarine that floods fields and a Swiss red that marks the one chosen thing.",
+    "voice": "Exact and plain, sentence case: name the record, the field, the year and the press in the order a catalogue lists them, and leave the adjectives out.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Radio Canada Big 700, sentence case (a capital first letter and proper nouns, nothing else), line-height 0.9 at poster size, 1.0 at section size.",
+      "Poster scale: a poster head sizes with the screen, clamp(4.5rem, 10.2vw, 10rem), tracking -0.045em, held at 1920.",
+      "Primary: a square block of ink with paper text, 52px tall, the same on paper and on either field. Secondary: text with a 1px underline that turns mark red on hover.",
+      "Inputs: square, no box; a 1px line beneath in on paper, field-ink at 60% on a field. The focus ring is 2px, field-ink on the ultramarine and ink on the red."
+    ],
+    "dont": [
+      "Never a rule above a section, a black stroke round a control or a boxed card.",
+      "Never red on the ultramarine, never two fields touching, never a second blue.",
+      "Never a lowercase or an all-capitals head.",
+      "Never a photograph in colour, toned in a field colour, framed, or under type."
+    ]
+  },
+  "halftone": {
+    "theme": "A loud one-colour print voice: butter-cream stock, brown-black ink, a fat Ultra slab for heads, Chivo for everything else, 3px ink rules and one vermilion that prints solid on controls and as a dot screen on a band or a well. Photographs are the only full colour, close and bright like a label's product shot.",
+    "voice": "The label: the fruit, the calories, the size of the can, the price of the box. Blunt, sweet and specific; never a lifestyle.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Ultra 400, its only weight, roman, sentence case, line-height 1.08 (Ultra's descenders touch the next line any tighter),; one colour per head.",
+      "Body: Chivo 400, 17px, line-height 1.55, in; Chivo 700 on controls and on the names in a label panel.",
+      "A spot-filled button in Chivo 700 at 3px beside a plain spot underline with no box.",
+      "Links in ink with a spot underline; inputs at 3px, 1px ink border."
+    ],
+    "dont": [
+      "Never a second ink; one spot does dots, buttons and fields, and a blue link on the cream is a different printer.",
+      "Never a gradient that is not dots; a fade is a screen from solid to nothing.",
+      "Never dots under or across type or a photograph.",
+      "Never a synthesised bold Ultra, a soft shadow or a rounded well."
+    ]
+  },
+  "hedgerow": {
+    "theme": "A dark page that reads as green, not night: a deep leaf-green ground, cream ink, Prata's sharp high-contrast names over a quiet Manrope, plants photographed close in shade, and one chartreuse that marks the controls and the few lines the page draws. It feels botanical, exact and fresh, like a field guide opened on a bench. It is not black luxury with a gold accent, and not a rustic kraft-paper page.",
+    "voice": "A field guide's: the plant and where it grows, then how far and when, only where the prompt knows; never invent a distance or a month. Provenance as a sentence, never a badge.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Prata 400, its only weight, font-synthesis: none; line-height 1.08, sentence case, roman.",
+      "Body: Manrope 400 at 17px, line-height 1.6, in; 500 for labels, 700 only on controls.",
+      "The pair: a chartreuse pill in Manrope 700 with text beside a pill outlined in 1.5px chartreuse. The primary lightens to on hover.",
+      "Links are cream with a 1px chartreuse underline; inputs are square, a 1px border on, the ring in."
+    ],
+    "dont": [
+      "Never a second accent; sold out is muted, not red.",
+      "Never a black or blue-black ground; the dark is leaf green, or plum on sloe.",
+      "Never a bright, high-key photograph: a berry on white or a sunny meadow reads as a hole in the green.",
+      "Never chartreuse running text, a chartreuse band, or chartreuse on cream."
+    ]
+  },
+  "hum": {
+    "theme": "Cut paper made by hand, cheerful without turning childish: cream paper with a visible grain and fibre, sheets torn along their edges so a pale core shows, card stock you can press, all lit from the top left. Chillax runs from head to label (its single-storey a and g read like an early reader's page) in a blue-black ink.",
+    "voice": "Warm, smart, casual, direct, written to the grown-up beside the child. Sentence case, verbs over nouns, honest numbers only.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Chillax 600, line-height 1.02 to 1.05, sentence case. Figures at or larger, their unit at.",
+      "Body: Chillax 500 at 17 to 19px, line-height 1.5; emphasis is a pear highlighter band behind the words, never inside a head. Two weights, 500 and 600.",
+      "Card stock: 54px controls at, grain and fibre on the fill, an inset highlight on top and a solid 5px edge below ( on the pear primary, on the secondary card); hover.",
+      "Each accent owns a job: pear the primary and the one pear field; blue links and the focus ring; coral one loud fill; mint growth. A chosen pill is ink with paper type."
+    ],
+    "dont": [
+      "Never a serif, never pure white paper, never a square corner.",
+      "Never a clean vector edge on a cut sheet or a shadow that falls up or left.",
+      "Never a gradient between two accents and never a rainbow ground.",
+      "Never emoji, stock icons or a drawn character; type, paper and the product carry it."
+    ]
+  },
+  "ink": {
+    "theme": "A notice printed in plain black: white paper, a black with no hue, Epilogue at 700 for the head and 400 for everything you read, hairline rules, and one teal that means in or open. Its photographs show the things on the shelves, in daylight with the colour turned down. It feels competent, local and kind, the way a well-run community desk does.",
+    "voice": "The desk volunteer's: what is in, when it is back, who is on Saturday. Short, kind, exact, never institutional.",
+    "photo": "muted colours, even light, nothing oversaturated",
+    "do": [
+      "Display: Epilogue 700, line-height 1.0 at hero size and 1.05 below, sentence case, roman; a figure (a count, a price, an hour) takes the same setting, a step larger than.",
+      "Body: Epilogue 400 at 16 to 17px, line-height 1.55, in (muted greys tire on white); the name in a row, links and tags at 600.",
+      "The pair: an ink-filled button with paper text beside a 1px bordered button on, both at 10px radius in Epilogue 600.",
+      "Tags carry state and nothing else: in is pale teal () with, out is outlined in the rule colour, on is ink-filled."
+    ],
+    "dont": [
+      "Never a second colour: teal means in, and out is an outline, never red.",
+      "Never a warm black. The ink has no hue, and the page says so: waive 22 · ink and greys at zero chroma · a notice board is printed in plain black.",
+      "Never a teal field or teal running text; teal is a state, not a surface.",
+      "Never a resting shadow; the paper stays flat."
+    ]
+  },
+  "kiln": {
+    "theme": "A dark workshop with the kiln door open a crack: a near-black ground, cream ink, Boska's cut high-contrast serif over a plain Geist, and heat only where something is hot. The photographs carry the fire; a ramp from ash through oxblood, ember and amber to white heat colours a temperature as it climbs. Warm in one place, cold everywhere else.",
+    "voice": "Calm and physical, in a potter's words: the cone, the degrees, the hour, the load. Name the firing, never the feeling.",
+    "photo": "warm daylight, soft shadows, natural materials",
+    "do": [
+      "Display: Boska 500, line-height 1.04, sentence case, roman, one colour per head; a statement set in it may run to at line-height 1.0.",
+      "Figures: a temperature, a firing time or the price that carries the story is Boska 500, lining and tabular, at -0.03em, its unit (°C, h, £) in the same face; a lone.",
+      "The pair: an ember pill ( with text, Geist 500), 50px tall, beside a ghost pill with a 1px inset ring and cream text.",
+      "Inputs are smoked wells at 16px radius; a range input runs a 2px track filled along the ramp under a 28px ember thumb."
+    ],
+    "dont": [
+      "Never the ramp as a fill: no heat gradient behind text, on the ground, in a slot or across a band.",
+      "Never orange type; the ember is a fill, and every letter stays cream.",
+      "Never a brown or warm-lit ground; it stays near-black so the heat has somewhere to rise from.",
+      "Never a bright, flat-lit photograph or a pot on white seamless."
+    ]
+  },
+  "loom": {
+    "theme": "A weaving studio speaking quietly: ecru paper, Caslon cut for display with a book's calm over a plain Hanken Grotesk, thin rules, and one deep indigo, the colour of dyed yarn, that arrives as a band or a button and never as a wash. The cloth is photographed close in window light; nothing is drawn to stand in for it. It reads crafted because the page is ruled like a pattern book.",
+    "voice": "The weaver speaking plainly at the loom: the fibre, the metre, the weeks, the room the cloth is for. Prices and times said once, nothing sold hard.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Libre Caslon Display 400 for the h1, every h2 and any price or figure at 40px or more, line-height 1.04 (1.0 on a hero head of two lines), sentence case, roman.",
+      "Item titles (h3): Hanken Grotesk 500 at, line-height 1.25, the ink.",
+      "The pair: an indigo-filled square button in Hanken Grotesk 500 with ecru text beside a text link with a 2px bottom border in the text colour.",
+      "Links lift their 2px underline into on hover; inputs are square with a 1px border and the indigo focus ring, ecru on the indigo band."
+    ],
+    "dont": [
+      "Never indigo as a page wash or a tint on the ecru colourway; it is a band, a line or a fill.",
+      "Never a mono label voice; widths and weights earn the mono, the captions do not.",
+      "Never a ruler, a warp or a thread pattern drawn on the page; the cloth is photographed and the metre priced in type.",
+      "Never a warm accent (rust, clay, terracotta) next to the ecru; sand is a paper, not an accent."
+    ]
+  },
+  "lumen": {
+    "theme": "A night console with a literary voice: a violet-black ground, near-white ink, Instrument Serif set all in lowercase and a step large over Geist, hairline wells and one molten brass signal. Cool dark, warm light: the warmth is rationed to the brass and one rose verb, so the page reads engineered and quietly lit at once. The product is the picture.",
+    "voice": "Engineered, plain, specific: the model, the state, the unit, the price. Lowercase heads read like a note in a lab book, never cute.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Instrument Serif 400, roman, all lowercase, line-height 0.95 to 1.02. The face is narrow and light, so it sets one step large: section heads at, the hero head.",
+      "Body: Geist 400 and 500, tabular-nums wherever a figure appears.",
+      "The control pair: a solid brass pill with text beside a hairline pill in, both lowercase, 44 to 48px.",
+      "Links take a brass underline on hover; inputs sit on inside a band, 1px, 10px radius, the brass focus ring."
+    ],
+    "dont": [
+      "Never a drawn or generated light: no orb, lamp, ring, halo or glowing object behind or beside a head.",
+      "Never let the violet climb: a violet field or a violet-to-blue gradient is the generated look.",
+      "Never colour a noun, never a second accented word; one verb, in the hero.",
+      "Never sentence-case heads, and never a head at the plain section size; this face reads thin there."
+    ]
+  },
+  "manifesto": {
+    "theme": "A declaration printed on a dark sheet: a warm near-black ground, warm off-white ink, Anton capitals set as big as the width allows and leaded tight, a small plain Public Sans body, hairlines, one heavy ink bar, square edges and one fighting red.",
+    "voice": "Imperative, short, declarative: fighting words, verbs over adjectives, the demand in the reader's own nouns. No hedging; state it and stand behind it.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Anton 400, one weight, uppercase only. Condensed caps take a step up: a Ledge or Corridor hero head sets at the theme's own (to 13rem), a statement as large as.",
+      "The red word: one word on the whole page, inside the hero head, in (stamp waive 38iii). Every other head is one colour.",
+      "Square, ruler-drawn controls: a flat red block with text ( on hover) beside a hairline block in that inverts to red on hover.",
+      "Links are ink with a 1px underline that turns on hover; inputs are square, hairline-bordered, on."
+    ],
+    "dont": [
+      "Never a second accent; red is the only colour.",
+      "Never a red flood beyond the one inverted surface; red is a signal, not a background.",
+      "Never a light ground; the sheet stays dark.",
+      "Never ornament: no fleurons, stickers, torn edges, hard-offset shadows, or a photograph in colour or toned red."
+    ]
+  },
+  "midnight": {
+    "theme": "A cold, calm night instrument whose blue is the ground itself: deep midnight blue to every edge, cool white ink, Mona Sans at an expanded 300 for the heads like titles on a film, the same family at its normal width for reading, surfaces cut square in steps of lighter blue, one azure signal. Photographs arrive as moonlight, shadows in the ground's blue and highlights in the ink.",
+    "voice": "Cool and spare, the night shift's register: the hour, the count, the cost. Short declaratives; a number always carries its unit or its time.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Mona Sans 300 at the expanded width on h1 and h2, line-height 1.04, sentence case, roman.",
+      "Figures that are the point: the display cut at 300, tabular, from up to twice it, tracking -0.03em, the unit beside it at the normal width 400 in.",
+      "The pair: a solid azure rectangle with text beside a secondary outlined in, both square, 500. A segmented choice is the same square, filled ink when chosen.",
+      "Links take an azure underline on hover; inputs sit on the paper with a 1px edge, square."
+    ],
+    "dont": [
+      "Never a warm accent; the light here is cold.",
+      "Never a heavy display weight or a head at the normal width; the expanded 300 is the face.",
+      "Never a lamp: no radial glow, no halo, no lit edge on a card.",
+      "Never a rounded corner or a light section; dark and square end to end."
+    ]
+  },
+  "newsprint": {
+    "theme": "A broadsheet in a browser: pale newsprint stock, warm black ink, a blunt Zilla Slab head over a calm Spectral book serif, hairlines and column rules for ordinary breaks, a double rule for the major ones, and a dried-brick signal that never fills anything. Photographs run in black and white with a caption, as a paper prints them. It reads reported and edited, not decorated.",
+    "voice": "Specific and declarative, with a dry editorial wit: name the place, the day and the fact, and write heads a sub-editor would pass, in sentence case and full stops.",
+    "photo": "black and white, strong contrast, visible grain",
+    "do": [
+      "Display: Zilla Slab 700, line-height 1.05, sentence case, roman, for heads, decks and the masthead.",
+      "Body: Spectral 400 and 500 at 1.0625rem, line-height 1.55. The blunt slab over the calm book serif is the voice; Spectral italic is emphasis in running text only.",
+      "The control pair: an ink-filled rectangle with paper type beside one ruled top and bottom in ink, both square, set in Zilla Slab 700 a step smaller.",
+      "Links in brick with a 1px brick underline that thickens on hover; inputs are square with a 1px border on."
+    ],
+    "dont": [
+      "Never a sans-serif body or a sans label voice; Spectral does all the small work.",
+      "Never a cool or bright accent; dried brick is furniture, not a shout.",
+      "Never boxed cards, shadows or rounded corners; rules carry the structure.",
+      "Never Zilla Slab under 700 or in italic; one blunt roman weight."
+    ]
+  },
+  "overprint": {
+    "theme": "A two-colour screenprint on cheap stock: grey newsprint, near-black ink, wide heavy Anybody capitals over a plain Archivo body, and two transparent flat inks, teal and orange, that print a deep moss where they cross. Photographs print hard through one pass, as a bill prints them. All in register, flat and square: the noise is scale and two inks, never effects.",
+    "voice": "The bill on the wall: who plays, which night, doors, the price, and whether it has sold out.",
+    "photo": "black and white, strong contrast, visible grain",
+    "do": [
+      "Display: Anybody 900, set wide (, 130 to 150%), uppercase, line-height 1.0 to 1.02. Figures, times and prices take it at 150% with tabular-nums.",
+      "Body: Archivo 400 and 600, 16 to 17px, line-height 1.5, in ink.",
+      "The control pair: a pass-1 fill with type in Archivo Narrow 600 capitals, untracked (67 allows it under an uppercase display), beside a 2px inset ink outline (paper on.",
+      "Pass 1 takes the primary and an open state; pass 2 the closed state (sold out). Links are ink with a 2px pass-1 underline that turns ink on hover; inputs square in the."
+    ],
+    "dont": [
+      "Never a third ink; the moss is printed by the overlap, never mixed into a fill, a control or a letter.",
+      "Never out of register or set apart: no echo, no offset copy, no recoloured word, no ghosted second head.",
+      "Never a photograph in colour, or one printed through both passes.",
+      "Never shapes drawn to show the overprint off; the passes print surfaces the page already has."
+    ]
+  },
+  "pasteup": {
+    "theme": "A hand-made flyer: kraft board, near-black toner, League Gothic capitals at poster size over a Newsreader galley, white copy paper on real paper shadows, controls on hard ink offsets, one sheet of fluorescent yellow. Photographs come off the copier, black and white, the greys crushed. The paste-up lives in the paper, the tilt and the lift, never in props.",
+    "voice": "Flyer voice: the date, the door, the price, the table number.",
+    "photo": "black and white, strong contrast, visible grain",
+    "do": [
+      "Display: League Gothic 400, uppercase, never under 28px, so item titles (h3) set in Newsreader 500 instead.",
+      "Body: Newsreader 400 and 500 at 18px, line-height 1.5; italic is emphasis in running text only.",
+      "The control pair: a fluorescent primary with toner type on a hard 4px 4px 0 ink offset, beside a copy-paper secondary on the same offset, both Newsreader 500 at 15px.",
+      "Links are toner with a 1px underline, thicker on hover; inputs are copy paper, square, a 1px ink border; the focus ring is toner."
+    ],
+    "dont": [
+      "Never paste-up props: no tape, stickers, stamps or scrawled notes.",
+      "Never a word set apart in a head: no cut-out word, no yellow word, no italic word.",
+      "Never a soft shadow on a control; controls sit on a hard ink offset.",
+      "Never a grunge overlay, a torn edge or a photograph in colour."
+    ]
+  },
+  "piste": {
+    "theme": "A mountain morning in print: snow-white paper, cold near-black ink, Barlow Condensed 800 in capitals for every head and figure, square edges on 2px ink rules, and one cobalt doing all the colour work, from the primary control to a full field. Photographs bring the mountain in, crisp and in full colour, cut square, and the paper is the snow they open onto.",
+    "voice": "The morning report: the hour, the group, the week booked, called across the snow. Never a slogan about freedom or powder.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Barlow Condensed 800, uppercase, roman,; line-height 1.0 on any head that can wrap, 0.9 only on a single line that cannot.",
+      "Figures: the display face at 800, tabular, from to twice it; a figure on paper takes cobalt, a figure on the field takes paper. The label beneath is Barlow 500.",
+      "The pair: a cobalt fill with text beside a 2px inset ink outline, both square, in condensed capitals; on a scrim or the field the outline turns paper.",
+      "Links are ink and underlined, cobalt on hover; inputs square, 52px, a 1px ink border; a stepper is two square ink-bordered buttons around a tabular count."
+    ],
+    "dont": [
+      "Never lowercase display or a light condensed; Barlow Condensed at 800.",
+      "Never a rounded corner, a pill or a soft card.",
+      "Never a second accent hue, never cobalt on running text or as a card fill on snow paper.",
+      "Never a sky gradient, a sunset grade, or a drawn mountain, snowflake or piste map."
+    ]
+  },
+  "refract": {
+    "theme": "White plaster in strong sun, with light doing the decorating: a net of water caustics moving across the ground, or a prism throwing a spectrum and its bright cusps over the page. Everything else is quiet: deep pool-blue ink, Funnel Display at a light weight, clear surfaces whose shadows carry a tint of the light that passed through them. It feels like a cool room on a hot afternoon.",
+    "voice": "Bright and plain, a little sensory: the temperature, the hour, what the light does.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Funnel Display 400 (300 for a figure set at statement size), line-height 1.02, sentence case, one colour. Heads stay calm; the light is the loud part.",
+      "Body: Funnel Sans 400 at 17px, line-height 1.6,; leads a step up in.",
+      "Primary pill: under, a white inset top edge, 48px; hover darkens to. Secondary pill: white at 80% with and a hairline.",
+      "Inputs are white wells with a hairline and; focus ring in."
+    ],
+    "dont": [
+      "Never a rainbow on type, a gradient button or a spectral border on more than one object.",
+      "Never frosted glass or a backdrop blur; clear surfaces stay clear.",
+      "Never the light under running text, and never two lit grounds in a row.",
+      "Never a grey drop shadow; every shadow carries the light's tint and falls from one sun."
+    ]
+  },
+  "ribbon": {
+    "theme": "The hour before sleep, set quietly: Instrument Sans at 400, upright and tightly set, for every head, Figtree in a soft grey for reading, hairline rules instead of boxes, and the night itself drawn as slow light behind a machined instrument that really sets the levels. The calm comes from light type, slow light and well-made parts. It is not a glossy wellness app and not a sky of stars and moons.",
+    "voice": "Calm and specific: the hour, the sound, how loud. Never a promise of perfect sleep.",
+    "photo": "muted colours, even light, nothing oversaturated",
+    "do": [
+      "Display: Instrument Sans 400, upright, line-height 1.04, sentence case, one colour; 500 for small titles (a panel's name, the wordmark).",
+      "Body: Figtree 400 at 17px, line-height 1.6, in; Figtree 500 for a part's name and value.",
+      "Machined pills, 52px: a top-to-bottom gradient with and, a 1px border; the primary is the accent, lit from inside with an inset highlight. Active presses 1px down.",
+      "Faders and curves are real inputs (role=\"slider\", keyboard steps). Sound plays only after a press of Listen, and Stop or Esc ends it."
+    ],
+    "dont": [
+      "Never an italic or a heavy head; the display stays upright at 400 and 500.",
+      "Never a starfield, a moon, a navy-to-violet gradient or a stock sleeper.",
+      "Never a plastic or flat control on the instrument; parts are machined, lit from above, one light.",
+      "Never a drawn waveform or equaliser; levels live on faders and lines."
+    ]
+  },
+  "rim": {
+    "theme": "An instrument at night: warm black paper, warm off-white ink, Switzer at a medium weight for every head, Geist Mono for every number that measures something, square surfaces parted by hairlines, an orange signal and a sky-blue second, and the earth shown the way an instrument sees it, from straight above. It reads as exact because every edge is hard and every time carries its zone.",
+    "voice": "Measured and exact: the site, the pass, the time in UTC, the area in square kilometres. No wonder, no frontier.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Switzer 500, on the hero head and -0.03em on section heads, line-height 1.02, sentence case, roman. Medium, never bold; one colour per head.",
+      "Body: Switzer 400 at 16 to 17px, line-height 1.55, in; labels, captions and table heads are 500 a step smaller in, sentence case, untracked, never mono.",
+      "The pair: a square orange-filled primary with text beside a square secondary outlined in 1px, both Switzer 500.",
+      "Links are ink, underlined on hover; inputs square on with a 1px border, a value that measures typed in Geist Mono."
+    ],
+    "dont": [
+      "Never anything round: no pill, no avatar circle, no rounded button or frame.",
+      "Never a bare time; 09:30 without a zone is the theme lying.",
+      "Never bold display; Switzer 500 is the ceiling and the black does the weight.",
+      "Never the planet from space, a starfield, a glow or an orbit traced round a globe."
+    ]
+  },
+  "riso": {
+    "theme": "A small-press run from two drums and nothing else: bright uncoated stock, a medium blue drum that sets every word and a fluorescent pink drum for the fills, crossing in a purple nobody mixed. Cabinet Grotesk 800 heads over a Literata body, grain where the ink skips, one word a hair out of register. It reads handmade because the imperfection is in the ink, not in tape and scribbles.",
+    "voice": "Specific and hand-set: name the ink, the sheet, the drum and the price; verbs over adjectives. Imperfect on purpose.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Cabinet Grotesk 800, sentence case, in the blue; h1 leads 0.92, h2 0.98. A head is one weight and one colour. Figures that are the offer set in it, tabular.",
+      "The misregistered word (stamp waive 38iii): one focal word in the hero head prints in both drums, a pink copy behind the blue nudged 2 to 3px down and right, so only its.",
+      "The pair: a pink-filled rectangle with type beside one outlined 1.5px in the blue, both at 2px radius in Cabinet Grotesk 800 at 15px; pressed, a control drops 1px down.",
+      "Links underline in pink, thicker on hover; inputs 48px tall at 2px radius with a 1.5px blue border on the stock, the value in Cabinet 800."
+    ],
+    "dont": [
+      "Never black ink or a grey; the only third colour is the purple the drums make.",
+      "Never a registered, ungrained flat gradient; that is vector, not riso.",
+      "Never pink as type on the stock; the pink drum fills, the blue one writes.",
+      "Never the misregistration on a second head; one word, then rest."
+    ]
+  },
+  "solstice": {
+    "theme": "An almanac's warmth: cream paper, warm brown ink, Yeseva One heads, Archivo for the reading and Archivo Narrow for the small print, gold hairlines doing the ruling, square surfaces on hard paper shadows, photographs taken in low late light, and one vermilion signal. It reads as seasonal and rural through the ink, the gold, a fat serif and the light in its pictures, never through drawings of produce.",
+    "voice": "The almanac: the hour of light, the pressing day, the orchard by name. Never a toast to the good life.",
+    "photo": "warm daylight, soft shadows, natural materials",
+    "do": [
+      "Display: Yeseva One 400, roman, line-height 1.0, one colour per head; big figures take it too.",
+      "Body: Archivo 400 and 500, 16 to 17px, line-height 1.55, in.",
+      "The pair: a vermilion-filled pill in Archivo Narrow 600 with text, beside a plain one in ink over a 2px ink underline, no box.",
+      "Links underline in ink and turn vermilion on hover; inputs square on with a 1px ink border."
+    ],
+    "dont": [
+      "Never a second warm colour; a second orange makes a fruit stand.",
+      "Never a neutral ink; a grey-black kills the cream.",
+      "Never a rounded card or a soft shadow; a raised well is square, ruled and hard-shadowed.",
+      "Never a cold or flat-lit photograph: a blue noon sky or a flash turns the cream sickly."
+    ]
+  },
+  "specimen": {
+    "theme": "A foundry's material: warm oat paper, warm near-black ink, Bodoni Moda 400 pinned at its highest optical size so the hairlines thin to a razor against the stems, a Geist body beneath it, square 1px rules and one ink-blue signal. It reads as hand-set and exact because all the contrast lives inside the letters, none in colour or depth.",
+    "voice": "Editorial, hand-set, lightly literary. Verbs over adjectives; name the face, the size, the number.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Bodoni Moda 400, line-height 1.02, sentence case, roman. h1 and h2 take \"opsz\" 96, where the hairline nearly vanishes against the stem and that contrast is the.",
+      "Body: Geist 400 at 17px, line-height 1.55; the plain sans under the Didone is the tension. Bodoni Moda italic stays inside running text or a sample, never a head.",
+      "The pair: an ink-filled rectangle with oat text beside a 1px ink-outlined one, both square, Geist 500, 48px tall.",
+      "A range is a 1px track with a square ink thumb; a toggle is two square cells inside one ink hairline, the pressed one paper with a 2px ink rule beneath, so the ink fill."
+    ],
+    "dont": [
+      "Never a heavy display head; bold turns the Didone into a fashion masthead. Heavier weights appear only as samples of a family.",
+      "Never an optical size under 72 on an h1 or h2; fat hairlines are this theme's most common failure.",
+      "Never a warm accent, never cool paper: the signal is ink blue, the warmth comes from the oat.",
+      "Never a drawn book, page or device to show text; set the text itself at its size."
+    ]
+  },
+  "spore": {
+    "theme": "A cellar at night: coffee-ground black warmed toward brown, a warm grain on its wells, parchment Young Serif over Instrument Sans, soft pills, photographs lit only by lamps and candles, and one oyster-mushroom pink. It feels close and handmade because the warmth sits in the ground, the grain, the figures and one soft colour, never in drawn light. It is not a dark-mode template with a glow, nor a wellness label.",
+    "voice": "A maker's log: the name, the day, the hour, the vintage, the price. No wellness, no mystique, no \"curated\".",
+    "photo": "warm daylight, soft shadows, natural materials",
+    "do": [
+      "Display: Young Serif 400, line-height 1.02, sentence case, roman, one colour per head. Its one weight is the voice: hierarchy comes from size, never from bolding.",
+      "Figures: prices, days, hours and counts are Young Serif, lining, and may run past when one number is the section's reason; a price is the one figure that takes pink.",
+      "The pair: a pink-filled pill with text, lightening to on hover, beside a pill outlined in 1.5px. Chips are pills; the chosen one fills pink.",
+      "Links are parchment with an underline that turns pink on hover; inputs are square with the 1.5px edge and the ring."
+    ],
+    "dont": [
+      "Never a second hue; a green for \"in stock\" makes a garden centre.",
+      "Never drawn light as the mood (a beam, a pool, a glow behind a head); the light lives in the photographs.",
+      "Never a neutral or blue-black ground; every dark step tints toward hue 60.",
+      "Never pink running text or a pink outline; pink is a fill, a price or the focus."
+    ]
+  },
+  "sport": {
+    "theme": "A results-sheet material: cool concrete paper, blue-black ink, Saira Condensed 800 in capitals over an Albert Sans body, big condensed figures and JetBrains Mono times, hairlines and one heavier bar rule, and volt as the only colour. Volt is a fill: ink sits on it, and it never sets a letter on paper. Photographs print in the ink, like a race programme.",
+    "voice": "Race-briefing plain: the distance, the time, the place, as a marshal calls them. Imperative heads in capitals, sentence case below, numerals over words, verbs over adjectives.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Saira Condensed 800, uppercase, line-height 1.02, upright, roman. A true condensed design, so the caps stack without crowding, even at poster scale over a.",
+      "Body: Albert Sans 400 and 500, sentence case.",
+      "The control pair: a volt-filled block with ink text beside one bordered 2px in ink, both 4px, set in the display face's capitals with no added tracking; on a photograph.",
+      "Links grow a underline on hover (3:1 on paper); inputs are 4px with a 1px border and the ring."
+    ],
+    "dont": [
+      "Never slant or italicise the display; the upright condensed cap is the speed.",
+      "Never loosen the display tracking past zero, or tighten it until two capitals touch.",
+      "Never warm paper; the ground is cool concrete, hue 250.",
+      "Never volt type, a volt hairline on paper or a second accent; photographs print in the ink, never in their own colour."
+    ]
+  },
+  "squeeze": {
+    "theme": "A market stall in colour: a forest-green ground with real chroma, warm white ink, Gabarito's round, heavy heads and figures over a sturdy Manrope, soft tiles a step lighter or deeper, fruit photographed bright and close, juicy peach controls and one warm-white card.",
+    "voice": "The stall-holder's, out loud on a Thursday morning: the fruit, the day it comes, what ripe feels like in the hand. Short, warm sentences with the price said plainly; never gourmet, never a wellness pitch.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Gabarito 800, line-height 1.0, sentence case, one colour per head. Round, compact and heavy, so it takes the shared display scale without a cap; never under 700.",
+      "Figures: prices, dates and days in Gabarito 800 with tabular, lining numerals; a single figure may run three to four times the section head, tracked to -0.04em, with its.",
+      "The control pair: a peach-filled primary with text beside a 2px ink-outlined secondary, both at, Manrope 700. Tags and chips are pills; nav links may be pills.",
+      "Links are ink at 700, the underline turning peach on hover; inputs take a 2px border at and the ring."
+    ],
+    "dont": [
+      "Never a neutral ground. White is for the one card; grey does not exist. The page is green.",
+      "Never a dull or greyed green; the ground keeps its chroma, or it turns to army surplus.",
+      "Never a weight under 500, a serif, or a mono figure: numbers are Gabarito.",
+      "Never a hairline border; a 1px rule lives only between list rows."
+    ]
+  },
+  "sticker": {
+    "theme": "A print shop's material: a warm off-white sheet, warm black ink, Bowlby One SC capitals over Sofia Sans, hot pink and lime fills, every raised surface edged in a thick white die-cut on a hard offset shadow. It feels loud and handmade because the depth is printed and the colours are fills, never tints. It is not a soft pastel shop with blurred shadows, and not a cartoon toy page.",
+    "voice": "Cheerful and exact: the price, the quantity, the size, the ship day. It sounds like the person at the cutter.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Bowlby One SC 400, capitals only by design, line-height 1.02. It is wide and heavy, so the h1 caps at 4.5rem and section heads at 3.25rem. Never a paragraph.",
+      "Figures: prices, counts and step numbers set in Bowlby, and a lone figure on a fill may run to 12rem; it is the loudest thing the theme owns, so one a screen.",
+      "The control pair: a pink pill with a 5px white ring and, beside a ghost pill with an inset 2px ink border.",
+      "Links are ink with a pink underline on hover; inputs take a 2px ink edge at."
+    ],
+    "dont": [
+      "Never a soft blurred drop under a raised surface; the shadow is a hard offset or there is no shadow.",
+      "Never a die-cut border thinner than 4px, or in any colour but white.",
+      "Never pink text on the paper; pink is a fill with white on it.",
+      "Never a drawn sticker, mascot or doodle; the die-cut edges a real surface, a fact or a photograph, never a shape drawn to stand for a design."
+    ]
   },
   "studio": {
-    "theme": "Big, confident and graphic. Huge headlines, hard lines and an orange accent. Feels like a design studio: bold, opinionated and fast.",
-    "voice": "Confident and direct. Strong verbs, short punchy headlines, a clear opinion. Still concrete: no hype words.",
-    "photo": "bold compositions, strong contrast, close-ups, graphic shapes, urban settings",
-    "do": ["Let one headline dominate each section", "Use hairline borders and a strict grid", "Use the orange accent sparingly, for the main action and one highlight", "Mix very large and small type for contrast"],
-    "dont": ["Do not soften with rounded cards or pastel surfaces", "Do not centre long text blocks", "Do not use the accent for body text", "Do not add decorative icons to every item"]
+    "theme": "A design studio's proof sheet, caught mid-build: cool studio-white paper with an ink dot grid and a fine grain, blue-black ink, Hedvig Letters Serif for the heads (a contemporary serif with a calligraphic hand in its joins), a clean Geist body, crop marks at the corners of every printed piece, and one cadmium orange that both fills the action and draws the construction: metric guides, clear-space boxes, redlines.",
+    "voice": "Spare and exact, a little literary. Verbs over adjectives; name the work, the institution, the surface it lives on, the measurement.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Hedvig Letters Serif 400, its one weight, line-height 0.98 to 1.04, sentence case, font-optical-sizing: auto.",
+      "Body: Geist 400 and 500, line-height 1.55, ink-2 for running text.",
+      "Printed controls: a 1px ink border at 2px radius, a second rule inset 2px inside it, crop marks at the corners that open slightly on hover; the primary is filled orange.",
+      "Fields: 3px, a 1px border, crop marks appear on focus. Links take an orange underline on hover."
+    ],
+    "dont": [
+      "Never Hedvig in running text, never the specimen face outside a specimen.",
+      "Never an orange flood, orange type or a second warm colour.",
+      "Never warm paper; the ground is cool, hue 215.",
+      "Never a guide that is not true to the font's metrics or a dimension that is not the real one."
+    ]
   },
-  "ambacht": {
-    "theme": "Warm and honest, made for craftspeople. A sturdy grotesque, a warm ground and a deep blue accent. Feels reliable, local and hands-on.",
-    "voice": "Warm, plain-spoken and practical, like the owner explaining the job. Mention the work, the materials and the region.",
-    "photo": "craftsmen at work, hands and tools, real materials, warm light, finished projects",
-    "do": ["Show real work and real people as much as possible", "Use the warm surface for cards and the blue for actions", "Put contact details and the main call to action within easy reach", "Use rounded, friendly shapes for buttons"],
-    "dont": ["Do not use cold greys or a dark theme", "Do not use abstract stock imagery", "Do not use thin, light fonts for headings", "Do not hide the phone number"]
+  "terminal": {
+    "theme": "The page is the terminal surface, and its pictures are printed in type. A near-black ground with a green cast, pale phosphor ink, one bright phosphor green and a dim wash of it for what is added or selected, and Martian Mono for every glyph: heads wide, text narrow. A picture is printed as a grid of characters from the product's own text.",
+    "voice": "Commands, flags, paths and exit codes. Declarative and short: name the command, never the adjective.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Every glyph is Martian Mono, in three weights at most: 400, 500, 700. Display 500 at, line-height 1.12, h1 at most 3.75rem in two or three lines.",
+      "Figures set wide and light against the narrow text: 400 at from up, tabular, the unit or a # comment beneath in.",
+      "Primary: an accent block with text, square. Secondary: a 1px border. Hover and state switch in steps.",
+      "Install lines: a well with tabs (brew, cargo, curl) underlined in the accent, the command at, and a 16px copy icon at the right that turns into a tick in the accent for."
+    ],
+    "dont": [
+      "Never a proportional face, and never a box-drawing glyph from a fallback font.",
+      "Never a second hue: no amber, no cyan, no red for a removed line.",
+      "Never a rounded corner, a pill or a soft card, and never a light section.",
+      "Never more than one photograph, and only where glyphs cannot be made."
+    ]
   },
-  "helder": {
-    "theme": "Trusted and accessible. Rounded shapes, soft flat surfaces and a petrol accent. Feels caring and calm, easy for everyone to use.",
-    "voice": "Reassuring and simple. Short sentences, no jargon, speak to the reader directly and explain the next step.",
-    "photo": "warm caring moments, people talking, bright welcoming spaces, soft colours",
-    "do": ["Keep text large enough and contrast high", "Use soft surfaces to group related content", "Make the next step obvious on every page", "Use rounded corners consistently"],
-    "dont": ["Do not use small or light grey text", "Do not use dark or loud sections", "Do not use sharp, aggressive shapes", "Do not stack several calls to action next to each other"]
+  "terrazzo": {
+    "theme": "A materials library's specification voice: off-white paper, near-black ink, wide Syne heads over a plain Onest body, JetBrains Mono for the codes and the millimetres, and white card surfaces ruled in 2px ink over a hard offset, holding the surfaces themselves photographed flat-on and close.",
+    "voice": "A catalogue's plainness: the family, the finish, the code, the size at one to one. Never sells the feeling of stone.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Syne 700, line-height 1.0, sentence case. The face sets wide, so heads stay short rather than drop a step; 800 turns clumsy and is never used.",
+      "Body: Onest 400 and 500, line-height 1.5. Three weights a page: 400, 500, 700.",
+      "An ink-filled primary with paper text beside a inset ink outline, both square, Onest 500. On the ink band the primary turns plate with ink text.",
+      "Links are ink with a hairline underline that turns rust on hover; inputs are square on with a 1px ink border."
+    ],
+    "dont": [
+      "Never a drawn chip, speck or confetti; a surface's colour comes from its photograph.",
+      "Never a photograph as a background or under type; it lives in a card.",
+      "Never a coloured primary on off-white paper; controls are ink.",
+      "Never a rounded corner, on a card, a control or a photograph."
+    ]
   },
-  "noir": {
-    "theme": "Dark and exclusive. A fine serif, champagne accent and large photography on a near-black ground. Feels evening, intimate and premium.",
-    "voice": "Refined and evocative but still precise. Few words, sensory detail, an invitation rather than a sales pitch.",
-    "photo": "moody low light, evening atmosphere, rich textures, close-up details, warm highlights",
-    "do": ["Let large photography fill the space", "Use the champagne accent only for actions and fine details", "Use uppercase letter-spaced labels for buttons and small headings", "Keep generous spacing between sections"],
-    "dont": ["Do not use bright colours or white sections", "Do not use small grey text on the dark ground", "Do not use rounded, playful shapes", "Do not use bright daylight stock photos"]
+  "ultraviolet": {
+    "theme": "A producer's tool in one pigment: a paper tinted the same hue as the ink, one saturated violet in two strengths, Outfit set lowercase on every head and control, pills throughout, depth held to a hairline, photographs pulled into the violet. It reads quick, exact and young without raising its voice. It is not a purple-gradient startup page and not a neon club flyer.",
+    "voice": "Lowercase, short, exact: the stem, the bar, the minute, the track count. It talks like a producer, not a label.",
+    "photo": "photographs tinted toward the accent colour, graphic and high contrast",
+    "do": [
+      "Display: Outfit 500, lowercase, line-height 1. Lowercase is the material: heads, nav links, buttons and pills never carry a capital.",
+      "Figures: Outfit 300 at and over, lowercase units beside them in the label voice, tabular; the thin geometric numeral is the one place the display goes light.",
+      "A violet-filled pill ( on, on hover) beside an inset-outlined one (1.5px of ), both Outfit 500 lowercase; inside a violet field the filled pill turns white with violet.",
+      "Links underline in violet on hover; inputs are pills with a 1.5px inset ring that turns ink on focus. Toggles (solo, mute) are small pills that fill violet when pressed."
+    ],
+    "dont": [
+      "Never a capital in a head, a nav link or a button.",
+      "Never a second chromatic colour, in a photograph either; the violet is the only one.",
+      "Never a purple-to-pink gradient, a mesh behind text or a glow.",
+      "Never square controls or 4px radii; Ultraviolet is round."
+    ]
   },
-  "raster": {
-    "theme": "Swiss and technical. White, black and a single red, everything on a strict grid with hairlines. Feels precise, engineered and no-nonsense.",
-    "voice": "Factual and exact. Numbers, specifications and clear claims; no adjectives that cannot be measured.",
-    "photo": "architectural lines, technical details, clean product shots, strong geometry",
-    "do": ["Put every element on the grid, aligned to columns", "Use hairlines to divide content", "Use the red only for the main action and key numbers", "Use square corners everywhere"],
-    "dont": ["Do not round corners or use soft shadows", "Do not add a second accent colour", "Do not centre text", "Do not use decorative illustrations"]
+  "vantage": {
+    "theme": "Reality capture at night: the thing itself, a site, a ridge, an object, rendered as tens of thousands of measured points on a blue-black ground, turning slowly while a sweep passes through and lights them. Around it the page is instrument-quiet: Geologica with its corners sharpened, steel-grey ink, hairline frames that only mark their corners, figures with their units. One lime signal means found, measured, live.",
+    "voice": "Measured and exact: what was scanned, how big, how accurate, how soon.",
+    "photo": "muted colours, even light, nothing oversaturated",
+    "do": [
+      "Display: Geologica 300 with \"SHRP\" 100 (its sharpened corners), line-height 1.0, sentence case; 400 for small titles.",
+      "Body: Geologica 300 at 17px with \"SHRP\" 0, line-height 1.6.",
+      "Primary pill: under, 48px, Geologica 400; hover. Secondary: a hairline pill in, ink text.",
+      "Inputs: wells with a hairline frame, lime caret and focus. Switches lime when on."
+    ],
+    "dont": [
+      "Never lines joining points, never a glow or bloom, never a grid floor receding to a horizon.",
+      "Never more than one hue on the points besides lime for found.",
+      "Never the cloud under running text or behind a form.",
+      "Never a monospace label; figures are tabular Geologica."
+    ]
   },
-  "fris": {
-    "theme": "Friendly and modern for local services. A rounded sans, white ground and cobalt blue. Feels approachable, quick and easy to contact.",
-    "voice": "Friendly, direct and helpful. Say what you do, where and how to reach you; invite the reader to call or ask a quote.",
-    "photo": "bright daylight, friendly people, service at home, clean modern spaces",
-    "do": ["Make the main action (call, quote, booking) visible in the header and hero", "Use flat light cards to group services", "Keep icons simple and consistent", "Use rounded buttons with a clear label"],
-    "dont": ["Do not use dark themes or heavy imagery", "Do not use serif headlines", "Do not use long paragraphs", "Do not use more than one accent colour"]
+  "vellum": {
+    "theme": "An old printing house: a parchment ground, umber ink, Grenze Gotisch for the heads, its roman sibling Grenze for a sentence set large, a plain Hanken Grotesk for everything read, hairlines and double rules, and ultramarine as the one pigment. The gothic face carries the age, so nothing else is ornamented: no tavern, no distressed pastiche, no cream-and-serif editorial page.",
+    "voice": "Ledger-plain and dated: the item, the weight, the year, the town, as a clerk would enter them. Never *artisanal*, *curated*, or a story the prompt did not give.",
+    "photo": "warm daylight, soft shadows, natural materials",
+    "do": [
+      "Display: Grenze Gotisch 600 for h1 and h2, line-height 0.92, sentence case. It closes up below 30px, so h3 and smaller set in Hanken Grotesk 600.",
+      "Outlier, Grenze 400: the roman sibling, for one sentence set at and for figures at display size, line-height 1.02. Never for running text.",
+      "A pigment-filled primary ( on ) that deepens to on hover, beside a ghost with a 1px ink border, both 2px radius, Hanken Grotesk 500.",
+      "Links underline in pigment on hover; inputs take 2px radius and a 1px ink border."
+    ],
+    "dont": [
+      "Never clay, terracotta or oxblood as the pigment on parchment; oxblood is a ground only.",
+      "Never Grenze Gotisch below 30px, at paragraph length, or opening a head on a capital I, which reads as J.",
+      "Never a deckled edge, a vignette, a coffee ring, a burn or a second texture.",
+      "Never the founding year alone as the hero's head; it sits in a sentence, a row or a figure with its label."
+    ]
+  },
+  "wayfind": {
+    "theme": "Public signage set as a page: cool grey paper, blue-black ink, every glyph in Chivo Mono (a sober grotesk cut to the fixed cell of a departure board), square 2px ink borders, ink plates that carry a sign, cobalt for what is live and amber for figures. The mono is the board's face and the borders mark the way.",
+    "voice": "Signage: the platform, the exit, the minute, the carriage. Imperative and short; a head reads in one look.",
+    "photo": "neutral daylight, true colour, no filter",
+    "do": [
+      "Display: Chivo Mono 800, line-height 0.98, sentence case. A mono line runs wide, so h1 caps at 4.75rem and a head stays short enough to read in one look.",
+      "Body: Chivo Mono 400, line-height 1.55, tabular-nums on everything. Mono is the material here (waive 64): the board's face sets the whole page.",
+      "A cobalt-filled button beside a transparent one with a ink border, both square, Chivo Mono 800, sentence case, 48 to 52px.",
+      "A choice set is square cells sharing 2px borders; the chosen cell fills ink with paper text."
+    ],
+    "dont": [
+      "Never a proportional face anywhere, not even for prose.",
+      "Never amber as a text colour on the paper; it belongs on ink or under ink text.",
+      "Never a third bright colour, except a network's own line colours as small squares beside their names.",
+      "Never rounded cards or soft shadows on cards; Wayfind is bordered."
+    ]
+  },
+  "werkstatt": {
+    "theme": "A design school's printed prospectus: a warm putty ground, near-black ink, heavy Jost capitals over a plain Karla body, square 2px and 3px ink rules, and three flat primaries, blue, red and yellow, each with one job. Its photographs are black and white records of the shops at work.",
+    "voice": "Plain school prose: the shop, the week, the tuition, the deadline, each said once and plainly.",
+    "photo": "black and white, strong contrast, visible grain",
+    "do": [
+      "Display: Jost 700, uppercase, line-height 1.02, at the shared steps. Capitals are the material: every head is set in them.",
+      "Body: Karla 400, line-height 1.5.",
+      "A transparent ink-bordered button beside an ink-filled one, both square; on an ink band the pair inverts: the filled one turns putty with ink type, never a primary,.",
+      "Links carry a 2px ink underline that thickens to 3px on hover; inputs are square with a ink border."
+    ],
+    "dont": [
+      "Never a fourth colour, a tint of a primary, a primary used as type, or a photograph in colour.",
+      "Never a radius on a container, a button or an image; Werkstatt is square.",
+      "Never mixed-case display; Jost here is capitals.",
+      "Never the primaries as confetti or a pattern; each fill means a category."
+    ]
   }
 }

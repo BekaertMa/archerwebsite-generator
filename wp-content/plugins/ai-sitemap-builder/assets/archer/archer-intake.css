@@ -169,6 +169,15 @@
 .archer-intake-composer { position: sticky; bottom: 12px; display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--ar-line-2); border-radius: 14px; background: #fff; box-shadow: 0 6px 18px rgba(9, 9, 48, 0.08); z-index: 2; }
 .archer-intake-attach { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: var(--ar-muted); cursor: pointer; flex: none; }
 .archer-intake-attach:hover { background: var(--ar-bg); color: var(--ar-navy); }
+.archer-intake-mic { height: 40px; min-width: 40px; padding: 0 10px; border: 0; display: inline-flex; align-items: center; gap: 6px; border-radius: 10px; background: transparent; color: var(--ar-muted); cursor: pointer; flex: none; }
+.archer-intake-mic:hover { background: var(--ar-bg); color: var(--ar-navy); }
+.archer-intake-mic.is-recording { background: var(--ar-carmine, #d8232a); color: #fff; }
+.archer-intake-mic.is-recording:hover { background: var(--ar-carmine, #d8232a); color: #fff; }
+.archer-intake-mic.is-recording svg { animation: archer-mic-pulse 1.4s ease-in-out infinite; }
+.archer-intake-mic-time { font-size: 13px; font-variant-numeric: tabular-nums; }
+.archer-intake-mic-time[hidden] { display: none; }
+@keyframes archer-mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .archer-intake-mic.is-recording svg { animation: none; } }
 .archer-intake-input { flex: 1; border: 0; outline: 0; font: inherit; padding: 10px 6px; background: transparent; min-width: 0; }
 .archer-intake-send { width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--ar-navy); color: #fff; cursor: pointer; display: grid; place-items: center; flex: none; }
 .archer-intake-legacy { align-self: center; margin-top: 10px; font-size: 13px; }

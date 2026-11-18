@@ -292,7 +292,7 @@ class AISB_Wireframes_AI {
     $settings = get_option('aisb_settings', []);
     $openai = new \AISB_OpenAI();
     // Archer: elke sectie apart en tegelijk laten schrijven (sneller model); anders de oude, ene grote vraag.
-    $translated = class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::translate_sections_parallel($prompt, $to_translate) : null;
+    $translated = class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::translate_sections_parallel($prompt, $to_translate, ['project_id' => $project_id, 'page_slug' => $page_slug, 'page_title' => (string) $page_title, 'page_type' => (string) $page_type, 'page_purpose' => (string) $page_purpose]) : null;
     if (!is_array($translated)) {
     $res = $openai->call_openai_chat_completions($prompt, $settings, "Return valid JSON only. No markdown. No explanation.");
 
@@ -484,7 +484,10 @@ class AISB_Wireframes_AI {
    * Recursief AI-gegenereerde tekst terugmergen in Bricks elementen.
    * Volgt dezelfde structuur als extract_text_recursive, maar schrijft terug.
    */
-  private function merge_text_recursive(array &$target, array $source): void {
+  private function merge_text_recursive(&$target, $source): void {
+    // De AI geeft soms een kapotte waarde (een losse string in plaats van settings): overslaan, niet crashen.
+    if (!is_array($source)) return;
+    if (!is_array($target)) $target = [];
     foreach ($source as $key => $value) {
         if (is_string($value)) {
             $target[$key] = $value;

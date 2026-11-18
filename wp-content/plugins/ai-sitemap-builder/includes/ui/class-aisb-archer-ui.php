@@ -16,10 +16,17 @@ require_once __DIR__ . '/class-aisb-archer-motion.php';
 require_once __DIR__ . '/class-aisb-archer-sector.php';
 require_once __DIR__ . '/class-aisb-archer-checks.php';
 require_once __DIR__ . '/class-aisb-archer-marketing.php';
+require_once __DIR__ . '/class-aisb-archer-copy-coach.php';
+require_once __DIR__ . '/class-aisb-archer-design-coach.php';
+require_once __DIR__ . '/class-aisb-archer-dutch.php';
+require_once __DIR__ . '/class-aisb-archer-voice.php';
+require_once __DIR__ . '/class-aisb-archer-composition.php';
 require_once __DIR__ . '/class-aisb-archer-collections.php';
 require_once __DIR__ . '/class-aisb-archer-structure.php';
 require_once __DIR__ . '/class-aisb-archer-megamenu.php';
 require_once __DIR__ . '/class-aisb-archer-intake.php';
+require_once __DIR__ . '/class-aisb-archer-direction.php';
+require_once __DIR__ . '/class-aisb-archer-imagery.php';
 require_once __DIR__ . '/class-aisb-archer-design.php';
 
 /**
@@ -113,6 +120,8 @@ class AISB_Archer_UI {
     (new AISB_Archer_Styles())->init();
     (new AISB_Archer_Site())->init();
     (new AISB_Archer_Intake())->init();
+    (new AISB_Archer_Direction())->init();
+    (new AISB_Archer_Imagery())->init();
     (new AISB_Archer_Design())->init();
   }
 
@@ -168,7 +177,8 @@ class AISB_Archer_UI {
     wp_enqueue_style('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.css', [], $v('archer.css'));
 
     // In de footer, na de stapmodules: de init draait op DOMContentLoaded.
-    wp_enqueue_script('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.js', [], $v('archer.js'), true);
+    if (class_exists('AISB_Archer_Styles')) AISB_Archer_Styles::enqueue_stack_js();
+    wp_enqueue_script('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.js', ['aisb-font-stack'], $v('archer.js'), true);
     wp_enqueue_script('archer-sitemap', AISB_PLUGIN_URL . 'assets/archer/archer-sitemap.js', ['archer-ui'], $v('archer-sitemap.js'), true);
     // Intake-agent: enkel op het startscherm (stap 1 zonder project).
     if ((int) ($_GET['aisb_step'] ?? 1) === 1 && empty($_GET['aisb_project'])) {

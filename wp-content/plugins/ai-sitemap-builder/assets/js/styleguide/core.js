@@ -316,20 +316,22 @@
       // even secties: white/light, oneven secties: neutral/light
     }
 
-    // stap 6: font-family overrides voor headings
+    // stap 6 en 7: font-family overrides voor headings en body-tekst.
+    // De terugval komt uit assets/js/font-stack.js, zodat een schreefletter als Vollkorn hier
+    // geen schreefloze reserve krijgt. Deze regels dragen !important en winnen dus van het thema.
+    const stack = (f) =>
+      window.AISB_fontStack ? window.AISB_fontStack(f) : "'" + f + "',sans-serif";
     if (SG.guide.headingFont) {
       css +=
         "h1,h2,h3,h4,h5,h6,.brxe-heading{font-family:" +
-        SG.guide.headingFont +
-        ",sans-serif !important;}";
+        stack(SG.guide.headingFont) +
+        " !important;}";
     }
-
-    // stap 7: font-family overrides voor body-tekst en Bricks tekst-elementen
     if (SG.guide.bodyFont) {
       css +=
         "body,p,.brxe-text,.brxe-text-basic,.brxe-rich-text,.brxe-post-content{font-family:" +
-        SG.guide.bodyFont +
-        ",sans-serif !important;}";
+        stack(SG.guide.bodyFont) +
+        " !important;}";
     }
 
     // geeft de volledige CSS-string terug, klaar om in een <style> tag te plaatsen

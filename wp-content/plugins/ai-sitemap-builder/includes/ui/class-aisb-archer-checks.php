@@ -60,6 +60,68 @@ class AISB_Archer_Checks {
         : ['id' => 'photos', 'status' => 'ok', 'label' => 'Alle fotokaders gevuld', 'detail' => count($imgs) . ' foto\'s.'];
     }
 
+    // Ontwerpcoach (AISB_Archer_Design_Coach): de opbouw van de pagina's, gemeten tijdens het bouwen.
+    if (class_exists('AISB_Archer_Design_Coach') && AISB_Archer_Design_Coach::on()) {
+      $d = AISB_Archer_Design_Coach::summary($pid);
+      if ($d['average'] !== null) {
+        $weak = array_values(array_filter($d['pages'], fn($p) => $p['total'] !== null && $p['total'] < AISB_Archer_Design_Coach::WEAK_BELOW));
+        if ($weak) {
+          $w = $weak[0];
+          $note = (string) ($w['weak'][0] ?? ($w['findings'][0]['note'] ?? ''));
+          $out[] = [
+            'id' => 'design', 'status' => 'warn',
+            'label' => count($weak) === 1 ? '1 pagina met een zwakke opbouw: ' . $w['slug'] : count($weak) . ' pagina\'s met een zwakke opbouw',
+            'detail' => trim(ucfirst($w['slug']) . ' scoort ' . (int) $w['total'] . '/100. ' . $note),
+          ];
+        } else {
+          $out[] = ['id' => 'design', 'status' => 'ok', 'label' => 'Opbouw van de pagina\'s nagekeken (' . (int) $d['average'] . '/100 gemiddeld)', 'detail' => 'Volgorde, afwisseling en stijl van de secties.'];
+        }
+      }
+      if ($d['findings'] > 0) {
+        $notes = [];
+        foreach ($d['pages'] as $p) foreach ((array) $p['findings'] as $fn) $notes[] = $p['slug'] . ': ' . $fn['note'];
+        $out[] = [
+          'id' => 'design-findings', 'status' => 'warn',
+          'label' => $d['findings'] === 1 ? '1 ding om na te kijken in de opbouw' : $d['findings'] . ' dingen om na te kijken in de opbouw',
+          'detail' => mb_substr(implode(' ', array_slice($notes, 0, 3)), 0, 300),
+        ];
+      }
+    }
+
+    // Klinkt het nog als AI? (AISB_Archer_Dutch) De copycoach bewaart per pagina wat hij niet
+    // opgeruimd kreeg: Nederlands uit Nederland, ambtelijke taal, verzonnen enthousiasme, vormtics.
+    if (class_exists('AISB_Archer_Dutch') && AISB_Archer_Dutch::on()) {
+      $tells = [];
+      foreach ((array) get_post_meta($pid) as $mk => $mv) {
+        if (strpos($mk, '_archer_copy_score_') !== 0) continue;
+        $score = maybe_unserialize($mv[0] ?? '');
+        if (!is_array($score) || empty($score['tells'])) continue;
+        $slug = substr($mk, strlen('_archer_copy_score_'));
+        foreach ((array) $score['tells'] as $t) $tells[] = ['slug' => $slug] + (array) $t;
+      }
+      if ($tells) {
+        $groups = [];
+        foreach ($tells as $t) $groups[(string) ($t['group'] ?? '')] = true;
+        $names = array_values(array_filter(array_map(fn($g) => AISB_Archer_Dutch::GROUPS[$g] ?? '', array_keys($groups))));
+        $first = $tells[0];
+        $out[] = [
+          'id' => 'ai-tells', 'status' => 'warn',
+          'label' => count($tells) === 1 ? '1 zin die als AI klinkt' : count($tells) . ' zinnen die als AI klinken',
+          'detail' => mb_substr(($names ? implode(', ', $names) . '. ' : '') . ucfirst((string) $first['slug']) . ': "' . $first['hit'] . '" - ' . $first['note'] . '.', 0, 300),
+        ];
+      }
+    }
+
+    // Stemprofiel (AISB_Archer_Voice): zonder dat schrijft elke stap in haar eigen toon.
+    if (class_exists('AISB_Archer_Voice') && AISB_Archer_Voice::on()) {
+      $v = AISB_Archer_Voice::summary($pid);
+      $out[] = empty($v['has'])
+        ? ['id' => 'voice', 'status' => 'warn', 'label' => 'Nog geen stemprofiel', 'detail' => 'De teksten kiezen dan zelf hun toon. Doorloop de intake opnieuw, of laat de eigenaar zijn zaak inspreken.']
+        : ['id' => 'voice', 'status' => 'ok',
+           'label' => 'Stemprofiel klaar' . (!empty($v['spoken']) ? ' (uit het verhaal van de eigenaar)' : ''),
+           'detail' => trim(($v['who'] !== '' ? $v['who'] . '. ' : '') . (int) $v['objections'] . ' twijfel(s), ' . (int) $v['knows'] . ' eigen detail(s).')];
+    }
+
     $contact = class_exists('AISB_Archer_Site') ? AISB_Archer_Site::contact($pid) : ['phone' => '', 'email' => '', 'address' => ''];
     $need_phone = $sector && in_array($sector['key'], self::NEEDS_PHONE, true);
     if ($contact['phone'] === '' && $contact['email'] === '') {
