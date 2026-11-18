@@ -436,18 +436,20 @@ class AISB_Archer_Design {
       }
     }
     if ($idx && $pref !== 'own' && class_exists('AISB_Archer_Stock')) {
+      // Uitsluiten op de sleutel van de foto, niet op haar adres: een binnengehaalde foto draagt
+      // een lokaal adres en zou anders op een tweede pagina gewoon opnieuw gekozen worden.
       $exclude = [];
-      foreach ($images as $img) if (!self::empty_img($img)) $exclude[] = (string) ($img['full'] ?? '');
+      foreach ($images as $img) if (!self::empty_img($img)) $exclude[] = AISB_Archer_Stock::imgkey($img);
       $r = AISB_Archer_Stock::for_page($pid, $page['slug'], $page['title'], $page['sections'], count($idx), array_slice($exclude, -150));
       if (is_wp_error($r)) {
         $g['images'] = $images;
         return $r;
       }
-      $taken = array_flip(array_map([AISB_Archer_Stock::class, 'pkey'], $exclude));
+      $taken = array_flip($exclude);
       foreach ((array) ($r['images'] ?? []) as $pick) {
         if (!$idx) break;
-        if (empty($pick['full']) || isset($taken[AISB_Archer_Stock::pkey($pick['full'])])) continue;
-        $taken[AISB_Archer_Stock::pkey($pick['full'])] = 1;
+        if (empty($pick['full']) || isset($taken[AISB_Archer_Stock::imgkey($pick)])) continue;
+        $taken[AISB_Archer_Stock::imgkey($pick)] = 1;
         // Het adres bij de bron blijft de sleutel tegen dubbels; wat in de gids komt, is de kopie.
         $images[array_shift($idx)] = AISB_Archer_Stock::localise($pick, $pid);
       }
@@ -525,9 +527,13 @@ class AISB_Archer_Design {
     };
     $full = $ok($p['full'] ?? '');
     if ($full === '') return null;
+    // De eigen sleutel van de bron (Pixabay geeft "pixabay/1281053" mee) blijft bewaard: na het
+    // binnenhalen staat er een lokaal adres in full en is de foto daar niet meer aan te herkennen.
+    $key = preg_match('#^[a-z]+/\d+$#', (string) ($p['key'] ?? '')) ? (string) $p['key'] : '';
     return [
       'thumb' => $ok($p['thumb'] ?? '') ?: $full,
       'full' => $full,
+      'key' => $key,
       'alt' => sanitize_text_field((string) ($p['alt'] ?? '')),
       'photographer' => sanitize_text_field((string) ($p['photographer'] ?? '')),
       'link' => esc_url_raw((string) ($p['link'] ?? '')),

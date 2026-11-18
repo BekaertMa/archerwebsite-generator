@@ -199,7 +199,10 @@ class AISB_Archer_Stock {
       $tags = array_slice(array_filter(array_map('trim', explode(',', (string) ($p['tags'] ?? '')))), 0, 2);
       $out[] = ['thumb' => (string) ($p['webformatURL'] ?? $vol), 'full' => $vol,
         'alt' => $tags ? implode(', ', $tags) : $q,
-        'photographer' => (string) ($p['user'] ?? ''), 'link' => (string) ($p['pageURL'] ?? ''), 'source' => 'Pixabay'];
+        'photographer' => (string) ($p['user'] ?? ''), 'link' => (string) ($p['pageURL'] ?? ''), 'source' => 'Pixabay',
+        // Pixabay levert getekende /get/-adressen waar de foto zelf niet in te herkennen is,
+        // en na het binnenhalen staat er een lokaal adres in full. Hun eigen id blijft wel gelijk.
+        'key' => 'pixabay/' . (int) ($p['id'] ?? 0)];
     }
     $total = (int) ($body['totalHits'] ?? 0);
     return ['images' => $out, 'total_pages' => max(1, (int) ceil($total / $per))];
@@ -214,7 +217,18 @@ class AISB_Archer_Stock {
     // met een andere maat achteraan (…-1867459_1280.jpg), dus vergelijken op het nummer erin.
     if (preg_match('#photo-[0-9a-f]+-[0-9a-f]+|photos/\d+#i', $url, $m)) return strtolower($m[0]);
     if (preg_match('#[-_](\d{5,})_\d{3,4}\.(?:jpe?g|png)#i', $url, $m)) return 'pixabay/' . $m[1];
+    if (preg_match('#pixabay\.com/[a-z-]+/[^/]*?-(\d{4,})/?$#i', $url, $m)) return 'pixabay/' . $m[1];
     return $url;
+  }
+
+  /**
+   * De sleutel van een foto. Draagt ze er zelf een (Pixabay geeft een id mee), dan die; anders
+   * uit het adres. Een sleutel die er al een is, blijft zichzelf, dus dit mag dubbel toegepast worden.
+   */
+  public static function imgkey($img): string {
+    if (is_array($img) && !empty($img['key'])) return (string) $img['key'];
+    $url = is_array($img) ? (string) ($img['full'] ?? '') : (string) $img;
+    return self::pkey($url);
   }
 
   /* ───────────────────────── Waar een foto woont ───────────────────────── */
@@ -248,7 +262,8 @@ class AISB_Archer_Stock {
     $full = (string) ($photo['full'] ?? '');
     if ($full === '' || self::is_local($full)) return $photo;
 
-    $id = self::existing($full) ?: self::store($full, $photo, $pid);
+    $sleutel = self::imgkey($photo);
+    $id = self::existing($sleutel) ?: self::store($full, $photo, $pid, $sleutel);
     if (!$id) return $photo;
     $local = set_url_scheme((string) wp_get_attachment_url($id));
     if ($local === '') return $photo;
@@ -266,14 +281,15 @@ class AISB_Archer_Stock {
   }
 
   /** Dezelfde foto al eens binnengehaald? Dan die hergebruiken in plaats van opnieuw te downloaden. */
-  private static function existing(string $url): int {
+  private static function existing(string $sleutel): int {
+    if ($sleutel === '') return 0;
     $q = get_posts(['post_type' => 'attachment', 'post_status' => 'inherit', 'numberposts' => 1,
-      'fields' => 'ids', 'meta_key' => '_archer_stock_key', 'meta_value' => self::pkey($url)]);
+      'fields' => 'ids', 'meta_key' => '_archer_stock_key', 'meta_value' => $sleutel]);
     return $q ? (int) $q[0] : 0;
   }
 
   /** @return int attachment-id, of 0 als het niet lukte. */
-  private static function store(string $url, array $photo, int $pid): int {
+  private static function store(string $url, array $photo, int $pid, string $sleutel): int {
     $res = wp_remote_get($url, ['timeout' => 25, 'redirection' => 3]);
     if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return 0;
     $bytes = (string) wp_remote_retrieve_body($res);
@@ -297,7 +313,7 @@ class AISB_Archer_Stock {
     if ($alt !== '') update_post_meta($id, '_wp_attachment_image_alt', $alt);
     // De herkomst blijft aan het beeld hangen, niet aan de stijlgids: zo weten we later nog
     // waar het vandaan komt, ook als het project opnieuw opgebouwd wordt.
-    update_post_meta($id, '_archer_stock_key', self::pkey($url));
+    update_post_meta($id, '_archer_stock_key', $sleutel);
     update_post_meta($id, '_archer_stock_source', (string) ($photo['source'] ?? ''));
     update_post_meta($id, '_archer_stock_link', (string) ($photo['link'] ?? ''));
     update_post_meta($id, '_archer_stock_photographer', (string) ($photo['photographer'] ?? ''));
@@ -347,8 +363,8 @@ class AISB_Archer_Stock {
     for ($i = 0; $i < $langste && count($out) < $max; $i++) {
       foreach ($lists as $l) {
         $img = $l[$i] ?? null;
-        if (!$img || empty($img['full']) || isset($seen[self::pkey($img['full'])])) continue;
-        $seen[self::pkey($img['full'])] = 1;
+        if (!$img || empty($img['full']) || isset($seen[self::imgkey($img)])) continue;
+        $seen[self::imgkey($img)] = 1;
         $out[] = $img;
         if (count($out) >= $max) break;
       }
@@ -430,8 +446,8 @@ class AISB_Archer_Stock {
     $kw = self::page_keyword($pid, $slug, $title, $sections);
     $want = $need + count($skip) + 4;
     $eerste = self::fetch($kw, $want, 1);
-    $pool = array_values(array_filter(self::mix($eerste['lists'], $want + 10), fn($img) => !isset($skip[self::pkey($img['full'])])));
-    foreach ($pool as $img) $skip[self::pkey($img['full'])] = 1;
+    $pool = array_values(array_filter(self::mix($eerste['lists'], $want + 10), fn($img) => !isset($skip[self::imgkey($img)])));
+    foreach ($pool as $img) $skip[self::imgkey($img)] = 1;
     // Te weinig (veel foto's staan al op andere pagina's): volgende resultaatpagina's, dan het algemene zoekwoord.
     $tries = [[$kw, 2], [$kw, 3], [self::keyword($pid), 1], [self::keyword($pid), 2]];
     foreach ($tries as [$q, $pg]) {
@@ -439,8 +455,8 @@ class AISB_Archer_Stock {
       $more = self::mix(self::fetch($q, 40, $pg)['lists'], 70);
       foreach ($more as $img) {
         if (count($pool) >= $need) break;
-        if (isset($skip[self::pkey($img['full'])])) continue;
-        $skip[self::pkey($img['full'])] = 1;
+        if (isset($skip[self::imgkey($img)])) continue;
+        $skip[self::imgkey($img)] = 1;
         $pool[] = $img;
       }
     }
