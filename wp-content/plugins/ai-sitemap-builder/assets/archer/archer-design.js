@@ -311,7 +311,8 @@
       const g = S.guide || {};
       const cur = g.style;
       const styles = S.styles || [];
-      styles.forEach((s) => loadFont(s.fontUrl));
+      // Een hallmark-stijl kan twee bronnen hebben (Google Fonts en Fontshare).
+      styles.forEach((s) => (s.fontUrls && s.fontUrls.length ? s.fontUrls : [s.fontUrl]).forEach(loadFont));
       const brand = /^#[0-9A-F]{6}$/i.test(g.brand || "") ? g.brand.toUpperCase() : "";
       const swatches = ["#1F3A5F", "#2152E8", "#0E6E72", "#2F5A46", "#6B8F3E", "#C2410C", "#D21F14", "#B4235A", "#6D28D9", "#191917"];
       return `

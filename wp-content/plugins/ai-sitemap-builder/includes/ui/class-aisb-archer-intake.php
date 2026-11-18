@@ -537,6 +537,7 @@ class AISB_Archer_Intake {
         'radius' => $s['radius'],
         'dark' => !empty($s['dark']),
         'fontUrl' => AISB_Archer_Styles::font_url($s),
+        'fontUrls' => AISB_Archer_Styles::font_urls($s),
         '_score' => ($order[$s['id']] ?? 0) - $i * 0.001,
       ];
     }

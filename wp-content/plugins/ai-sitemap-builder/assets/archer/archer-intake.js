@@ -195,13 +195,18 @@
       } catch (e) { /* voorbeeld zonder stijl */ }
     }
     const fontLoaded = {};
+    // Een hallmark-stijl kan twee bronnen hebben (Google Fonts en Fontshare).
     const loadFont = (s) => {
-      if (!s || !s.fontUrl || fontLoaded[s.fontUrl]) return;
-      fontLoaded[s.fontUrl] = 1;
-      const l = document.createElement("link");
-      l.rel = "stylesheet";
-      l.href = s.fontUrl;
-      document.head.appendChild(l);
+      if (!s) return;
+      const urls = s.fontUrls && s.fontUrls.length ? s.fontUrls : (s.fontUrl ? [s.fontUrl] : []);
+      urls.forEach((u) => {
+        if (!u || fontLoaded[u]) return;
+        fontLoaded[u] = 1;
+        const l = document.createElement("link");
+        l.rel = "stylesheet";
+        l.href = u;
+        document.head.appendChild(l);
+      });
     };
 
     /* ── Weergave: gesprek ───────────────────────────────── */
