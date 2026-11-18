@@ -3243,6 +3243,9 @@
       styleFonts.rel = "stylesheet";
       document.head.appendChild(styleFonts);
       const styleNow = () => (SG.guide && !Array.isArray(SG.guide) && SG.guide.style) || "";
+      // Terugvalletters achter een eigen keuze van de klant: assets/js/font-stack.js, dezelfde
+      // beslissing als AISB_Archer_Styles::stack() op de server.
+      const fontStack = (f) => (window.AISB_fontStack ? window.AISB_fontStack(f) : "'" + f + "',ui-sans-serif,system-ui,sans-serif");
       const styleById = (id) => styles.find((x) => x.id === id);
       // Kleur- en letteraanpassingen na het kiezen gaan voor op de stijl (zelfde regel als op de server).
       const styleCssFor = (st) => {
@@ -3261,8 +3264,8 @@
           o += "--a-accent-ink:" + (white >= 4.5 || !/^#[0-9a-f]{6}$/i.test(ink) ? "#FFFFFF" : ink) + ";";
         }
         const hf = SG.guide && SG.guide.headingFont, bf = SG.guide && SG.guide.bodyFont;
-        if (hf && hf !== st.headingFont) o += `--a-font-heading:'${hf}',ui-sans-serif,system-ui,sans-serif;`;
-        if (bf && bf !== st.bodyFont) o += `--a-font-body:'${bf}',ui-sans-serif,system-ui,sans-serif;`;
+        if (hf && hf !== st.headingFont) o += `--a-font-heading:${fontStack(hf)};`;
+        if (bf && bf !== st.bodyFont) o += `--a-font-body:${fontStack(bf)};`;
         const rk = SG.guide && !Array.isArray(SG.guide) ? SG.guide.radius : "";
         if (rk && rk !== ((st.guide && st.guide.radius) || "")) o += UI.radiusVars(rk);
         return st.css + (o ? ":root{" + o + "}" : "");

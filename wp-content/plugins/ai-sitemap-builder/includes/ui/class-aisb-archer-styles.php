@@ -304,6 +304,19 @@ class AISB_Archer_Styles {
     'Vollkorn', 'Yeseva One', 'Young Serif', 'Zilla Slab'];
   const MONO_FACES = ['Chivo Mono', 'Geist Mono', 'Martian Mono'];
 
+  /**
+   * Dezelfde keuze in de browser (assets/js/font-stack.js → window.AISB_fontStack).
+   * Drie lagen zetten de letter — het thema, de stijlgidsoverride en de eigen keuze in Ontwerp —
+   * en die moeten alle drie dezelfde terugval nemen. De lijsten gaan mee, zodat ze hier blijven.
+   */
+  public static function enqueue_stack_js(): void {
+    if (wp_script_is('aisb-font-stack', 'enqueued')) return;
+    $p = AISB_PLUGIN_DIR . 'assets/js/font-stack.js';
+    wp_enqueue_script('aisb-font-stack', AISB_PLUGIN_URL . 'assets/js/font-stack.js', [],
+      file_exists($p) ? (string) filemtime($p) : AISB_VERSION, false);
+    wp_localize_script('aisb-font-stack', 'AISB_FONTS', ['serif' => self::SERIF_FACES, 'mono' => self::MONO_FACES]);
+  }
+
   public static function stack(string $family): string {
     $q = "'" . $family . "'";
     if (in_array($family, self::MONO_FACES, true) || preg_match('/\bmono\b/i', $family)) {

@@ -177,7 +177,8 @@ class AISB_Archer_UI {
     wp_enqueue_style('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.css', [], $v('archer.css'));
 
     // In de footer, na de stapmodules: de init draait op DOMContentLoaded.
-    wp_enqueue_script('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.js', [], $v('archer.js'), true);
+    if (class_exists('AISB_Archer_Styles')) AISB_Archer_Styles::enqueue_stack_js();
+    wp_enqueue_script('archer-ui', AISB_PLUGIN_URL . 'assets/archer/archer.js', ['aisb-font-stack'], $v('archer.js'), true);
     wp_enqueue_script('archer-sitemap', AISB_PLUGIN_URL . 'assets/archer/archer-sitemap.js', ['archer-ui'], $v('archer-sitemap.js'), true);
     // Intake-agent: enkel op het startscherm (stap 1 zonder project).
     if ((int) ($_GET['aisb_step'] ?? 1) === 1 && empty($_GET['aisb_project'])) {
