@@ -583,6 +583,64 @@
       return errors;
     }
 
+    /**
+     * Hetzelfde, maar zonder te wachten tot alle pagina's er staan: zodra de opbouw van één
+     * pagina klaar is, gaat die pagina de rij in en worden haar foto's gezocht terwijl de
+     * volgende pagina's nog geschreven worden. Dat scheelt de hele fotostap behalve die van
+     * de laatste pagina.
+     *
+     * Eén pagina tegelijk, en dat blijft zo: de server herschrijft bij elke vulling de hele
+     * stijlgids (één schrijver), en de foto's van de vorige pagina moeten al meetellen, anders
+     * staat dezelfde foto twee keer op de site.
+     *
+     * De wireframe staat op de server bewaard voor het antwoord terugkomt, dus op het moment
+     * dat archer:wf-progress afgaat kent de server de fotovakken van die pagina al.
+     */
+    function photoStreamer(only) {
+      const queue = [];
+      const seen = new Set();
+      let worker = null;
+      let errors = 0;
+      let done = 0;
+      const api = { onPage: null };
+
+      const drain = async () => {
+        while (queue.length) {
+          const slug = queue.shift();
+          done++;
+          const page = (wf.state.pages || []).find((p) => p.slug === slug) || { slug, title: slug };
+          if (api.onPage) api.onPage(done, done + queue.length, page);
+          try {
+            if (UI.flushAll) await UI.flushAll();
+            await photoOp({ op: "fill", page_slug: slug });
+          } catch (e) {
+            errors++;
+          }
+        }
+        worker = null;
+      };
+
+      // Pagina's die intussen klaar zijn, in de rij. Mislukte pagina's hebben geen model en
+      // blijven dus vanzelf liggen.
+      api.sweep = () => {
+        for (const p of wf.state.pages || []) {
+          if (only && !only.has(p.slug)) continue;
+          if (seen.has(p.slug) || !sectionsOf(p.slug)) continue;
+          seen.add(p.slug);
+          queue.push(p.slug);
+        }
+        if (queue.length && !worker) worker = drain();
+      };
+      api.finish = async () => {
+        document.removeEventListener("archer:wf-progress", api.sweep);
+        api.sweep();
+        while (worker) await worker;
+        return errors;
+      };
+      document.addEventListener("archer:wf-progress", api.sweep);
+      return api;
+    }
+
     /* ── Foto's en stijl op het canvas ────────────────── */
 
     // Eigen foto's van deze site in https als de pagina https is (WordPress geeft hier http-adressen).
@@ -862,12 +920,20 @@
       const st0 = UI.wfGenState ? UI.wfGenState() : { pending: 0 };
       if (missing.length && !st0.pending && UI.generateWireframes) UI.generateWireframes(missing);
       await sleep(400);
+      // De foto's lopen mee met de opbouw: elke pagina die klaar is, krijgt er meteen.
+      const stream = photoStreamer();
+      let fotoNu = "";
+      stream.onPage = (d, n, p) => { fotoNu = p.title || p.slug; };
+      stream.sweep();
       const st = await waitWireframes((s) => {
-        if (s.total) dockShow("wireframes", `Pagina's opbouwen: ${s.done} van ${s.total} klaar…`, 35 + Math.round((s.done / s.total) * 40));
+        if (!s.total) return;
+        dockShow("wireframes", `Pagina's opbouwen: ${s.done} van ${s.total} klaar…${fotoNu ? ` · foto's voor ${fotoNu}` : ""}`,
+          35 + Math.round((s.done / s.total) * 40));
       });
       renderLeft();
-      dockShow("photos", "Foto's plaatsen…", 78);
-      const errors = await fillPhotos(false, (i, n, p) => dockShow("photos", `Foto's voor ${p.title} (${i} van ${n})…`, 78 + Math.round((i / n) * 20)));
+      dockShow("photos", fotoNu ? `Foto's voor ${fotoNu}…` : "Foto's plaatsen…", 78);
+      stream.onPage = (d, n, p) => dockShow("photos", `Foto's voor ${p.title} (${d} van ${n})…`, 78 + Math.round((d / n) * 20));
+      const errors = await stream.finish();
       const url = new URL(window.location.href);
       url.searchParams.delete("aisb_build");
       window.history.replaceState({}, "", url.toString());
@@ -893,11 +959,13 @@
         UI.generateWireframes(todo);
         focusPage(todo[0]);
         await sleep(400);
+        // Ook hier lopen de foto's mee: bij één pagina verandert er niets, bij meer wel.
+        // Alleen de nieuwe pagina's: de rest heeft haar foto's al.
+        const stream = photoStreamer(new Set(todo));
+        stream.sweep();
         await waitWireframes();
         renderLeft();
-        // Foto's voor de nieuwe pagina.
-        await photoOp({ op: "state" }).catch(() => {});
-        for (const slug of todo) await photoOp({ op: "fill", page_slug: slug }).catch(() => {});
+        await stream.finish();
         toast("De nieuwe pagina is klaar.");
       }
     }
