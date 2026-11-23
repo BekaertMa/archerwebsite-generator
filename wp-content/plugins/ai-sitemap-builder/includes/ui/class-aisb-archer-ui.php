@@ -182,8 +182,11 @@ class AISB_Archer_UI {
     wp_enqueue_script('archer-sitemap', AISB_PLUGIN_URL . 'assets/archer/archer-sitemap.js', ['archer-ui'], $v('archer-sitemap.js'), true);
     // Intake-agent: enkel op het startscherm (stap 1 zonder project).
     if ((int) ($_GET['aisb_step'] ?? 1) === 1 && empty($_GET['aisb_project'])) {
-      wp_enqueue_style('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.css', ['archer-ui'], $v('archer-intake.css'));
-      wp_enqueue_script('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.js', ['archer-ui', 'archer-sitemap'], $v('archer-intake.js'), true);
+      // Het uitgewerkte ontwerp van een stijl (tegels, zijpaneel en groot scherm).
+      wp_enqueue_style('archer-preview', AISB_PLUGIN_URL . 'assets/archer/archer-preview.css', ['archer-ui'], $v('archer-preview.css'));
+      wp_enqueue_script('archer-preview', AISB_PLUGIN_URL . 'assets/archer/archer-preview.js', [], $v('archer-preview.js'), true);
+      wp_enqueue_style('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.css', ['archer-ui', 'archer-preview'], $v('archer-intake.css'));
+      wp_enqueue_script('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.js', ['archer-ui', 'archer-sitemap', 'archer-preview'], $v('archer-intake.js'), true);
     }
     // Scherm Ontwerp: pagina's, stijl en foto's rond het canvas.
     if ((int) ($_GET['aisb_step'] ?? 1) === 2 && !empty($_GET['aisb_project'])) {

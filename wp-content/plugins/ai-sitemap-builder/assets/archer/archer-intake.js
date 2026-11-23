@@ -194,20 +194,7 @@
         renderSetup();
       } catch (e) { /* voorbeeld zonder stijl */ }
     }
-    const fontLoaded = {};
-    // Een hallmark-stijl kan twee bronnen hebben (Google Fonts en Fontshare).
-    const loadFont = (s) => {
-      if (!s) return;
-      const urls = s.fontUrls && s.fontUrls.length ? s.fontUrls : (s.fontUrl ? [s.fontUrl] : []);
-      urls.forEach((u) => {
-        if (!u || fontLoaded[u]) return;
-        fontLoaded[u] = 1;
-        const l = document.createElement("link");
-        l.rel = "stylesheet";
-        l.href = u;
-        document.head.appendChild(l);
-      });
-    };
+    /* De letters van een stijl laadt het voorbeeld zelf, in zijn eigen iframe (archer-preview.js). */
 
     /* ── Weergave: gesprek ───────────────────────────────── */
 
@@ -275,18 +262,53 @@
       if (c.type === "pages") return cardPages(host, m, live);
     }
 
+    /**
+     * De tegel toont het ontwerp zelf: de bovenkant van een echte pagina in die stijl, klein gezet.
+     * Het vak blijft leeg tot de tegel in beeld komt (mountDemos), anders staan er vijftig pagina's
+     * en vijftig lettersets te laden voor stijlen die niemand bekijkt.
+     */
     function styleTile(s, chosen) {
-      loadFont(s);
-      const c = s.colours || {};
-      return `<button type="button" class="archer-ic-style${chosen ? " is-on" : ""}" data-style="${esc(s.id)}" aria-pressed="${chosen}">
-        <span class="archer-ic-style-demo" style="background:${esc(c.base)};color:${esc(c.ink)}">
-          <span class="archer-ic-style-aa" style="font-family:'${esc(s.headingFont)}';font-weight:${Number(s.headingWeight) || 600}">Aa</span>
-          <span class="archer-ic-style-btn" style="background:${esc(c.accent)};color:${esc(c.accentInk)};border-radius:${Math.min(Number((s.radius || {}).button) || 0, 999)}px">Knop</span>
-          <span class="archer-ic-style-sw">${["accent", "dark", "surface", "surface2"].map((k) => `<i style="background:${esc(c[k])}"></i>`).join("")}</span>
-        </span>
-        <span class="archer-ic-style-name">${esc(s.name)}${s.fit ? ' <em>past bij je zaak</em>' : ""}</span>
-        <span class="archer-ic-style-pitch">${esc(s.pitch)}</span>
-      </button>`;
+      return `<div class="archer-ic-style-wrap">
+        <button type="button" class="archer-ic-style${chosen ? " is-on" : ""}" data-style="${esc(s.id)}" aria-pressed="${chosen}">
+          <span class="archer-ic-style-demo" data-demo="${esc(s.id)}"></span>
+          <span class="archer-ic-style-name">${esc(s.name)}${s.fit ? ' <em>past bij je zaak</em>' : ""}</span>
+          <span class="archer-ic-style-pitch">${esc(s.pitch)}</span>
+        </button>
+        <button type="button" class="archer-ic-style-zoom" data-zoom="${esc(s.id)}">Bekijk groot</button>
+      </div>`;
+    }
+
+    /** De merkkleur van de klant gaat voor op het accent van de stijl, net als op de site. */
+    const brandVars = () => (hexOk(state.brief.brand_colors) ? `--a-accent:${state.brief.brand_colors};--a-accent-ink:#FFFFFF;` : "");
+
+    /**
+     * De lege vakken van de tegels met het ontwerp vullen.
+     *
+     * De vier tegels die open staan meteen, de rest pas als de klant alle stijlen openklapt. Niet
+     * met een IntersectionObserver: die zwijgt zolang het venster niet getekend wordt (een tabblad
+     * op de achtergrond, een verborgen paneel), en dan blijven de vakken leeg. In stukjes van vier,
+     * zodat zesenveertig pagina's tegelijk de keuze niet laten haperen.
+     */
+    function mountDemos(host) {
+      const P = window.ArcherPreview;
+      if (!P) return;
+      const draw = (el) => {
+        if (el.dataset.drawn) return;
+        const s = STYLES.find((x) => x.id === el.getAttribute("data-demo"));
+        if (!s || !el.clientWidth) return;
+        el.dataset.drawn = "1";
+        P.mount(el, s, P.content(state.brief), { clip: Math.round(el.clientWidth * 0.8), sections: P.TOP, vars: brandVars() });
+      };
+      const drawAll = (list) => {
+        const rest = list.slice();
+        const stap = () => {
+          rest.splice(0, 4).forEach(draw);
+          if (rest.length) setTimeout(stap, 60);
+        };
+        stap();
+      };
+      drawAll($$("[data-demo]", host).filter((el) => !el.closest("details")));
+      $$("details", host).forEach((d) => d.addEventListener("toggle", () => { if (d.open) drawAll($$("[data-demo]", d)); }));
     }
 
     function cardStyles(host, m, live) {
@@ -302,6 +324,7 @@
       host.innerHTML =
         `<div class="archer-ic-style-grid">${(c.items || []).map((s) => styleTile(s, s.id === chosen)).join("")}</div>` +
         ((c.more || []).length ? `<details class="archer-ic-more"><summary>Toon alle ${all.length} stijlen</summary><div class="archer-ic-style-grid">${c.more.map((s) => styleTile(s, s.id === chosen)).join("")}</div></details>` : "");
+      mountDemos(host);
       $$("[data-style]", host).forEach((b) => {
         const id = b.getAttribute("data-style");
         b.addEventListener("mouseenter", () => { peek = { style_id: id }; renderPreview(); });
@@ -312,6 +335,74 @@
           send("Stijl gekozen: " + styleName(id), { style_id: id });
         });
       });
+      $$("[data-zoom]", host).forEach((b) => b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openDesign(b.getAttribute("data-zoom"), all.map((s) => s.id));
+      }));
+    }
+
+    /* ── Het ontwerp op groot scherm ─────────────────────── */
+
+    let shade = null;
+    let dvIds = [];
+    let dvAt = 0;
+
+    function dvClose() {
+      if (!shade) return;
+      shade.classList.remove("is-on");
+      document.body.classList.remove("archer-no-scroll");
+    }
+    function dvDraw() {
+      const P = window.ArcherPreview;
+      const s = STYLES.find((x) => x.id === dvIds[dvAt]);
+      if (!P || !s || !shade) return;
+      $(".archer-dv-bar strong", shade).textContent = s.name;
+      $(".archer-dv-pitch", shade).textContent = s.pitch || "";
+      const box = $(".archer-dv-page", shade);
+      P.mount(box, s, P.content(state.brief), { scroll: true, vars: brandVars() });
+      box.scrollTop = 0;
+    }
+    const dvStep = (d) => { dvAt = (dvAt + d + dvIds.length) % dvIds.length; dvDraw(); };
+
+    /** Eén stijl zo groot als het scherm toelaat, met pijlen om door de andere te bladeren. */
+    function openDesign(id, ids) {
+      const P = window.ArcherPreview;
+      if (!P) return;
+      dvIds = (ids && ids.length ? ids : STYLES.map((s) => s.id)).filter((x) => STYLES.find((s) => s.id === x));
+      dvAt = Math.max(0, dvIds.indexOf(id));
+
+      if (!shade) {
+        shade = document.createElement("div");
+        shade.className = "archer-dv";
+        shade.innerHTML =
+          '<div class="archer-dv-box" role="dialog" aria-modal="true" aria-label="Ontwerp bekijken">' +
+          '<div class="archer-dv-bar"><strong></strong><span class="archer-dv-pitch"></span>' +
+          '<button type="button" class="archer-dv-prev" aria-label="Vorige stijl">&#8592;</button>' +
+          '<button type="button" class="archer-dv-next" aria-label="Volgende stijl">&#8594;</button>' +
+          '<button type="button" class="archer-dv-pick">Kies deze stijl</button>' +
+          '<button type="button" class="archer-dv-close" aria-label="Sluiten">&#10005;</button></div>' +
+          '<div class="archer-dv-page"></div></div>';
+        document.body.appendChild(shade);
+        shade.addEventListener("click", (e) => { if (e.target === shade) dvClose(); });
+        $(".archer-dv-close", shade).addEventListener("click", dvClose);
+        $(".archer-dv-prev", shade).addEventListener("click", () => dvStep(-1));
+        $(".archer-dv-next", shade).addEventListener("click", () => dvStep(1));
+        $(".archer-dv-pick", shade).addEventListener("click", () => {
+          const pick = dvIds[dvAt];
+          dvClose();
+          peek = null;
+          send("Stijl gekozen: " + styleName(pick), { style_id: pick });
+        });
+        document.addEventListener("keydown", (e) => {
+          if (!shade || !shade.classList.contains("is-on")) return;
+          if (e.key === "Escape") dvClose();
+          if (e.key === "ArrowLeft") dvStep(-1);
+          if (e.key === "ArrowRight") dvStep(1);
+        });
+      }
+      shade.classList.add("is-on");
+      document.body.classList.add("archer-no-scroll");
+      dvDraw();
     }
 
     function cardPalette(host, m, live) {
@@ -526,43 +617,21 @@
 
     /* ── Live voorbeeld ──────────────────────────────────── */
 
-    const GOAL_CTA = {
-      bellen: "Bel ons", offerte: "Vraag een offerte", afspraak: "Maak een afspraak", reserv: "Reserveer",
-      langs: "Kom langs", bestel: "Bestel nu", contact: "Neem contact op",
-    };
-    const ctaFor = (goal) => {
-      const g = String(goal || "").toLowerCase();
-      for (const k of Object.keys(GOAL_CTA)) if (g.indexOf(k) >= 0) return GOAL_CTA[k];
-      return "Neem contact op";
-    };
     const hexOk = (v) => /^#[0-9a-f]{6}$/i.test(String(v || "").trim());
     const slugify = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "").slice(0, 24) || "jouwzaak";
 
+    /**
+     * Het zijpaneel toont geen schets meer maar het ontwerp zelf: dezelfde pagina als op de tegels
+     * en op groot scherm, met de gegevens die de brief al heeft. Eronder blijven de kaart van de
+     * pagina's en de eigen foto's staan.
+     */
     function renderPreview() {
       const b = Object.assign({}, state.brief, peek || {});
       const s = STYLES.find((x) => x.id === b.style_id) || STYLES[0] || null;
-      if (s) loadFont(s);
-      const c = Object.assign({ base: "#FFFFFF", surface: "#F4F7FC", surface2: "#E2E9F4", ink: "#090930", muted: "#4A4D63", accent: "#1B5A5B", accentInk: "#FFFFFF", line: "#E2E9F4", dark: "#090930", darkInk: "#FFFFFF" }, (s && s.colours) || {});
-      if (hexOk(b.brand_colors)) { c.accent = b.brand_colors; c.accentInk = "#FFFFFF"; }
-      const r = (s && s.radius) || { button: 8, card: 14, image: 14 };
-      const vars = `--p-base:${c.base};--p-surface:${c.surface};--p-surface2:${c.surface2};--p-ink:${c.ink};--p-muted:${c.muted};--p-accent:${c.accent};--p-accent-ink:${c.accentInk};--p-line:${c.line};--p-dark:${c.dark};--p-dark-ink:${c.darkInk};` +
-        `--p-hf:'${s ? s.headingFont : "Urbanist"}',system-ui,sans-serif;--p-bf:'${s ? s.bodyFont : "Poppins"}',system-ui,sans-serif;--p-hw:${(s && s.headingWeight) || 700};` +
-        `--p-rb:${Math.min(Number(r.button) || 0, 999)}px;--p-rc:${Number(r.card) || 0}px;--p-ri:${Number(r.image) || 0}px;`;
-
+      const P = window.ArcherPreview;
       const name = b.business_name || "Je zaak";
       const pages = (b.must_pages && b.must_pages.length ? b.must_pages : ["Home", "Diensten", "Over ons", "Contact"]).filter((p) => !/^home$/i.test(p)).slice(0, 5);
-      const services = (b.services || []).slice(0, 3);
       const photos = b.own_photos || [];
-      const logo = b.logo && typeof b.logo === "object" ? b.logo.thumb || b.logo.url : "";
-      const head = b.usp && b.usp !== "-" ? b.usp : b.activity ? b.activity : "Hier komt je website";
-      const sub = [b.activity && b.usp ? b.activity : "", b.region ? "in " + b.region + (b.service_area && b.service_area !== "-" ? " (" + b.service_area + ")" : "") : ""].filter(Boolean).join(" ");
-      const trust = [
-        b.reviews && b.reviews !== "-" ? "★ " + b.reviews : "",
-        b.founded && b.founded !== "-" ? "Sinds " + b.founded : "",
-        (b.certifications || []).filter((x) => x !== "-")[0] || "",
-      ].filter((t) => t && t !== "-");
-      const hero = photos[0] ? `<img src="${esc(photos[0].thumb || photos[0].url)}" alt="">` : `<span class="ip-ph" aria-hidden="true"></span>`;
-      const contact = b.contact && !b.contact.skipped ? b.contact : {};
       const filledPct = Math.round(((state.progress.agenda && state.progress.agenda.have) || 0) / (((state.progress.agenda && state.progress.agenda.need) || 1)) * 100);
 
       el.preview.innerHTML = `
@@ -570,38 +639,26 @@
           <span>Je website${s ? ` · stijl <strong>${esc(s.name)}</strong>` : ""}</span>
           <span class="archer-ip-meter" title="Hoeveel ik al weet"><i style="width:${filledPct}%"></i></span>
         </div>
-        <div class="archer-ip" style="${vars}">
+        <div class="archer-ip">
           <div class="archer-ip-chrome"><i></i><i></i><i></i><span>${esc(slugify(name))}.archerwebsites.app</span></div>
-          <div class="archer-ip-page">
-            <header class="ip-nav">
-              <span class="ip-logo">${logo ? `<img src="${esc(logo)}" alt="">` : esc(name)}</span>
-              <nav>${pages.slice(0, 4).map((p) => `<span>${esc(p)}</span>`).join("")}</nav>
-              <span class="ip-btn">${esc(ctaFor(b.main_goal))}</span>
-            </header>
-            <section class="ip-hero">
-              <div class="ip-hero-text">
-                <h2>${esc(head)}</h2>
-                ${sub ? `<p>${esc(sub)}</p>` : ""}
-                <span class="ip-btn">${esc(ctaFor(b.main_goal))}</span>
-                ${trust.length ? `<div class="ip-trust">${trust.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
-              </div>
-              <div class="ip-hero-img">${hero}</div>
-            </section>
-            <section class="ip-cards">
-              ${(services.length ? services : ["Dienst", "Dienst", "Dienst"]).map((t, i) => `<div class="ip-card${services.length ? "" : " is-ph"}">${photos[i + 1] ? `<img src="${esc(photos[i + 1].thumb || photos[i + 1].url)}" alt="">` : `<span class="ip-ico" aria-hidden="true"></span>`}<strong>${esc(t)}</strong></div>`).join("")}
-            </section>
-            <footer class="ip-foot">
-              <strong>${esc(name)}</strong>
-              <span>${esc([contact.address, contact.phone, contact.email].filter(Boolean).join(" · ") || (b.region || ""))}</span>
-              ${b.opening_hours && b.opening_hours !== "-" ? `<span>${esc(b.opening_hours)}</span>` : ""}
-            </footer>
-          </div>
+          <div class="archer-ip-body"></div>
         </div>
+        ${s ? '<button type="button" class="archer-ip-zoom" data-zoom-live>Bekijk dit ontwerp groot</button>' : ""}
         <div class="archer-ip-map">
           <span class="archer-ip-map-k">Pagina's</span>
           <ul>${["Home"].concat(pages).map((p) => `<li>${esc(p)}</li>`).join("")}${b.must_pages && b.must_pages.length > 6 ? `<li>+${b.must_pages.length - 6}</li>` : ""}</ul>
         </div>
         ${photos.length ? `<div class="archer-ip-photos"><span class="archer-ip-map-k">Je foto's (${photos.length})</span><div>${photos.slice(0, 10).map((p) => `<img src="${esc(p.thumb || p.url)}" alt="">`).join("")}</div></div>` : ""}`;
+
+      const body = $(".archer-ip-body", el.preview);
+      if (s && P && body) {
+        P.mount(body, s, P.content(b), {
+          scroll: true,
+          vars: hexOk(b.brand_colors) ? `--a-accent:${b.brand_colors};--a-accent-ink:#FFFFFF;` : "",
+        });
+      }
+      const zoom = $("[data-zoom-live]", el.preview);
+      if (zoom && s) zoom.addEventListener("click", () => openDesign(s.id, STYLES.map((x) => x.id)));
     }
 
     /* ── Gesprek ─────────────────────────────────────────── */
