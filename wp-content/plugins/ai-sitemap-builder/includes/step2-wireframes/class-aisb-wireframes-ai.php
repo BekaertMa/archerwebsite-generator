@@ -105,6 +105,26 @@ class AISB_Wireframes_AI {
     $to_translate = [];         // Teksten die naar OpenAI gestuurd worden
     $raw_bricks_data_maps = []; // Originele Bricks element-data per sectie-index
 
+    /**
+     * De sitemapsectie die bij deze wireframesectie hoort: gekoppeld op uuid.
+     *
+     * Geen wf_uuid in de sitemap? Dan op volgorde: wireframe en sitemap krijgen dezelfde secties in
+     * dezelfde volgorde (AISB_Archer_Generate::wireframe_types). Alleen als de aantallen kloppen en
+     * het sectietype op dezelfde soort sjabloon uitkomt, zodat we nooit de verkeerde tekst koppelen.
+     *
+     * Eén plek voor die koppeling: het snoeien van de kaarten en de opdracht aan de copywriter
+     * moeten per se dezelfde sectie te pakken hebben.
+     */
+    $ctx_for = function ($sec, $idx) use ($section_ctx, $section_ctx_order, $model) {
+        $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
+        if (!$ctx && isset($section_ctx_order[$idx]) && count($section_ctx_order) === count((array) ($model['sections'] ?? []))) {
+            $cand = $section_ctx_order[$idx];
+            $want = class_exists('AISB_Archer_Structure') ? \AISB_Archer_Structure::tag_for((string) ($cand['type'] ?? '')) : '';
+            if ($want === '' || $want === (string) ($sec['type'] ?? '')) $ctx = $cand;
+        }
+        return $ctx;
+    };
+
     // 2. Alle tekst ophalen uit de gekozen Bricks templates
     foreach ($model['sections'] as $idx => $sec) {
         // Archer: per sectie opnieuw beginnen (anders kreeg elke sectie de modules van alle vorige secties mee).
@@ -139,6 +159,23 @@ class AISB_Wireframes_AI {
               continue;
           }
           error_log('[AISB] Section ' . $idx . ': loaded Bricks elements for post ' . $post_id . ' (' . count($bricks_data) . ' nodes)');
+
+          // Het ontwerp volgt de inhoud: heeft de kaartenrij meer kaarten dan de sitemap dingen
+          // opsomt, dan gaan de overtollige eruit voor de copywriter begint. Anders vult hij ze met
+          // een verzonnen vierde medewerker, of blijft het vak leeg. Header en footer blijven buiten
+          // schot: die hebben hun eigen opmaak en hun key_content is geen rij.
+          $aisb_trim_type = strtolower((string) ($sec['type'] ?? ''));
+          if (!in_array($aisb_trim_type, ['header', 'footer'], true) && class_exists('AISB_Archer_Section_Edit')) {
+              $aisb_ctx = $ctx_for($sec, $idx);
+              $aisb_want = count(array_filter((array) ($aisb_ctx['key_content'] ?? []), 'is_string'));
+              if ($aisb_want >= 1) {
+                  [$bricks_data, $aisb_weg] = \AISB_Archer_Section_Edit::trim_items($bricks_data, $aisb_want);
+                  if ($aisb_weg > 0) {
+                      error_log('[AISB] Sectie ' . $idx . ' (' . $aisb_trim_type . '): ' . $aisb_weg
+                        . ' kaart(en) weggehaald, ' . $aisb_want . ' item(s) in de sitemap.');
+                  }
+              }
+          }
 
           $raw_bricks_data_maps[$idx] = [
               'data' => $bricks_data,
@@ -214,16 +251,8 @@ class AISB_Wireframes_AI {
         }
 
         if (!empty($module_data_to_translate)) {
-            // Archer: doel en key_content van deze sectie uit de sitemap, gekoppeld op uuid.
-            $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
-            // Geen wf_uuid in de sitemap? Dan op volgorde: wireframe en sitemap krijgen dezelfde secties in
-            // dezelfde volgorde (AISB_Archer_Generate::wireframe_types). Alleen als de aantallen kloppen en
-            // het sectietype op dezelfde soort sjabloon uitkomt, zodat we nooit de verkeerde tekst koppelen.
-            if (!$ctx && isset($section_ctx_order[$idx]) && count($section_ctx_order) === count((array) ($model['sections'] ?? []))) {
-                $cand = $section_ctx_order[$idx];
-                $want = class_exists('AISB_Archer_Structure') ? \AISB_Archer_Structure::tag_for((string) ($cand['type'] ?? '')) : '';
-                if ($want === '' || $want === (string) ($sec['type'] ?? '')) $ctx = $cand;
-            }
+            // Archer: doel en key_content van deze sectie uit de sitemap (zelfde koppeling als het snoeien).
+            $ctx = $ctx_for($sec, $idx);
             $doel = $ctx ? trim((string) ($ctx['goal'] ?? '')) : '';
             $purpose = $ctx ? trim($ctx['name'] . ': ' . ($doel !== '' ? $doel : $ctx['purpose']), ': ') : '';
             if ($purpose === '') $purpose = (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content');
