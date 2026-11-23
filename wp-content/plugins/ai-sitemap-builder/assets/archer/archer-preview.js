@@ -19,74 +19,75 @@
   const esc = (s) =>
     String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  const GOAL_CTA = {
-    bellen: "Bel ons", offerte: "Vraag een offerte", afspraak: "Maak een afspraak", reserv: "Reserveer",
-    langs: "Kom langs", bestel: "Bestel nu", contact: "Neem contact op",
-  };
-  const ctaFor = (goal) => {
-    const g = String(goal || "").toLowerCase();
-    for (const k of Object.keys(GOAL_CTA)) if (g.indexOf(k) >= 0) return GOAL_CTA[k];
-    return "Neem contact op";
+  /**
+   * De woorden komen uit de taal van de plugin (AISB_Archer_Lang::words, via wp_localize_script).
+   * Ze staan niet in dit bestand: wie Nederlands op Engels zet, mag niet in de code moeten.
+   */
+  const W = window.ARCHER_WORDS || {};
+  const t = (k) => (typeof W[k] === "string" ? W[k] : "");
+  const list = (k) => (Array.isArray(W[k]) ? W[k] : []);
+  const fmt = (k, v) => t(k).replace("%s", v);
+  const fill = (i) => {
+    const f = list("fill");
+    return f.length ? f[i % f.length] : "";
   };
 
-  const FILL = [
-    "Een paar zinnen over wat je hier doet en voor wie.",
-    "Wat de klant krijgt, in gewone woorden.",
-    "Hoe het werkt, van eerste vraag tot afgewerkt.",
-  ];
+  const ctaFor = (goal) => {
+    const g = String(goal || "").toLowerCase();
+    for (const row of list("goals")) {
+      if (row && row[0] && g.indexOf(String(row[0]).toLowerCase()) >= 0) return row[1];
+    }
+    return t("cta_default");
+  };
 
   /* ── De inhoud uit de brief ──────────────────────────────── */
 
   function content(brief) {
     const b = brief || {};
     const clean = (v) => (typeof v === "string" && v.trim() !== "" && v.trim() !== "-" ? v.trim() : "");
-    const list = (k) => (Array.isArray(b[k]) ? b[k].filter((x) => clean(x)) : []);
-    const name = clean(b.business_name) || "Je zaak";
+    // `uit` leest een lijst uit de brief; `list` leest er een uit de woordenlijst van de taal.
+    const uit = (k) => (Array.isArray(b[k]) ? b[k].filter((x) => clean(x)) : []);
+    const name = clean(b.business_name) || t("business");
     const region = clean(b.region);
     const activity = clean(b.activity);
     const usp = clean(b.usp);
-    const pages = (list("must_pages").length ? list("must_pages") : ["Diensten", "Over ons", "Werkwijze", "Contact"])
+    const pages = (uit("must_pages").length ? uit("must_pages") : list("nav_pages"))
       .filter((p) => !/^home$/i.test(p));
-    const services = list("services");
+    const services = uit("services");
     const photos = Array.isArray(b.own_photos) ? b.own_photos : [];
     const contact = b.contact && !b.contact.skipped ? b.contact : {};
     const cta = ctaFor(b.main_goal);
 
     const trust = [
       clean(b.reviews) ? "★ " + clean(b.reviews) : "",
-      clean(b.founded) ? "Sinds " + clean(b.founded) : "",
-      list("certifications")[0] || "",
-      list("guarantees")[0] || "",
+      clean(b.founded) ? fmt("since", clean(b.founded)) : "",
+      uit("certifications")[0] || "",
+      uit("guarantees")[0] || "",
     ].filter(Boolean).slice(0, 3);
 
     // Cijfers: alleen wat de brief echt weet. Weet ze te weinig, dan staat de band er als werkwijze.
     const figures = [];
-    if (clean(b.founded)) figures.push({ n: clean(b.founded), t: "In zaak sinds" });
-    if (clean(b.reviews)) figures.push({ n: clean(b.reviews).split(/\s/)[0], t: "Wat klanten geven" });
-    if (clean(b.team)) figures.push({ n: clean(b.team), t: "Ons team" });
-    if (services.length) figures.push({ n: String(services.length), t: "Diensten" });
-    const steps = [
-      { n: "Contact", t: "Je vraag komt binnen en we bekijken ze samen." },
-      { n: "Voorstel", t: "Je krijgt een duidelijk voorstel met een prijs." },
-      { n: "Uitvoering", t: "We voeren uit en je blijft op de hoogte." },
-    ];
+    if (clean(b.founded)) figures.push({ n: clean(b.founded), t: t("fig_since") });
+    if (clean(b.reviews)) figures.push({ n: clean(b.reviews).split(/\s/)[0], t: t("fig_reviews") });
+    if (clean(b.team)) figures.push({ n: clean(b.team), t: t("fig_team") });
+    if (services.length) figures.push({ n: String(services.length), t: t("fig_services") });
+    const steps = list("steps").map((r) => ({ n: r[0], t: r[1] }));
 
     return {
       name, region, activity, cta,
       logo: b.logo && typeof b.logo === "object" ? b.logo.thumb || b.logo.url : "",
       pages: pages.slice(0, 5),
-      title: usp || activity || "Hier komt je website",
-      lead: [activity && usp ? activity : "", region ? "in " + region : ""].filter(Boolean).join(" ")
-        || "De eerste zin van je website vertelt wat je doet en voor wie.",
-      services: (services.length ? services : ["Je eerste dienst", "Je tweede dienst", "Je derde dienst"]).slice(0, 3),
+      title: usp || activity || t("title"),
+      lead: [activity && usp ? activity : "", region ? fmt("in_region", region) : ""].filter(Boolean).join(" ") || t("lead"),
+      services: (services.length ? services : list("services_fallback")).slice(0, 3),
       servicesKnown: services.length > 0,
       audience: clean(b.audience),
       hours: clean(b.opening_hours),
       contact, trust, photos,
       figures: figures.length >= 3 ? figures.slice(0, 3) : null,
       steps,
-      quote: "Hier komt straks een woord van een klant.",
-      quoteBy: clean(b.references) ? clean(b.references).split(/[,;]/)[0] : "Een klant",
+      quote: t("quote"),
+      quoteBy: clean(b.references) ? clean(b.references).split(/[,;]/)[0] : t("quote_by"),
     };
   }
 
@@ -106,26 +107,26 @@
       <div class="apv-hero-text">
         <h1>${esc(c.title)}</h1>
         <p>${esc(c.lead)}</p>
-        <div class="apv-actions"><span class="apv-btn">${esc(c.cta)}</span><span class="apv-btn is-ghost">Bekijk ons werk</span></div>
-        ${c.trust.length ? `<ul class="apv-trust">${c.trust.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+        <div class="apv-actions"><span class="apv-btn">${esc(c.cta)}</span><span class="apv-btn is-ghost">${esc(t("secondary"))}</span></div>
+        ${c.trust.length ? `<ul class="apv-trust">${c.trust.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       </div>
       ${img(c.photos[0], "apv-hero-img")}
     </div></section>`,
 
     services: (c) => `<section class="apv-sec apv-services"><div class="apv-wrap">
-      <div class="apv-head"><h2>Wat we doen</h2><p>${esc(c.audience ? "Voor " + c.audience + "." : FILL[1])}</p></div>
+      <div class="apv-head"><h2>${esc(t("services_title"))}</h2><p>${esc(c.audience ? fmt("services_for", c.audience) : fill(1))}</p></div>
       <div class="apv-grid">${c.services.map((s, i) => `<article class="apv-card">
         ${c.photos[i + 1] ? img(c.photos[i + 1]) : ""}
-        <h3>${esc(s)}</h3><p>${esc(FILL[i % FILL.length])}</p><span class="apv-link">Meer hierover</span>
+        <h3>${esc(s)}</h3><p>${esc(fill(i))}</p><span class="apv-link">${esc(t("more"))}</span>
       </article>`).join("")}</div>
     </div></section>`,
 
     split: (c) => `<section class="apv-sec apv-split"><div class="apv-wrap">
       ${img(c.photos[4])}
       <div class="apv-split-text">
-        <h2>Over ${esc(c.name)}</h2>
-        <p>${esc(FILL[2])}</p>
-        <ul class="apv-checks">${(c.trust.length ? c.trust : ["Vast aanspreekpunt", "Afspraak is afspraak", "Werk dat blijft"]).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+        <h2>${esc(fmt("about", c.name))}</h2>
+        <p>${esc(fill(2))}</p>
+        <ul class="apv-checks">${(c.trust.length ? c.trust : list("checks")).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
       </div>
     </div></section>`,
 
@@ -138,15 +139,15 @@
     </div></section>`,
 
     cta: (c) => `<section class="apv-sec apv-cta"><div class="apv-wrap">
-      <div class="apv-cta-text"><h2>Zin om te starten?</h2><p>${esc(c.region ? "We werken in " + c.region + " en omstreken." : FILL[0])}</p></div>
+      <div class="apv-cta-text"><h2>${esc(t("cta_title"))}</h2><p>${esc(c.region ? fmt("cta_region", c.region) : fill(0))}</p></div>
       <span class="apv-btn">${esc(c.cta)}</span>
     </div></section>`,
 
     foot: (c) => `<footer class="apv-foot"><div class="apv-wrap">
       <div class="apv-foot-col"><strong>${esc(c.name)}</strong>${c.contact.address ? `<span>${esc(c.contact.address)}</span>` : c.region ? `<span>${esc(c.region)}</span>` : ""}</div>
-      <div class="apv-foot-col"><b>Pagina's</b><ul>${["Home"].concat(c.pages).slice(0, 5).map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>
-      <div class="apv-foot-col"><b>Contact</b><ul>${[c.contact.phone, c.contact.email].filter(Boolean).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>Je gegevens</li>"}</ul></div>
-      <div class="apv-foot-col"><b>Open</b><ul><li>${esc(c.hours || "Je openingsuren")}</li></ul></div>
+      <div class="apv-foot-col"><b>${esc(t("pages"))}</b><ul>${[t("home")].concat(c.pages).slice(0, 5).map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>
+      <div class="apv-foot-col"><b>${esc(t("contact"))}</b><ul>${[c.contact.phone, c.contact.email].filter(Boolean).map((x) => `<li>${esc(x)}</li>`).join("") || `<li>${esc(t("your_details"))}</li>`}</ul></div>
+      <div class="apv-foot-col"><b>${esc(t("open"))}</b><ul><li>${esc(c.hours || t("your_hours"))}</li></ul></div>
       <div class="apv-foot-rule" style="grid-column:1/-1">&copy; ${new Date().getFullYear()} ${esc(c.name)}</div>
     </div></footer>`,
   };
@@ -195,7 +196,9 @@
   function mount(host, style, c, opts) {
     if (!host) return null;
     opts = opts || {};
-    const w = opts.width || host.clientWidth || 1280;
+    // Een kader dat nog nul breed is (een dichtgeklapt paneel) zou de pagina op ware grootte
+    // tekenen en dus afgeknipt tonen; dan liever de breedte van het scherm als maat.
+    const w = opts.width || host.clientWidth || Math.min(1280, Math.max(320, document.documentElement.clientWidth - 40));
     const k = w / 1280;
     const visible = opts.clip || host.clientHeight || Math.round(w * 0.78);
     host.innerHTML =

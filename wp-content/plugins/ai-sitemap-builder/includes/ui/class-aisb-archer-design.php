@@ -42,7 +42,8 @@ class AISB_Archer_Design {
       $all = AISB_Archer_Styles::for_project($pid);
       foreach ((array) ($all['styles'] ?? []) as $s) {
         $styles[] = [
-          'id' => $s['id'], 'name' => $s['name'], 'pitch' => $s['pitch'], 'fit' => !empty($s['fit']),
+          'id' => $s['id'], 'name' => $s['name'], 'fit' => !empty($s['fit']),
+          'pitch' => class_exists('AISB_Archer_Lang') ? AISB_Archer_Lang::pitch($s) : $s['pitch'],
           'colours' => $s['colours'], 'headingFont' => $s['headingFont'], 'headingWeight' => $s['headingWeight'],
           'bodyFont' => $s['bodyFont'], 'radius' => $s['radius'], 'fontUrl' => $s['fontUrl'],
         ];

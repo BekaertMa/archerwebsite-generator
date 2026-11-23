@@ -529,7 +529,7 @@ class AISB_Archer_Intake {
       $out[] = [
         'id' => $s['id'],
         'name' => $s['name'],
-        'pitch' => $s['pitch'],
+        'pitch' => class_exists('AISB_Archer_Lang') ? AISB_Archer_Lang::pitch($s) : $s['pitch'],
         'colours' => $s['colours'],
         'headingFont' => $s['fonts']['heading']['family'],
         'headingWeight' => (int) $s['fonts']['heading']['weight'],

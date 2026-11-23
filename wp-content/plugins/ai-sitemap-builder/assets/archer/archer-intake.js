@@ -597,7 +597,7 @@
         state.summary.map((r) => `<tr><th scope="row">${esc(r.label)}</th><td>${esc(r.value)}</td></tr>`).join("") +
         `</tbody></table>` +
         `<p class="archer-muted archer-small">Iets niet juist? Typ het gewoon, bijvoorbeeld "de regio is Lokeren en omstreken".</p>` +
-        `<p class="archer-small">Ik maak nu in één keer je pagina's, de opbouw, de teksten, de stijl en de foto's. Daarna pas je alles aan in één scherm.</p>` +
+        `<p class="archer-small">Ik maak nu in één keer je pagina's, de opbouw, de teksten, de stijl en de stockfoto's. Daarna pas je alles aan in één scherm.</p>` +
         `<div class="archer-intake-actions"><button type="button" class="archer-btn archer-btn-primary" data-intake-go>Bouw mijn website →</button></div>` +
         `<div class="archer-status" data-intake-error aria-live="polite"></div>`;
       el.log.appendChild(d);
@@ -827,6 +827,9 @@
       const open = root.classList.toggle("is-side-open");
       e.currentTarget.setAttribute("aria-expanded", String(open));
       e.currentTarget.textContent = open ? "Terug naar het gesprek" : "Bekijk je website";
+      // Op een smal scherm staat het paneel dicht en is het nog nul breed: het ontwerp wordt pas
+      // op maat getekend als het opengaat.
+      if (open) renderPreview();
     });
 
     /* ── Eén run: sitemap, stijl, dan Ontwerp ────────────── */
@@ -869,9 +872,9 @@
     /** Overlay met de stappen van de run; gedeeld met archer-design.js via sessionStorage. */
     const BUILD_STEPS = [
       { key: "sitemap", label: "Pagina's en secties bepalen" },
-      { key: "style", label: "Stijl, logo en foto's klaarzetten" },
+      { key: "style", label: "Stijl, logo en eigen foto's klaarzetten" },
       { key: "wireframes", label: "Elke pagina opbouwen en teksten schrijven" },
-      { key: "photos", label: "Foto's plaatsen" },
+      { key: "photos", label: "Stockfoto's plaatsen" },
     ];
     function overlay(stepKey, note) {
       let o = $("[data-archer-build]");

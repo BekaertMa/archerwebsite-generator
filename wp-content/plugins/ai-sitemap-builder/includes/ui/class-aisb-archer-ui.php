@@ -10,6 +10,7 @@ require_once __DIR__ . '/class-aisb-archer-template-import.php';
 require_once __DIR__ . '/class-aisb-archer-chrome.php';
 require_once __DIR__ . '/class-aisb-archer-logo.php';
 require_once __DIR__ . '/class-aisb-archer-stock.php';
+require_once __DIR__ . '/class-aisb-archer-lang.php';
 require_once __DIR__ . '/class-aisb-archer-styles.php';
 require_once __DIR__ . '/class-aisb-archer-site.php';
 require_once __DIR__ . '/class-aisb-archer-motion.php';
@@ -117,6 +118,7 @@ class AISB_Archer_UI {
     (new AISB_Archer_Template_Import())->init();
     (new AISB_Archer_Chrome())->init();
     (new AISB_Archer_Stock())->init();
+    (new AISB_Archer_Lang())->init();
     (new AISB_Archer_Styles())->init();
     (new AISB_Archer_Site())->init();
     (new AISB_Archer_Intake())->init();
@@ -185,6 +187,8 @@ class AISB_Archer_UI {
       // Het uitgewerkte ontwerp van een stijl (tegels, zijpaneel en groot scherm).
       wp_enqueue_style('archer-preview', AISB_PLUGIN_URL . 'assets/archer/archer-preview.css', ['archer-ui'], $v('archer-preview.css'));
       wp_enqueue_script('archer-preview', AISB_PLUGIN_URL . 'assets/archer/archer-preview.js', [], $v('archer-preview.js'), true);
+      // De plaatshouders in het voorbeeld staan in de taal van de plugin, niet in het script.
+      wp_localize_script('archer-preview', 'ARCHER_WORDS', AISB_Archer_Lang::words());
       wp_enqueue_style('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.css', ['archer-ui', 'archer-preview'], $v('archer-intake.css'));
       wp_enqueue_script('archer-intake', AISB_PLUGIN_URL . 'assets/archer/archer-intake.js', ['archer-ui', 'archer-sitemap', 'archer-preview'], $v('archer-intake.js'), true);
     }

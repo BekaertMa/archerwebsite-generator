@@ -628,7 +628,7 @@ class AISB_Archer_Styles {
       $out[] = [
         'id' => $s['id'],
         'name' => $s['name'],
-        'pitch' => $s['pitch'],
+        'pitch' => class_exists('AISB_Archer_Lang') ? AISB_Archer_Lang::pitch($s) : $s['pitch'],
         'fit' => $fit,
         'order' => $adv ? (100 - $scores[$s['id']] * 5) : (($fit ? 0 : 100) + $i),
         'score' => $adv ? $scores[$s['id']] : null,
