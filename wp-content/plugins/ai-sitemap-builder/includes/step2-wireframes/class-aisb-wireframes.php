@@ -1121,7 +1121,7 @@ class AISB_Wireframes {
     // Niet elke sectie is een rij items. Een hero heeft ook key_content (de belofte, de knop, het
     // beeld), maar dat zijn geen kaarten: daar zou het aantal het sjabloon de verkeerde kant op
     // sturen. Deze soorten tellen dus niet mee.
-    if (in_array($want, ['header', 'headers', 'nav', 'navbar', 'hero', 'footer', 'footers', 'cta', 'contact', 'form', 'forms', 'map', 'banner'], true)) return 0;
+    if (class_exists('AISB_Archer_Section_Edit') && !AISB_Archer_Section_Edit::counts_as_cards($section_type)) return 0;
 
     $needle = $this->normalize_slug($page_slug);
     foreach ($data['sitemap'] as $p) {

@@ -204,6 +204,9 @@
         .map((s) => {
           const section_name = (s?.section_name ?? "").toString();
           const purpose = (s?.purpose ?? "").toString();
+          // De doelstelling van de sectie hoort hier mee door: deze normalisatie bouwt elke sectie
+          // opnieuw op en liet section_goal vallen, zodat de copywriter ze nooit te zien kreeg.
+          const section_goal = (s?.section_goal ?? "").toString();
           const key_content = Array.isArray(s?.key_content)
             ? s.key_content
             : [];
@@ -211,7 +214,7 @@
             (s?.section_type ?? "").toString().trim(),
             section_name,
           );
-          return { section_name, section_type, purpose, key_content };
+          return { section_name, section_type, section_goal, purpose, key_content };
         })
         .filter((s) => s.section_name.trim() !== "");
     };

@@ -1131,7 +1131,7 @@
         let at = Number.isFinite(want) ? Math.min(Math.max(want, 0), footAt) : footAt;
         // Nooit boven de header.
         if (at === 0 && sections[0] && /^(Headers|Megamenu)/.test(sections[0].section_type || "")) at = 1;
-        sections.splice(at, 0, { section_name: name, section_type: type, purpose: "", key_content: [] });
+        sections.splice(at, 0, { section_name: name, section_type: type, section_goal: "", purpose: "", key_content: [] });
         page.sections = sections;
         if (sel && sel.slug === slug) { sel = null; renderPanel(); }
         syncPage(slug);
@@ -1341,9 +1341,9 @@
         const page = state.bySlug[slug];
         if (page && (!Array.isArray(page.sections) || !page.sections.length)) {
           page.sections = [
-            { section_name: "Navigatie", section_type: "Headers", purpose: "", key_content: [] },
-            { section_name: "Inhoud", section_type: "Content Sections", purpose: "", key_content: [] },
-            { section_name: "Footer", section_type: "Footers", purpose: "", key_content: [] },
+            { section_name: "Navigatie", section_type: "Headers", section_goal: "", purpose: "", key_content: [] },
+            { section_name: "Inhoud", section_type: "Content Sections", section_goal: "", purpose: "", key_content: [] },
+            { section_name: "Footer", section_type: "Footers", section_goal: "", purpose: "", key_content: [] },
           ];
           syncPage(slug);
         }

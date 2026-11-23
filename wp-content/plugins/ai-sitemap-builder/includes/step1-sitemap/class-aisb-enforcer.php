@@ -191,6 +191,10 @@ class AISB_Enforcer {
       if (trim($name) === '') continue;
 
       $purpose = (string)($s['purpose'] ?? '');
+      // De doelstelling van de sectie hoort mee: deze normalisatie bouwt elke sectie opnieuw op,
+      // en liet section_goal vallen. Het veld werd dus wel bedacht en stond in het geheugen van
+      // de browser, maar haalde de opgeslagen sitemap nooit, dus de copywriter kreeg het nooit.
+      $goal = (string)($s['section_goal'] ?? '');
       $kc = isset($s['key_content']) && is_array($s['key_content']) ? $s['key_content'] : [];
       $kc = array_values(array_filter(array_map(function($x){ return is_string($x) ? trim($x) : ''; }, $kc), function($x){ return $x !== ''; }));
 
@@ -199,6 +203,7 @@ class AISB_Enforcer {
       $sections_norm[] = [
         'section_name' => $name,
         'section_type' => $stype,
+        'section_goal' => $goal,
         'purpose' => $purpose,
         'key_content' => $kc,
       ];
@@ -217,6 +222,7 @@ class AISB_Enforcer {
       $sections[] = [
         'section_name' => $name,
         'section_type' => $this->coerce_section_type($type, $name),
+        'section_goal' => '',
         'purpose' => $purpose,
         'key_content' => $kc,
       ];

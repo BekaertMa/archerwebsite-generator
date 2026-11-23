@@ -164,11 +164,11 @@ class AISB_Wireframes_AI {
           // opsomt, dan gaan de overtollige eruit voor de copywriter begint. Anders vult hij ze met
           // een verzonnen vierde medewerker, of blijft het vak leeg. Header en footer blijven buiten
           // schot: die hebben hun eigen opmaak en hun key_content is geen rij.
-          $aisb_trim_type = strtolower((string) ($sec['type'] ?? ''));
-          if (!in_array($aisb_trim_type, ['header', 'footer'], true) && class_exists('AISB_Archer_Section_Edit')) {
+          $aisb_trim_type = (string) ($sec['type'] ?? '');
+          if (class_exists('AISB_Archer_Section_Edit') && \AISB_Archer_Section_Edit::counts_as_cards($aisb_trim_type)) {
               $aisb_ctx = $ctx_for($sec, $idx);
               $aisb_want = count(array_filter((array) ($aisb_ctx['key_content'] ?? []), 'is_string'));
-              if ($aisb_want >= 1) {
+              if ($aisb_want >= 2) {
                   [$bricks_data, $aisb_weg] = \AISB_Archer_Section_Edit::trim_items($bricks_data, $aisb_want);
                   if ($aisb_weg > 0) {
                       error_log('[AISB] Sectie ' . $idx . ' (' . $aisb_trim_type . '): ' . $aisb_weg

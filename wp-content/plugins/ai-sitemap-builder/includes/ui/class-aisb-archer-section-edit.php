@@ -122,6 +122,24 @@ class AISB_Archer_Section_Edit {
   /* ───────────────────────── De kaartenrij ───────────────────────── */
 
   /**
+   * Telt key_content van dit soort sectie als een kaartenrij?
+   *
+   * Een hero heeft ook key_content (de belofte, de knop, het beeld), maar dat zijn geen kaarten.
+   * Zou het aantal daar meetellen, dan stuurt het zowel de sjabloonkeuze als het snoeien de
+   * verkeerde kant op. Soorten heten in de sitemap voluit ("Team Sections") en elders kort
+   * ("team"), daarom vergelijken we op het eerste woord.
+   */
+  public static function counts_as_cards(string $section_type): bool {
+    $s = strtolower(trim((string) preg_replace('/\b(sections?|sectie)\b/i', ' ', $section_type)));
+    $s = trim((string) preg_replace('/[^a-z0-9]+/', ' ', $s));
+    $delen = preg_split('/\s+/', $s);
+    $kern = $delen ? (string) $delen[0] : '';
+    if ($kern === '') return false;
+    return !in_array($kern, ['header', 'headers', 'nav', 'navbar', 'hero', 'footer', 'footers',
+      'cta', 'contact', 'form', 'forms', 'map', 'banner'], true);
+  }
+
+  /**
    * De kaartenrij van een sectie: de grootste groep zusjes met dezelfde vorm én tekst.
    *
    * Eén reeks per sectie. Nummeren we elke groep apart, dan bestaat "item 2" twee keer en
