@@ -1089,7 +1089,53 @@ class AISB_Wireframes {
       'page_title' => $page_title,
       'page_slug' => $page_slug,
       'section_type' => $section_type,
+      // Hoeveel dingen deze sectie moet tonen. Het ontwerp hoort de inhoud te volgen: drie
+      // medewerkers vragen een sjabloon met drie kaarten, geen raster van vier.
+      'items' => $this->expected_items($sitemap_version_id, $page_slug, $section_type),
     ];
+  }
+
+  /**
+   * Het aantal items dat deze sectie moet tonen, uit key_content van de sitemap.
+   *
+   * De sitemap zet in key_content wat de sectie opsomt: de medewerkers, de genoemde diensten, de
+   * erkenningen. Eén of geen item zegt niets over een raster (dat is dan gewoon een tekst), dus
+   * vanaf twee. Soorten heten in de sitemap voluit ("Team Sections") en hier kort ("team"), daarom
+   * vergelijken we op het eerste woord.
+   */
+  private function expected_items(int $sitemap_id, string $page_slug, string $section_type): int {
+    if (!$sitemap_id || $page_slug === '' || $section_type === '') return 0;
+    $json = get_post_meta($sitemap_id, 'aisb_sitemap_json', true);
+    if (!$json) return 0;
+    $data = json_decode((string) $json, true);
+    if (!is_array($data) || !is_array($data['sitemap'] ?? null)) return 0;
+
+    $kern = function (string $s): string {
+      $s = strtolower(trim(preg_replace('/\b(sections?|sectie)\b/i', ' ', $s)));
+      $s = trim(preg_replace('/[^a-z0-9]+/', ' ', $s));
+      $delen = preg_split('/\s+/', $s);
+      return $delen ? (string) $delen[0] : '';
+    };
+    $want = $kern($section_type);
+    if ($want === '') return 0;
+    // Niet elke sectie is een rij items. Een hero heeft ook key_content (de belofte, de knop, het
+    // beeld), maar dat zijn geen kaarten: daar zou het aantal het sjabloon de verkeerde kant op
+    // sturen. Deze soorten tellen dus niet mee.
+    if (in_array($want, ['header', 'headers', 'nav', 'navbar', 'hero', 'footer', 'footers', 'cta', 'contact', 'form', 'forms', 'map', 'banner'], true)) return 0;
+
+    $needle = $this->normalize_slug($page_slug);
+    foreach ($data['sitemap'] as $p) {
+      if (!is_array($p)) continue;
+      if ($this->normalize_slug((string) ($p['slug'] ?? '')) !== $needle) continue;
+      foreach ((array) ($p['sections'] ?? []) as $s) {
+        if (!is_array($s)) continue;
+        if ($kern((string) ($s['section_type'] ?? '')) !== $want) continue;
+        $n = count(array_filter((array) ($s['key_content'] ?? []), 'is_string'));
+        return $n >= 2 ? min($n, 12) : 0;
+      }
+      return 0;
+    }
+    return 0;
   }
 
   private function get_page_title_from_sitemap(int $sitemap_id, string $page_slug): string {

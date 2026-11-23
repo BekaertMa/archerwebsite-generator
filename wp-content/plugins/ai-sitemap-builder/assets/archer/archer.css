@@ -1601,3 +1601,10 @@ body.archer-ws-mode .archer-stepbar .archer-design-tab .archer-step-label { disp
 body.archer-ws-mode .archer-stepbar .archer-design-tab { padding: 4px 10px !important; }
 span.archer-step { cursor: default; }
 span.archer-step:hover { background: none; }
+
+/* De nalezing van het plan: wat de controleronde aanpaste, onder de statusregel. */
+.archer-review-note { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--ar-line); border-left: 3px solid var(--ar-teal); border-radius: 10px; background: #fff; font-size: 13px; line-height: 1.5; color: var(--ar-navy); }
+.archer-review-note strong { display: block; margin-bottom: 4px; }
+.archer-review-note ul { margin: 0; padding-left: 18px; }
+.archer-review-note li { margin: 2px 0; color: var(--ar-muted); }
+.archer-review-note p { margin: 6px 0 0; color: var(--ar-muted); }

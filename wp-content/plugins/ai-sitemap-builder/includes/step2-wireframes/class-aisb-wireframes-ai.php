@@ -71,15 +71,19 @@ class AISB_Wireframes_AI {
         if (!is_array($s)) continue;
         $name = trim((string) ($s['section_name'] ?? $s['section_type'] ?? ''));
         $purpose = trim((string) ($s['purpose'] ?? ''));
+        // De doelstelling van de sectie gaat voor op purpose: die zegt wat de tekst moet overbrengen,
+        // purpose zegt wat de ontwerper moet maken. De copywriter heeft aan het eerste meer.
+        $goal = trim((string) ($s['section_goal'] ?? ''));
         $kc = array_values(array_filter(array_map('trim', array_filter((array) ($s['key_content'] ?? []), 'is_string'))));
         $uuid = (string) ($s['wf_uuid'] ?? '');
-        $entry = ['name' => $name, 'purpose' => $purpose, 'key_content' => $kc, 'type' => (string) ($s['section_type'] ?? '')];
+        $entry = ['name' => $name, 'goal' => $goal, 'purpose' => $purpose, 'key_content' => $kc, 'type' => (string) ($s['section_type'] ?? '')];
         if ($uuid !== '') $section_ctx[$uuid] = $entry;
         // wf_uuid staat niet in elke sitemap (alleen projecten die door de wireframe-werkruimte gingen).
         // Zonder terugvaloptie viel key_content stilletjes weg en schreef de copywriter weer op gevoel.
         $section_ctx_order[] = $entry;
-        if ($name === '' && $purpose === '') continue;
-        $section_hints[] = '- ' . $name . ': ' . $purpose . ($kc ? ' [' . implode(' | ', $kc) . ']' : '');
+        if ($name === '' && $purpose === '' && $goal === '') continue;
+        $section_hints[] = '- ' . $name . ': ' . ($goal !== '' ? $goal . ($purpose !== '' ? ' (' . $purpose . ')' : '') : $purpose)
+          . ($kc ? ' [' . implode(' | ', $kc) . ']' : '');
     }
 
     // Paginascope: waar deze pagina over gaat en welke onderwerpen een andere pagina al behandelt.
@@ -220,7 +224,8 @@ class AISB_Wireframes_AI {
                 $want = class_exists('AISB_Archer_Structure') ? \AISB_Archer_Structure::tag_for((string) ($cand['type'] ?? '')) : '';
                 if ($want === '' || $want === (string) ($sec['type'] ?? '')) $ctx = $cand;
             }
-            $purpose = $ctx ? trim($ctx['name'] . ': ' . $ctx['purpose'], ': ') : '';
+            $doel = $ctx ? trim((string) ($ctx['goal'] ?? '')) : '';
+            $purpose = $ctx ? trim($ctx['name'] . ': ' . ($doel !== '' ? $doel : $ctx['purpose']), ': ') : '';
             if ($purpose === '') $purpose = (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content');
             // Rollen alleen meesturen als de kaartenrij volledig herkend is. Een half herkende structuur
             // (een paar kaarten als 'item', de rest als 'section') stuurt het model de verkeerde kant op;

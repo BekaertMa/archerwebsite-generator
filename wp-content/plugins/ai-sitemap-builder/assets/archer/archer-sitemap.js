@@ -1401,6 +1401,55 @@
     });
 
     /**
+     * De nalezing van het plan, na de secties en vóór er één woord tekst geschreven wordt.
+     *
+     * De secties worden vier pagina's tegelijk gepland, dus geen enkele vraag ziet het geheel. Deze
+     * ronde wel: ze kijkt per pagina na of de secties samen de verhaallijn dragen, of elke sectie een
+     * eigen doelstelling heeft en of er niets dubbel staat. Ze past aan wat er mis is en vertelt wat.
+     *
+     * Mislukt ze, dan blijft het plan staan zoals het was: liever verder met wat er is dan niets.
+     */
+    const reviewPlan = async () => {
+      if (!state.projectId || !state.data) return "";
+      app.setStatus && app.setStatus('<div class="archer-muted archer-small">Het plan nalezen…</div>');
+      try {
+        const rev = await UI.post("aisb_archer_review", {
+          project_id: state.projectId,
+          sitemap: JSON.stringify(stripTransient(state.data)),
+        });
+        const pages = (rev && rev.pages) || {};
+        const slugs = Object.keys(pages);
+        slugs.forEach((slug) => {
+          const page = state.bySlug[slug];
+          if (!page) return;
+          const r = pages[slug] || {};
+          if (Array.isArray(r.sections) && r.sections.length) page.sections = r.sections;
+          if (r.page_purpose) page.page_purpose = r.page_purpose;
+          syncPage(slug);
+        });
+        if (slugs.length) {
+          view.fitted = false;
+          app.renderAll(state.data);
+          afterChange();
+        }
+        const changes = (rev && rev.changes) || [];
+        const missing = (rev && rev.missing_pages) || [];
+        if (!changes.length && !missing.length) return "";
+        return (
+          '<div class="archer-review-note"><strong>Nagelezen</strong>' +
+          (changes.length ? "<ul>" + changes.map((c) => "<li>" + esc(c) + "</li>").join("") + "</ul>" : "") +
+          (missing.length
+            ? "<p>Hier is nog geen pagina voor: " + missing.map((m) => esc(m)).join(", ") + ".</p>"
+            : "") +
+          "</div>"
+        );
+      } catch (e) {
+        console.warn("[Archer] nalezing overgeslagen", e);
+        return "";
+      }
+    };
+
+    /**
      * Maakt een sitemap in twee stappen: eerst de structuur (meteen zichtbaar op het canvas),
      * dan de secties per pagina, parallel.
      */
@@ -1459,7 +1508,11 @@
         hideLoader();
         app.setStatus && app.setStatus("");
         await runSections(Array.from(pending));
-        app.setStatus && app.setStatus('<div class="aisb-ok">Klaar: de sitemap staat. Klik op een sectie of pagina om ze aan te passen.</div>');
+        const na = await reviewPlan();
+        app.setStatus &&
+          app.setStatus(
+            '<div class="aisb-ok">Klaar: de sitemap staat. Klik op een sectie of pagina om ze aan te passen.</div>' + na,
+          );
       } catch (e) {
         fail(e.message || "Er ging iets mis.");
         throw e;

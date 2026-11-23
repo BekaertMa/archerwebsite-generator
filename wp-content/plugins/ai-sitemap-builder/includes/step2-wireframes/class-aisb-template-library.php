@@ -294,6 +294,23 @@ class AISB_Template_Library {
         $score += $is_testi ? 2.5 : -0.5;
       }
 
+      // Het ontwerp volgt de inhoud: weet de sitemap hoeveel dingen deze sectie toont, dan wint het
+      // sjabloon dat er even veel heeft. Eén kaart te veel of te weinig is nog te vullen of weg te
+      // laten; daarboven klopt het raster niet meer met het verhaal.
+      $items = (int) ($context['items'] ?? 0);
+      if ($items >= 2) {
+        // De analyzer schrijft 'counts', maar wat in de tabel staat heet 'slot_counts'. Allebei lezen:
+        // op één sleutel vertrouwen betekende dat de score nooit afging.
+        $cards = isset($schema['counts']['cards']) ? (int) $schema['counts']['cards']
+          : (isset($schema['slot_counts']['cards']) ? (int) $schema['slot_counts']['cards'] : 0);
+        if ($cards > 0) {
+          $diff = abs($cards - $items);
+          if ($diff === 0) $score += 4.0;
+          elseif ($diff === 1) $score += 1.5;
+          else $score -= min(4.0, $diff * 0.8);
+        }
+      }
+
       if ($pref !== null) {
         $complexity = (int)($t['complexity_score'] ?? 0);
         $score -= min(10.0, abs($complexity - $pref) / 10.0);
