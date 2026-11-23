@@ -28,7 +28,7 @@ class AISB_Archer_Lang {
 
   /** De talen waarvoor er echt teksten zijn (de rest leest Engels). */
   public static function translated(): array {
-    return ['nl', 'en'];
+    return ['nl', 'en', 'fr', 'de'];
   }
 
   public static function current(): string {
@@ -70,8 +70,8 @@ class AISB_Archer_Lang {
         . esc_html($naam . ($klaar ? '' : ' — nog geen teksten')) . '</option>';
     }
     echo '</select>';
-    echo '<p class="description">Nederlands en English zijn uitgeschreven. Français en Deutsch lezen '
-      . 'voorlopig Engels: kies ze pas als die teksten er zijn.</p>';
+    echo '<p class="description">Alle vier zijn uitgeschreven: vijftig stijlen, elk met een eigen zin, '
+      . 'en de plaatshouders van het voorbeeld.</p>';
   }
 
   /* ───────────────────────── Uitleg bij een stijl ───────────────────────── */
@@ -218,6 +218,104 @@ class AISB_Archer_Lang {
         'open' => 'Open',
         'your_details' => 'Your details',
         'your_hours' => 'Your opening hours',
+      ],
+      'fr' => [
+        'business' => 'Votre entreprise',
+        'home' => 'Accueil',
+        'nav_pages' => ['Services', 'À propos', 'Notre méthode', 'Contact'],
+        'title' => 'Votre site web arrive ici',
+        'lead' => 'La première phrase de votre site dit ce que vous faites et pour qui.',
+        'in_region' => 'à %s',
+        'since' => 'Depuis %s',
+        'cta_default' => 'Nous contacter',
+        'goals' => [
+          ['appel', 'Appelez-nous'],
+          ['devis', 'Demander un devis'],
+          ['rendez-vous', 'Prendre rendez-vous'],
+          ['réserv', 'Réserver'],
+          ['visit', 'Passez nous voir'],
+          ['command', 'Commander'],
+          ['contact', 'Nous contacter'],
+        ],
+        'secondary' => 'Voir nos réalisations',
+        'services_title' => 'Ce que nous faisons',
+        'services_for' => 'Pour %s.',
+        'services_fallback' => ['Votre premier service', 'Votre deuxième service', 'Votre troisième service'],
+        'more' => 'En savoir plus',
+        'about' => 'À propos de %s',
+        'checks' => ['Un seul interlocuteur', 'Parole tenue', 'Un travail qui dure'],
+        'fill' => [
+          'Quelques lignes sur ce que vous faites ici et pour qui.',
+          'Ce que le client obtient, en mots simples.',
+          'Comment ça marche, de la question au travail fini.',
+        ],
+        'fig_since' => 'En activité depuis',
+        'fig_reviews' => 'Ce que les clients donnent',
+        'fig_team' => 'Notre équipe',
+        'fig_services' => 'Services',
+        'steps' => [
+          ['Contact', 'Votre question arrive et nous la regardons ensemble.'],
+          ['Proposition', 'Vous recevez une proposition claire avec un prix.'],
+          ['Réalisation', 'Nous exécutons et vous tenons au courant.'],
+        ],
+        'quote' => "Ici viendra le mot d'un client.",
+        'quote_by' => 'Un client',
+        'cta_title' => 'Envie de commencer ?',
+        'cta_region' => 'Nous travaillons à %s et aux alentours.',
+        'pages' => 'Pages',
+        'contact' => 'Contact',
+        'open' => 'Ouvert',
+        'your_details' => 'Vos coordonnées',
+        'your_hours' => 'Vos horaires',
+      ],
+      'de' => [
+        'business' => 'Ihr Betrieb',
+        'home' => 'Start',
+        'nav_pages' => ['Leistungen', 'Über uns', 'So arbeiten wir', 'Kontakt'],
+        'title' => 'Hier kommt Ihre Website',
+        'lead' => 'Der erste Satz Ihrer Website sagt, was Sie tun und für wen.',
+        'in_region' => 'in %s',
+        'since' => 'Seit %s',
+        'cta_default' => 'Kontakt aufnehmen',
+        'goals' => [
+          ['anruf', 'Rufen Sie uns an'],
+          ['angebot', 'Angebot anfragen'],
+          ['termin', 'Termin vereinbaren'],
+          ['reserv', 'Reservieren'],
+          ['besuch', 'Besuchen Sie uns'],
+          ['bestell', 'Jetzt bestellen'],
+          ['kontakt', 'Kontakt aufnehmen'],
+        ],
+        'secondary' => 'Unsere Arbeiten',
+        'services_title' => 'Was wir tun',
+        'services_for' => 'Für %s.',
+        'services_fallback' => ['Ihre erste Leistung', 'Ihre zweite Leistung', 'Ihre dritte Leistung'],
+        'more' => 'Mehr dazu',
+        'about' => 'Über %s',
+        'checks' => ['Eine feste Ansprechperson', 'Zusage ist Zusage', 'Arbeit, die bleibt'],
+        'fill' => [
+          'Ein paar Sätze darüber, was Sie hier tun und für wen.',
+          'Was Kundinnen und Kunden bekommen, in einfachen Worten.',
+          'Wie es abläuft, von der ersten Frage bis zur fertigen Arbeit.',
+        ],
+        'fig_since' => 'Im Geschäft seit',
+        'fig_reviews' => 'Bewertung',
+        'fig_team' => 'Unser Team',
+        'fig_services' => 'Leistungen',
+        'steps' => [
+          ['Kontakt', 'Ihre Anfrage kommt an und wir sehen sie uns gemeinsam an.'],
+          ['Angebot', 'Sie erhalten ein klares Angebot mit Preis.'],
+          ['Umsetzung', 'Wir führen aus und halten Sie auf dem Laufenden.'],
+        ],
+        'quote' => 'Hier kommt später eine Kundenstimme.',
+        'quote_by' => 'Aus der Kundschaft',
+        'cta_title' => 'Lust anzufangen?',
+        'cta_region' => 'Wir arbeiten in %s und Umgebung.',
+        'pages' => 'Seiten',
+        'contact' => 'Kontakt',
+        'open' => 'Geöffnet',
+        'your_details' => 'Ihre Kontaktdaten',
+        'your_hours' => 'Ihre Öffnungszeiten',
       ],
     ];
   }
