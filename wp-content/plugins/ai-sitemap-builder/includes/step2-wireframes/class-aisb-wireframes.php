@@ -666,7 +666,10 @@ class AISB_Wireframes {
         continue;
       }
 
-      $bricks_tpl = $this->bricks->pick_bricks_template($t, $bricks_by_type, $used_bricks_ids);
+      // Wat de sectie opsomt, telt mee bij het kiezen: drie medewerkers horen in een sjabloon met
+      // drie kaarten. Dezelfde context gebruikt de eigen bibliotheek hieronder.
+      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $t);
+      $bricks_tpl = $this->bricks->pick_bricks_template($t, $bricks_by_type, $used_bricks_ids, (int) ($context['items'] ?? 0));
 
       if ($bricks_tpl) {
         $used_bricks_ids[] = (int) $bricks_tpl['id'];
@@ -689,7 +692,6 @@ class AISB_Wireframes {
       $min_complexity = null;
       if ($pattern === 'homepage' && $t === 'hero') $min_complexity = 40;
 
-      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $t);
       $tpl = $this->tpl_lib->pick_best_match($t, $context, $used_layout_keys, $min_complexity);
 
       $layout_key = $tpl && !empty($tpl['layout_key'])
@@ -833,7 +835,8 @@ class AISB_Wireframes {
       if (!empty($s['locked'])) wp_send_json_error(['message' => 'Section is locked'], 400);
       $type = (string) ($s['type'] ?? 'generic');
 
-      $bricks_tpl = $this->bricks->pick_bricks_template($type, $bricks_by_type, $used_bricks_ids);
+      $ctx = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $type);
+      $bricks_tpl = $this->bricks->pick_bricks_template($type, $bricks_by_type, $used_bricks_ids, (int) ($ctx['items'] ?? 0));
       if ($bricks_tpl) {
         $old_ai = isset($s['ai_wireframe_id']) ? (int) $s['ai_wireframe_id'] : 0;
         if ($old_ai > 0) {
@@ -1110,11 +1113,15 @@ class AISB_Wireframes {
     $data = json_decode((string) $json, true);
     if (!is_array($data) || !is_array($data['sitemap'] ?? null)) return 0;
 
+    // De bouwer werkt met korte namen in het meervoud ("features"), de sitemap schrijft ze voluit in
+    // het enkelvoud ("Feature Sections"). Zonder die laatste stap komt "features" nooit overeen met
+    // "feature", en dat is net het soort dat het vaakst een kaartenrij heeft.
     $kern = function (string $s): string {
       $s = strtolower(trim(preg_replace('/\b(sections?|sectie)\b/i', ' ', $s)));
       $s = trim(preg_replace('/[^a-z0-9]+/', ' ', $s));
       $delen = preg_split('/\s+/', $s);
-      return $delen ? (string) $delen[0] : '';
+      $eerste = $delen ? (string) $delen[0] : '';
+      return mb_strlen($eerste) > 4 ? rtrim($eerste, 's') : $eerste;
     };
     $want = $kern($section_type);
     if ($want === '') return 0;

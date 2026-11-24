@@ -41,11 +41,36 @@ class AISB_Archer_Generate {
       }
     }
     unset($n);
+    $weg = [];
     // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
-    if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
+    if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes), $weg);
     // Iconen die bij de tekst passen in plaats van de standaardkubus; geen verzonnen cijfers (tellers).
-    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::iconoir(AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes))));
+    if (class_exists('AISB_Archer_Site')) {
+      $nodes = AISB_Archer_Site::proof(array_values($nodes), $weg);
+      $nodes = AISB_Archer_Site::iconoir(AISB_Archer_Site::icons(array_values($nodes)));
+    }
+    // Deze regels draaien bij het opslaan, dus onzichtbaar: een sectie komt dunner uit dan haar
+    // sjabloon en niets zegt waarom. Daarom hier bijhouden wat weggaat en door welke regel.
+    // WordPress draait deze opschoonfilter twee keer per update_post_meta (een keer om te kuisen,
+    // een keer bij de vergelijking met de oude waarde). Op sleutel bijhouden, anders staat elk
+    // weggehaald element dubbel in het spoor.
+    foreach ($weg as $w) {
+      $sleutel = $w['id'] . '|' . $w['regel'];
+      if (isset(self::$weggehaald[$sleutel])) continue;
+      self::$weggehaald[$sleutel] = $w;
+      error_log('[AISB] Huisregel haalde ' . ($w['name'] ?: '?') . ' ' . $w['id']
+        . ($w['label'] !== '' ? ' ("' . $w['label'] . '")' : '') . ' weg: ' . $w['regel'] . '.');
+    }
     return $nodes;
+  }
+
+  /** Wat de huisregels bij het laatste opslaan weghaalden; leegt de lijst meteen. */
+  public static $weggehaald = [];
+
+  public static function take_removals(): array {
+    $weg = array_values(self::$weggehaald);
+    self::$weggehaald = [];
+    return $weg;
   }
 
   /** Taal van de teksten in een sectie (nl, fr, en of ''), voor wat de AI niet vertaalde. */

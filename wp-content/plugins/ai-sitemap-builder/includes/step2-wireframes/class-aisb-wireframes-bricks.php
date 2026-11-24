@@ -86,14 +86,59 @@ class AISB_Wireframes_Bricks {
   }
 
   /**
-   * Pick a random Bricks template for $section_type, respecting exclusions.
+   * Het aantal kaarten dat dit sjabloon echt toont, of 0 als er geen kaartenrij in zit.
+   *
+   * Geteld op de elementen zoals ze er na de huisregels uitzien (geen label boven de titel, geen
+   * verzonnen tellers), want dat is wat de bezoeker krijgt. Zonder die stap tel je kaarten die bij
+   * het opslaan alsnog verdwijnen.
+   */
+  public static function card_count(int $template_id): int {
+    static $cache = [];
+    if (isset($cache[$template_id])) return $cache[$template_id];
+    $aantal = 0;
+    $nodes = get_post_meta($template_id, '_bricks_page_content_2', true);
+    if (is_array($nodes) && $nodes && class_exists('AISB_Archer_Section_Edit')) {
+      if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
+      if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::proof(array_values($nodes));
+      [$ouder, $leden] = AISB_Archer_Section_Edit::card_row($nodes);
+      $aantal = count($leden);
+    }
+    return $cache[$template_id] = $aantal;
+  }
+
+  /**
+   * Pick a Bricks template for $section_type, respecting exclusions.
    * Falls back to configured aliases when no direct match exists.
+   *
+   * Somt de sitemap dingen op in deze sectie (drie medewerkers, vier stappen), dan kiest hij het
+   * sjabloon met precies zo veel kaarten. Het snoeien achteraf kan er alleen afhalen, dus beginnen
+   * met een sjabloon dat te weinig kaarten heeft kost een kaart die er hoort te staan. Bij een
+   * gelijke stand blijft het toeval beslissen, zodat twee sites er niet hetzelfde uitzien.
    *
    * @param array<string,list<array>> $by_type     Output of get_bricks_templates_by_type()
    * @param int[]                     $exclude_ids Template IDs already used on this page
+   * @param int                       $items       Aantal dingen dat deze sectie opsomt (0 = onbekend)
    */
-  public function pick_bricks_template(string $section_type, array $by_type, array $exclude_ids = []): ?array {
-    $try = function(string $key) use ($by_type, $exclude_ids): ?array {
+  public function pick_bricks_template(string $section_type, array $by_type, array $exclude_ids = [], int $items = 0): ?array {
+    $kies = function(array $pool) use ($items, $section_type): ?array {
+      if (!$pool) return null;
+      if ($items < 2) return $pool[array_rand($pool)];
+      $beste = null; $gelijk = [];
+      foreach ($pool as $t) {
+        $kaarten = self::card_count((int) $t['id']);
+        // Precies goed (0) boven één te veel of te weinig (-2 per kaart verschil). Een sjabloon
+        // zonder kaartenrij kan de dingen niet naast elkaar tonen: dat gaat helemaal achteraan.
+        $score = $kaarten > 0 ? -2 * abs($kaarten - $items) : -100;
+        if ($beste === null || $score > $beste) { $beste = $score; $gelijk = [$t]; }
+        elseif ($score === $beste) { $gelijk[] = $t; }
+      }
+      $keuze = $gelijk[array_rand($gelijk)];
+      error_log('[AISB] Sjabloon voor ' . $section_type . ': ' . $keuze['title'] . ' (#' . $keuze['id'] . ', '
+        . self::card_count((int) $keuze['id']) . ' kaarten) bij ' . $items . ' item(s), uit ' . count($pool)
+        . ' sjablonen, score ' . $beste . '.');
+      return $keuze;
+    };
+    $try = function(string $key) use ($by_type, $exclude_ids, $kies): ?array {
       $pool = $by_type[strtolower($key)] ?? [];
       // Archer: sjablonen weglaten die niet passen bij wat al op de pagina staat (bv. een tweede formulier).
       $pool = (array) apply_filters('aisb_bricks_template_pool', $pool, strtolower($key), $exclude_ids);
@@ -102,7 +147,7 @@ class AISB_Wireframes_Bricks {
           return !in_array((int) $t['id'], $exclude_ids, true);
         }));
       }
-      return $pool ? $pool[array_rand($pool)] : null;
+      return $kies(array_values($pool));
     };
 
     $tpl = $try($section_type);

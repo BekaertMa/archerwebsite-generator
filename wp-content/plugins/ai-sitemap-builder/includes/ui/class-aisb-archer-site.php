@@ -427,7 +427,7 @@ class AISB_Archer_Site {
    * Geen verzonnen bewijs: tellers ("100+", "50+") komen uit het sjabloon, niet uit de briefing.
    * Het tellerblok (teller + label) gaat weg, een lege tellerlijst ook.
    */
-  public static function proof(array $nodes): array {
+  public static function proof(array $nodes, ?array &$weg = null): array {
     $ix = self::index($nodes);
     $drop = [];
     foreach ($nodes as $n) {
@@ -443,6 +443,12 @@ class AISB_Archer_Site {
     foreach ($nodes as $n) {
       $kids = array_map('strval', (array) ($n['children'] ?? []));
       if ($kids && !array_diff($kids, array_keys($drop)) && !empty($n['parent'])) $drop[(string) $n['id']] = 1;
+    }
+    // Navraagbaar houden: een sectie die dunner uitkomt dan haar sjabloon moet te verklaren zijn.
+    if (!is_array($weg)) $weg = [];
+    foreach (array_keys($drop) as $rid) {
+      $n = isset($ix[(string) $rid]) ? $nodes[$ix[(string) $rid]] : null;
+      $weg[] = ['id' => (string) $rid, 'name' => (string) ($n['name'] ?? ''), 'label' => (string) ($n['label'] ?? ''), 'regel' => 'teller zonder bewijs'];
     }
     return self::remove($nodes, array_keys($drop));
   }

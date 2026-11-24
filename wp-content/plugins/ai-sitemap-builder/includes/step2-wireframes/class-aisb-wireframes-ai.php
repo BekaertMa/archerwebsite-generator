@@ -456,9 +456,21 @@ class AISB_Wireframes_AI {
             }
 
             // Bricks elementen opslaan in de post meta
+            if (class_exists('AISB_Archer_Generate')) \AISB_Archer_Generate::take_removals();
             update_post_meta($new_post_id, '_bricks_page_content_2', $cloned_data);
             if ($meta_key_to_save === '_bricks_page_header_2' || $meta_key_to_save === '_bricks_page_footer_2') {
                 update_post_meta($new_post_id, $meta_key_to_save, $cloned_data);
+            }
+            // Bij het opslaan draaien de huisregels (geen label boven de titel, geen verzonnen teller).
+            // Die elementen staan dus wel in het sjabloon en niet meer in de sectie; zonder dit spoor
+            // is er achteraf niet te zien welke regel ze weghaalde.
+            if (class_exists('AISB_Archer_Generate')) {
+                $aisb_weg = \AISB_Archer_Generate::take_removals();
+                if ($aisb_weg) {
+                    update_post_meta($new_post_id, '_aisb_huisregels_weg', $aisb_weg);
+                    $aisb_namen = array_map(function ($w) { return ($w['label'] ?: $w['name']) . ' (' . $w['regel'] . ')'; }, $aisb_weg);
+                    error_log('[AISB] Sectie ' . $idx . ': huisregels haalden ' . count($aisb_weg) . ' element(en) weg - ' . implode(', ', $aisb_namen) . '.');
+                }
             }
             // Metadata voor groepering en herleidbaarheid
             update_post_meta($new_post_id, '_aisb_source_template_id', $original_id); // Origineel Bricks template

@@ -341,11 +341,11 @@ class AISB_Archer_Taste {
    * geen dunne lijnen (divider), geen label boven een titel (eyebrow/tagline), geen icoon
    * bovenaan een kaart, geen decoratieve nummering (01, 02).
    */
-  public static function house_nodes(array $nodes): array {
+  public static function house_nodes(array $nodes, ?array &$weg = null): array {
     $ix = [];
     foreach ($nodes as $i => $n) if (is_array($n) && isset($n['id'])) $ix[(string) $n['id']] = $i;
     $kids = fn($id) => isset($ix[$id]) ? array_values(array_filter(array_map('strval', (array) ($nodes[$ix[$id]]['children'] ?? [])), fn($c) => isset($ix[$c]))) : [];
-    $node = fn($id) => $nodes[$ix[$id]] ?? null;
+    $node = fn($id) => isset($ix[$id]) ? $nodes[$ix[$id]] : null;
     $text = function ($n) {
       foreach (['text', 'title', 'content'] as $k) if (isset($n['settings'][$k]) && is_string($n['settings'][$k])) return trim(html_entity_decode(wp_strip_all_tags($n['settings'][$k]), ENT_QUOTES, 'UTF-8'));
       return null;
@@ -368,7 +368,7 @@ class AISB_Archer_Taste {
       $label = (string) ($n['label'] ?? '');
       $parent = (string) ($n['parent'] ?? '');
       // Dunne lijnen
-      if ($name === 'divider') { $remove[$id] = 1; continue; }
+      if ($name === 'divider') { $remove[$id] = 'dunne lijn'; continue; }
       // Label boven een titel: een korte tekst vlak vóór een heading in dezelfde groep.
       if (in_array($name, ['text-basic', 'text'], true)) {
         $siblings = $kids($parent);
@@ -377,19 +377,27 @@ class AISB_Archer_Taste {
         $t = $text($n);
         $labelled = (bool) preg_match('/tagline|eyebrow|kicker|overline|pre-?title|subtitle-top|badge/i', $label);
         if ($next && ($next['name'] ?? '') === 'heading' && $t !== null && mb_strlen($t) <= 60 && ($labelled || $pos === 0)) {
-          $remove[$id] = 1;
+          $remove[$id] = 'label boven de titel';
           continue;
         }
         // Decoratieve nummering: 01, (02), 03.
-        if ($t !== null && preg_match('/^[(\[]?0[1-9][)\]]?\.?$/', $t)) { $remove[$id] = 1; continue; }
+        if ($t !== null && preg_match('/^[(\[]?0[1-9][)\]]?\.?$/', $t)) { $remove[$id] = 'decoratieve nummering'; continue; }
       }
       // Icoon bovenaan een kaart (icon wrapper in een kaart of item).
       if ($name === 'block' && preg_match('/^icon( wrapper)?$/i', trim($label)) && $ancestorLabel($id, '/card|item|feature|service/i')) {
-        $remove[$id] = 1;
+        $remove[$id] = 'icoon op een kaart';
         continue;
       }
     }
     if (!$remove) return $nodes;
+    // Wat er weggaat en waarom, zodat een sectie die dunner uitkomt dan haar sjabloon navraagbaar is.
+    if (is_array($weg) || $weg === null) {
+      if (!is_array($weg)) $weg = [];
+      foreach ($remove as $rid => $regel) {
+        $n = $node((string) $rid);
+        $weg[] = ['id' => (string) $rid, 'name' => (string) ($n['name'] ?? ''), 'label' => (string) ($n['label'] ?? ''), 'regel' => $regel];
+      }
+    }
     // Met kinderen en al verwijderen, en uit de lijst van de ouder halen.
     $all = $remove;
     $stack = array_keys($remove);
