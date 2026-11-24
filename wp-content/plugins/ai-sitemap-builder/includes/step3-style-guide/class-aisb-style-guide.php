@@ -598,6 +598,12 @@ class AISB_Style_Guide {
     $project_id = isset($_POST['project_id']) ? (int)$_POST['project_id'] : 0;
     $this->assert_project_ownership($project_id);
 
+    // Deze route praat rechtstreeks met Unsplash, en dat mag alleen als Unsplash aanstaat (zie
+    // AISB_Archer_Stock::unsplash_on()). Normaal komt ze hier niet eens: AISB_Archer_Stock vangt
+    // dezelfde actie af zodra er één bron is.
+    if (class_exists('AISB_Archer_Stock') && !AISB_Archer_Stock::unsplash_on()) {
+      wp_send_json_error(['message' => 'Unsplash doet niet mee zolang de gebouwde site geen naamsvermelding zet. Stel een Pexels- of Pixabay-sleutel in bij Instellingen, AI Sitemap Builder, Stockfoto\'s.'], 400);
+    }
     if (!defined('AISB_UNSPLASH_KEY') || !AISB_UNSPLASH_KEY) {
       wp_send_json_error(['message' => 'Unsplash API key not configured (AISB_UNSPLASH_KEY missing from wp-config.php).'], 400);
     }
@@ -701,6 +707,9 @@ class AISB_Style_Guide {
     $this->require_login();
     $this->check_nonce();
 
+    if (class_exists('AISB_Archer_Stock') && !AISB_Archer_Stock::unsplash_on()) {
+      wp_send_json_error(['message' => 'Unsplash doet niet mee zolang de gebouwde site geen naamsvermelding zet.'], 400);
+    }
     if (!defined('AISB_UNSPLASH_KEY') || !AISB_UNSPLASH_KEY) {
       wp_send_json_error(['message' => 'Unsplash API key not configured.'], 400);
     }
