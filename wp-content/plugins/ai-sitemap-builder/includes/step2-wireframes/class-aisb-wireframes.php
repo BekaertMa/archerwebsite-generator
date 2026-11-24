@@ -919,7 +919,10 @@ class AISB_Wireframes {
       $model['sections'][$i]['type']            = $new_type;
       $model['sections'][$i]['ai_wireframe_id'] = null;
 
-      $bricks_tpl = $this->bricks->pick_bricks_template($new_type, $bricks_by_type, $used_bricks_ids);
+      // Ook hier telt mee wat de sectie opsomt: een ander soort kiezen hoort hetzelfde sjabloon
+      // op te leveren als wanneer de pagina in een keer gemaakt wordt.
+      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $new_type);
+      $bricks_tpl = $this->bricks->pick_bricks_template($new_type, $bricks_by_type, $used_bricks_ids, (int) ($context['items'] ?? 0));
       if ($bricks_tpl) {
         $model['sections'][$i]['layout_key']            = 'bricks_' . $bricks_tpl['id'];
         $model['sections'][$i]['bricks_template_id']    = $bricks_tpl['id'];
@@ -932,7 +935,6 @@ class AISB_Wireframes {
         break;
       }
 
-      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $new_type);
       $tpl = $this->tpl_lib->pick_best_match($new_type, $context, $used_layout_keys, null);
       $model['sections'][$i]['layout_key']            = $tpl ? (string) $tpl['layout_key'] : ('cf_' . $new_type . '_1');
       $model['sections'][$i]['bricks_template_id']    = null;
