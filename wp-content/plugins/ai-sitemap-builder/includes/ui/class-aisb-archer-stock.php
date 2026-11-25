@@ -2,12 +2,12 @@
 if (!defined('ABSPATH')) exit;
 
 /**
- * Stockfoto's uit Unsplash én Pexels.
+ * Stockfoto's uit Pexels en Pixabay. Unsplash doet niet mee; zie unsplash_on().
  *
  * Neemt de twee AJAX-acties van de stijlgids over (aisb_get_unsplash_images en
- * aisb_search_similar_images) zodra er een Pexels-sleutel is: de foto's komen dan om en om
- * uit beide bronnen, en valt één bron weg, dan vult de andere aan. Zonder Pexels-sleutel
- * blijft alles zoals het was (alleen Unsplash).
+ * aisb_search_similar_images) zodra er één bron is: de foto's komen dan om en om uit elke
+ * bron, en valt er één weg, dan vullen de andere aan. De namen van die acties bleven, hun
+ * inhoud niet: er gaat langs deze weg niets meer naar Unsplash.
  *
  * Sleutel: Instellingen → AI Sitemap Builder → Stockfoto's, of de constante AISB_PEXELS_KEY in wp-config.php.
  * De sleutel gaat nooit naar de browser.
@@ -33,6 +33,18 @@ class AISB_Archer_Stock {
     return defined('AISB_UNSPLASH_KEY') && AISB_UNSPLASH_KEY ? (string) AISB_UNSPLASH_KEY : '';
   }
 
+  /**
+   * Doet Unsplash mee? Alleen als iemand dat uitdrukkelijk aanzet met AISB_UNSPLASH_ON.
+   *
+   * Hun voorwaarden vragen twee dingen die de gebouwde site geen van beide doet: een zichtbare
+   * vermelding met een link naar de fotograaf, en een melding bij het gebruik
+   * (download_location). Een sleutel volstaat dus niet om hun bibliotheek te mogen gebruiken.
+   * Zodra die twee er zijn, mag deze schakelaar weg.
+   */
+  public static function unsplash_on(): bool {
+    return defined('AISB_UNSPLASH_ON') && AISB_UNSPLASH_ON;
+  }
+
   public static function pixabay_key(): string {
     if (defined('AISB_PIXABAY_KEY') && AISB_PIXABAY_KEY) return (string) AISB_PIXABAY_KEY;
     return (string) get_option(self::OPTION_PIXABAY, '');
@@ -47,7 +59,7 @@ class AISB_Archer_Stock {
    */
   public static function readers(): array {
     $out = [];
-    if (self::unsplash_key()) $out['Unsplash'] = [self::class, 'unsplash'];
+    if (self::unsplash_key() && self::unsplash_on()) $out['Unsplash'] = [self::class, 'unsplash'];
     if (self::pexels_key()) $out['Pexels'] = [self::class, 'pexels'];
     if (self::pixabay_key()) $out['Pixabay'] = [self::class, 'pixabay'];
     return $out;
@@ -120,7 +132,7 @@ class AISB_Archer_Stock {
       echo '<p>Elke sleutel die je hier invult, komt erbij als bron in de stap Foto\'s: de foto\'s komen dan om beurten uit elke bron. Gratis sleutels vraag je aan op '
         . '<a href="https://www.pexels.com/api/" target="_blank" rel="noopener">pexels.com/api</a> en '
         . '<a href="https://pixabay.com/api/docs/" target="_blank" rel="noopener">pixabay.com/api/docs</a>. Leeg laten om die bron over te slaan.</p>';
-      echo '<p class="description">Pixabay staat niet toe dat een gepubliceerde site rechtstreeks naar hun adressen verwijst, dus hun foto\'s worden naar de mediabibliotheek gehaald. Unsplash verplicht net het omgekeerde en blijft bij de bron.</p>';
+      echo '<p class="description">Pixabay staat niet toe dat een gepubliceerde site rechtstreeks naar hun adressen verwijst, dus hun foto\'s worden naar de mediabibliotheek gehaald. Unsplash verplicht net het omgekeerde, en vraagt daarbovenop een zichtbare naamsvermelding die de gebouwde site nog niet zet: daarom doet Unsplash voorlopig niet mee.</p>';
     }, 'ai-sitemap-builder');
     add_settings_field('archer_pexels_key', 'Pexels API Key', [$this, 'field'], 'ai-sitemap-builder', 'aisb_stock', ['label_for' => 'archer_pexels_key']);
     add_settings_field('archer_pixabay_key', 'Pixabay API Key', [$this, 'field_pixabay'], 'ai-sitemap-builder', 'aisb_stock', ['label_for' => 'archer_pixabay_key']);
@@ -132,7 +144,11 @@ class AISB_Archer_Stock {
       return;
     }
     echo '<input type="password" id="archer_pexels_key" name="' . esc_attr(self::OPTION) . '" value="' . esc_attr((string) get_option(self::OPTION, '')) . '" class="regular-text" autocomplete="off">';
-    echo '<p class="description">' . (self::unsplash_key() ? 'Unsplash staat aan (AISB_UNSPLASH_KEY in wp-config.php).' : 'Er is geen Unsplash-sleutel ingesteld.') . '</p>';
+    echo '<p class="description">' . (self::unsplash_key()
+      ? (self::unsplash_on()
+        ? 'Unsplash staat aan (AISB_UNSPLASH_KEY en AISB_UNSPLASH_ON in wp-config.php).'
+        : 'Er is een Unsplash-sleutel, maar Unsplash doet niet mee: de gebouwde site zet hun naamsvermelding nog niet. Aanzetten kan met AISB_UNSPLASH_ON in wp-config.php.')
+      : 'Er is geen Unsplash-sleutel ingesteld.') . '</p>';
   }
 
   public function field_pixabay(): void {
@@ -766,8 +782,9 @@ class AISB_Archer_Stock {
 
   /** Alle foto's voor de wireframes in één keer (stap Foto's). */
   public function ajax_auto(): void {
-    // Maar één bron? Dan doet de stijlgids het zelf, zoals vroeger.
-    if (count(self::readers()) < 2) return;
+    // Geen enkele bron? Dan blijft het antwoord aan het oude scherm. Bij één bron wél zelf
+    // antwoorden: dat scherm kent alleen Unsplash, en die doet niet meer mee.
+    if (!self::readers()) return;
     $pid = $this->guard(true);
     @set_time_limit(60);
     $need = isset($_POST['total_needed']) ? max(1, min(150, (int) $_POST['total_needed'])) : 30;
@@ -791,7 +808,7 @@ class AISB_Archer_Stock {
 
   /** Andere foto zoeken (venster bij het wisselen van een foto). */
   public function ajax_search(): void {
-    if (count(self::readers()) < 2) return;
+    if (!self::readers()) return;
     $this->guard(false);
     $q = isset($_POST['keyword']) ? sanitize_text_field(wp_unslash($_POST['keyword'])) : '';
     if ($q === '') wp_send_json_error(['message' => 'Geen zoekwoord.'], 400);

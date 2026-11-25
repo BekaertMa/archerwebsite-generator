@@ -515,6 +515,99 @@ class AISB_Archer_Styles {
     return (max($la, $lb) + 0.05) / (min($la, $lb) + 0.05);
   }
 
+  /* ───────────────────────── Voorbeeld ───────────────────────── */
+
+  /** Een maat van fluid() uitgerekend op een vaste breedte (het voorbeeldkader, niet het scherm). */
+  public static function fluid_at($range, int $w): float {
+    if (!is_array($range)) return (float) $range;
+    [$min, $max] = [(float) $range[0], (float) $range[1]];
+    if ($min === $max) return $min;
+    $t = (min(max($w, 360), 1440) - 360) / 1080;
+    return round($min + ($max - $min) * $t, 2);
+  }
+
+  /** De korrel van een stijl als data-URI (zelfde tekening als craft_css). */
+  private static function grain_uri(array $g): string {
+    $size = max(60, min(400, (int) ($g['size'] ?? 180)));
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $size . '" height="' . $size . '">'
+      . '<filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/>'
+      . '<feColorMatrix type="saturate" values="0"/></filter>'
+      . '<rect width="100%" height="100%" filter="url(#g)"/></svg>';
+    return 'url("data:image/svg+xml,' . rawurlencode($svg) . '")';
+  }
+
+  /**
+   * De variabelen van een stijl voor het uitgewerkte voorbeeld in de chatbot (assets/archer/archer-preview.css).
+   *
+   * Dezelfde rollen, formules en afrondingen als tokens(), met één verschil: de maten staan hier als
+   * vaste pixels. Het voorbeeld staat in een kader van $w px breed dat daarna geschaald wordt, en
+   * clamp(..., 100vw, ...) zou daar de breedte van het scherm nemen in plaats van die van het kader.
+   */
+  public static function preview_vars(array $s, int $w = 1280): string {
+    $c = $s['colours'];
+    $f = $s['fonts'];
+    $t = $s['type'];
+    $sp = $s['space'];
+    $r = $s['radius'];
+    $b = $s['button'];
+    $craft = is_array($s['craft'] ?? null) ? $s['craft'] : [];
+    $card = (string) ($s['card'] ?? 'flat');
+    $foot = (string) ($s['bands']['footer'] ?? 'ink');
+    $cta = (string) ($s['bands']['cta'] ?? 'surface');
+    $px = fn($range) => self::n(self::fluid_at($range, $w)) . 'px';
+    $shadow = trim((string) ($craft['shadow'] ?? ''));
+    if ($shadow !== '' && !preg_match('/^[0-9a-zA-Z#(),.\s\/%-]{3,400}$/', $shadow)) $shadow = '';
+
+    $v = [
+      '--a-base' => $c['base'], '--a-surface' => $c['surface'], '--a-surface2' => $c['surface2'],
+      '--a-ink' => $c['ink'], '--a-muted' => $c['muted'], '--a-accent' => $c['accent'],
+      '--a-accent-ink' => $c['accentInk'], '--a-line' => $c['line'],
+      '--a-dark' => $c['dark'], '--a-dark-ink' => $c['darkInk'],
+      '--a-link' => self::contrast($c['accent'], $c['base']) >= 4.5 ? $c['accent'] : $c['ink'],
+      '--a-display' => $px($t['display']), '--a-h2' => $px($t['h2']), '--a-h3' => $px($t['h3']),
+      '--a-lead' => $px($t['lead']), '--a-body' => $px($t['body']), '--a-small' => $px($t['small']),
+      '--a-font-heading' => self::stack($f['heading']['family']),
+      '--a-font-body' => self::stack($f['body']['family']),
+      '--a-heading-weight' => (string) (int) $f['heading']['weight'],
+      '--a-heading-tracking' => (string) $f['heading']['tracking'],
+      '--a-heading-tracking-sm' => self::half($f['heading']['tracking']),
+      '--a-heading-lh' => (string) $f['heading']['lineHeight'],
+      '--a-heading-case' => (string) $f['heading']['case'],
+      '--a-body-lh' => (string) $f['body']['lineHeight'],
+      '--a-btn-size' => (int) $b['size'] . 'px', '--a-btn-weight' => (string) (int) $b['weight'],
+      '--a-btn-tracking' => (string) $b['tracking'], '--a-btn-case' => (string) $b['case'],
+      '--a-radius-button' => (int) $r['button'] . 'px', '--a-radius-card' => (int) $r['card'] . 'px',
+      '--a-radius-image' => (int) $r['image'] . 'px', '--a-radius-field' => (int) $r['field'] . 'px',
+      '--a-sec' => $px(self::scale($sp['section'], 0.55)),
+      '--a-gap-head' => $px(self::scale($sp['heading'], 0.75)),
+      '--a-gap-content' => (int) $sp['content'] . 'px',
+      '--a-gap-grid' => $px($sp['grid']),
+      '--a-container' => (int) $sp['container'] . 'px',
+      '--a-pad-x' => $px([20, 40]),
+      '--a-card-bg' => $card === 'flat' ? 'var(--a-surface)' : 'transparent',
+      '--a-card-border' => $card === 'hairline' ? 'var(--a-rule-hair) solid var(--a-line)' : '0',
+      '--a-card-radius' => $card === 'none' ? '0' : 'var(--a-radius-card)',
+      '--a-card-shadow' => $shadow !== '' ? $shadow : 'none',
+      '--a-card-image' => $shadow !== '' && !empty($craft['card']['stock'])
+        ? 'linear-gradient(160deg,var(--a-base),var(--a-surface) 60%)' : 'none',
+      '--a-footer-bg' => $foot === 'ground' ? 'var(--a-surface)' : 'var(--a-dark)',
+      '--a-footer-ink' => $foot === 'ground' ? 'var(--a-ink)' : 'var(--a-dark-ink)',
+      '--a-cta-bg' => $cta === 'ground' ? 'var(--a-base)' : 'var(--a-surface)',
+      '--a-rule-hair' => self::n(max(0.5, min(4, (float) ($craft['hairline'] ?? 1)))) . 'px',
+      '--a-grain' => 'none', '--a-grain-size' => '180px', '--a-grain-op' => '0', '--a-grain-blend' => 'multiply',
+    ];
+    if (!empty($craft['grain']) && is_array($craft['grain'])) {
+      $g = $craft['grain'];
+      $v['--a-grain'] = self::grain_uri($g);
+      $v['--a-grain-size'] = max(60, min(400, (int) ($g['size'] ?? 180))) . 'px';
+      $v['--a-grain-op'] = self::n(max(0.01, min(0.4, (float) ($g['opacity'] ?? 0.12))));
+      $v['--a-grain-blend'] = in_array((string) ($g['blend'] ?? ''), ['multiply', 'screen', 'overlay', 'soft-light'], true) ? $g['blend'] : 'multiply';
+    }
+    $out = '';
+    foreach ($v as $k => $val) $out .= $k . ':' . $val . ';';
+    return $out;
+  }
+
   /* ───────────────────────── Keuze ───────────────────────── */
 
   /** Alle stijlen, de stijlen die bij de sector passen eerst. */
@@ -535,7 +628,7 @@ class AISB_Archer_Styles {
       $out[] = [
         'id' => $s['id'],
         'name' => $s['name'],
-        'pitch' => $s['pitch'],
+        'pitch' => class_exists('AISB_Archer_Lang') ? AISB_Archer_Lang::pitch($s) : $s['pitch'],
         'fit' => $fit,
         'order' => $adv ? (100 - $scores[$s['id']] * 5) : (($fit ? 0 : 100) + $i),
         'score' => $adv ? $scores[$s['id']] : null,

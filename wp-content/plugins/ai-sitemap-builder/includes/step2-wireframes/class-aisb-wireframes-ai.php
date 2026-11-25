@@ -71,15 +71,19 @@ class AISB_Wireframes_AI {
         if (!is_array($s)) continue;
         $name = trim((string) ($s['section_name'] ?? $s['section_type'] ?? ''));
         $purpose = trim((string) ($s['purpose'] ?? ''));
+        // De doelstelling van de sectie gaat voor op purpose: die zegt wat de tekst moet overbrengen,
+        // purpose zegt wat de ontwerper moet maken. De copywriter heeft aan het eerste meer.
+        $goal = trim((string) ($s['section_goal'] ?? ''));
         $kc = array_values(array_filter(array_map('trim', array_filter((array) ($s['key_content'] ?? []), 'is_string'))));
         $uuid = (string) ($s['wf_uuid'] ?? '');
-        $entry = ['name' => $name, 'purpose' => $purpose, 'key_content' => $kc, 'type' => (string) ($s['section_type'] ?? '')];
+        $entry = ['name' => $name, 'goal' => $goal, 'purpose' => $purpose, 'key_content' => $kc, 'type' => (string) ($s['section_type'] ?? '')];
         if ($uuid !== '') $section_ctx[$uuid] = $entry;
         // wf_uuid staat niet in elke sitemap (alleen projecten die door de wireframe-werkruimte gingen).
         // Zonder terugvaloptie viel key_content stilletjes weg en schreef de copywriter weer op gevoel.
         $section_ctx_order[] = $entry;
-        if ($name === '' && $purpose === '') continue;
-        $section_hints[] = '- ' . $name . ': ' . $purpose . ($kc ? ' [' . implode(' | ', $kc) . ']' : '');
+        if ($name === '' && $purpose === '' && $goal === '') continue;
+        $section_hints[] = '- ' . $name . ': ' . ($goal !== '' ? $goal . ($purpose !== '' ? ' (' . $purpose . ')' : '') : $purpose)
+          . ($kc ? ' [' . implode(' | ', $kc) . ']' : '');
     }
 
     // Paginascope: waar deze pagina over gaat en welke onderwerpen een andere pagina al behandelt.
@@ -100,6 +104,26 @@ class AISB_Wireframes_AI {
     
     $to_translate = [];         // Teksten die naar OpenAI gestuurd worden
     $raw_bricks_data_maps = []; // Originele Bricks element-data per sectie-index
+
+    /**
+     * De sitemapsectie die bij deze wireframesectie hoort: gekoppeld op uuid.
+     *
+     * Geen wf_uuid in de sitemap? Dan op volgorde: wireframe en sitemap krijgen dezelfde secties in
+     * dezelfde volgorde (AISB_Archer_Generate::wireframe_types). Alleen als de aantallen kloppen en
+     * het sectietype op dezelfde soort sjabloon uitkomt, zodat we nooit de verkeerde tekst koppelen.
+     *
+     * Eén plek voor die koppeling: het snoeien van de kaarten en de opdracht aan de copywriter
+     * moeten per se dezelfde sectie te pakken hebben.
+     */
+    $ctx_for = function ($sec, $idx) use ($section_ctx, $section_ctx_order, $model) {
+        $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
+        if (!$ctx && isset($section_ctx_order[$idx]) && count($section_ctx_order) === count((array) ($model['sections'] ?? []))) {
+            $cand = $section_ctx_order[$idx];
+            $want = class_exists('AISB_Archer_Structure') ? \AISB_Archer_Structure::tag_for((string) ($cand['type'] ?? '')) : '';
+            if ($want === '' || $want === (string) ($sec['type'] ?? '')) $ctx = $cand;
+        }
+        return $ctx;
+    };
 
     // 2. Alle tekst ophalen uit de gekozen Bricks templates
     foreach ($model['sections'] as $idx => $sec) {
@@ -135,6 +159,23 @@ class AISB_Wireframes_AI {
               continue;
           }
           error_log('[AISB] Section ' . $idx . ': loaded Bricks elements for post ' . $post_id . ' (' . count($bricks_data) . ' nodes)');
+
+          // Het ontwerp volgt de inhoud: heeft de kaartenrij meer kaarten dan de sitemap dingen
+          // opsomt, dan gaan de overtollige eruit voor de copywriter begint. Anders vult hij ze met
+          // een verzonnen vierde medewerker, of blijft het vak leeg. Header en footer blijven buiten
+          // schot: die hebben hun eigen opmaak en hun key_content is geen rij.
+          $aisb_trim_type = (string) ($sec['type'] ?? '');
+          if (class_exists('AISB_Archer_Section_Edit') && \AISB_Archer_Section_Edit::counts_as_cards($aisb_trim_type)) {
+              $aisb_ctx = $ctx_for($sec, $idx);
+              $aisb_want = count(array_filter((array) ($aisb_ctx['key_content'] ?? []), 'is_string'));
+              if ($aisb_want >= 2) {
+                  [$bricks_data, $aisb_weg] = \AISB_Archer_Section_Edit::trim_items($bricks_data, $aisb_want);
+                  if ($aisb_weg > 0) {
+                      error_log('[AISB] Sectie ' . $idx . ' (' . $aisb_trim_type . '): ' . $aisb_weg
+                        . ' kaart(en) weggehaald, ' . $aisb_want . ' item(s) in de sitemap.');
+                  }
+              }
+          }
 
           $raw_bricks_data_maps[$idx] = [
               'data' => $bricks_data,
@@ -210,17 +251,10 @@ class AISB_Wireframes_AI {
         }
 
         if (!empty($module_data_to_translate)) {
-            // Archer: doel en key_content van deze sectie uit de sitemap, gekoppeld op uuid.
-            $ctx = $section_ctx[(string) ($sec['uuid'] ?? '')] ?? null;
-            // Geen wf_uuid in de sitemap? Dan op volgorde: wireframe en sitemap krijgen dezelfde secties in
-            // dezelfde volgorde (AISB_Archer_Generate::wireframe_types). Alleen als de aantallen kloppen en
-            // het sectietype op dezelfde soort sjabloon uitkomt, zodat we nooit de verkeerde tekst koppelen.
-            if (!$ctx && isset($section_ctx_order[$idx]) && count($section_ctx_order) === count((array) ($model['sections'] ?? []))) {
-                $cand = $section_ctx_order[$idx];
-                $want = class_exists('AISB_Archer_Structure') ? \AISB_Archer_Structure::tag_for((string) ($cand['type'] ?? '')) : '';
-                if ($want === '' || $want === (string) ($sec['type'] ?? '')) $ctx = $cand;
-            }
-            $purpose = $ctx ? trim($ctx['name'] . ': ' . $ctx['purpose'], ': ') : '';
+            // Archer: doel en key_content van deze sectie uit de sitemap (zelfde koppeling als het snoeien).
+            $ctx = $ctx_for($sec, $idx);
+            $doel = $ctx ? trim((string) ($ctx['goal'] ?? '')) : '';
+            $purpose = $ctx ? trim($ctx['name'] . ': ' . ($doel !== '' ? $doel : $ctx['purpose']), ': ') : '';
             if ($purpose === '') $purpose = (class_exists('AISB_Archer_Generate') ? \AISB_Archer_Generate::section_hint($page_slug, (int) $idx) : '') ?: ($sec['type'] ?? 'content');
             // Rollen alleen meesturen als de kaartenrij volledig herkend is. Een half herkende structuur
             // (een paar kaarten als 'item', de rest als 'section') stuurt het model de verkeerde kant op;
@@ -422,9 +456,21 @@ class AISB_Wireframes_AI {
             }
 
             // Bricks elementen opslaan in de post meta
+            if (class_exists('AISB_Archer_Generate')) \AISB_Archer_Generate::take_removals();
             update_post_meta($new_post_id, '_bricks_page_content_2', $cloned_data);
             if ($meta_key_to_save === '_bricks_page_header_2' || $meta_key_to_save === '_bricks_page_footer_2') {
                 update_post_meta($new_post_id, $meta_key_to_save, $cloned_data);
+            }
+            // Bij het opslaan draaien de huisregels (geen label boven de titel, geen verzonnen teller).
+            // Die elementen staan dus wel in het sjabloon en niet meer in de sectie; zonder dit spoor
+            // is er achteraf niet te zien welke regel ze weghaalde.
+            if (class_exists('AISB_Archer_Generate')) {
+                $aisb_weg = \AISB_Archer_Generate::take_removals();
+                if ($aisb_weg) {
+                    update_post_meta($new_post_id, '_aisb_huisregels_weg', $aisb_weg);
+                    $aisb_namen = array_map(function ($w) { return ($w['label'] ?: $w['name']) . ' (' . $w['regel'] . ')'; }, $aisb_weg);
+                    error_log('[AISB] Sectie ' . $idx . ': huisregels haalden ' . count($aisb_weg) . ' element(en) weg - ' . implode(', ', $aisb_namen) . '.');
+                }
             }
             // Metadata voor groepering en herleidbaarheid
             update_post_meta($new_post_id, '_aisb_source_template_id', $original_id); // Origineel Bricks template

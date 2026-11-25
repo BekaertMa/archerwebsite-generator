@@ -119,6 +119,113 @@ class AISB_Archer_Section_Edit {
     return $out;
   }
 
+  /* ───────────────────────── De kaartenrij ───────────────────────── */
+
+  /**
+   * Telt key_content van dit soort sectie als een kaartenrij?
+   *
+   * Een hero heeft ook key_content (de belofte, de knop, het beeld), maar dat zijn geen kaarten.
+   * Zou het aantal daar meetellen, dan stuurt het zowel de sjabloonkeuze als het snoeien de
+   * verkeerde kant op. Soorten heten in de sitemap voluit ("Team Sections") en elders kort
+   * ("team"), daarom vergelijken we op het eerste woord.
+   */
+  public static function counts_as_cards(string $section_type): bool {
+    $s = strtolower(trim((string) preg_replace('/\b(sections?|sectie)\b/i', ' ', $section_type)));
+    $s = trim((string) preg_replace('/[^a-z0-9]+/', ' ', $s));
+    $delen = preg_split('/\s+/', $s);
+    $kern = $delen ? (string) $delen[0] : '';
+    if ($kern === '') return false;
+    return !in_array($kern, ['header', 'headers', 'nav', 'navbar', 'hero', 'footer', 'footers',
+      'cta', 'contact', 'form', 'forms', 'map', 'banner'], true);
+  }
+
+  /**
+   * De kaartenrij van een sectie: de grootste groep zusjes met dezelfde vorm én tekst.
+   *
+   * Eén reeks per sectie. Nummeren we elke groep apart, dan bestaat "item 2" twee keer en
+   * spreken de rollen elkaar tegen. Een rij lege blokjes of iconen telt niet mee: een kaartenrij
+   * heeft tekst. Dezelfde regel staat in class-aisb-wireframes-ai.php, waar ze de rollen van de
+   * copywriter bepaalt; verandert ze hier, dan hoort ze daar mee te veranderen.
+   *
+   * @return array{0:string,1:array<int,string>} de ouder en de leden, in volgorde
+   */
+  public static function card_row(array $nodes): array {
+    $by = [];
+    foreach ($nodes as $n) if (is_array($n) && !empty($n['id'])) $by[(string) $n['id']] = $n;
+    $shape = function (string $id) use (&$shape, $by) {
+      $n = $by[$id] ?? null;
+      if (!$n) return '';
+      $kids = [];
+      foreach ((array) ($n['children'] ?? []) as $ch) $kids[] = $shape((string) $ch);
+      return ($n['name'] ?? '?') . ($kids ? '(' . implode(',', $kids) . ')' : '');
+    };
+    $best = [];
+    foreach ($nodes as $n) {
+      if (!is_array($n) || empty($n['id'])) continue;
+      $kids = array_map('strval', (array) ($n['children'] ?? []));
+      if (count($kids) < 2) continue;
+      $groups = [];
+      foreach ($kids as $ch) $groups[$shape($ch)][] = $ch;
+      foreach ($groups as $sig => $members) {
+        if (count($members) < 2) continue;
+        if (!preg_match('/heading|text|button|icon-box|list/i', (string) $sig)) continue;
+        $score = count($members) * 100 + substr_count((string) $sig, 'heading') + substr_count((string) $sig, 'text');
+        if (!$best || $score > $best['score']) $best = ['score' => $score, 'parent' => (string) $n['id'], 'members' => $members];
+      }
+    }
+    return $best ? [$best['parent'], $best['members']] : ['', []];
+  }
+
+  /**
+   * De kaartenrij terugbrengen tot het aantal dingen dat de inhoud heeft.
+   *
+   * Het sjabloon wordt al gekozen op dat aantal (AISB_Template_Library::pick_best_match), maar is
+   * er geen sjabloon met precies zo veel kaarten, dan blijft er een over. Drie medewerkers horen
+   * in drie kolommen te staan, niet in vier waarvan één met een verzonnen vierde medewerker of
+   * een leeg vak. Dit draait vóór de copywriter, zodat die meteen het juiste aantal beschrijft.
+   *
+   * Werkt op een kopie van de sjabloonelementen: het bibliotheeksjabloon zelf blijft ongemoeid.
+   *
+   * @return array{0:array,1:int} de elementen en het aantal weggehaalde kaarten
+   */
+  public static function trim_items(array $nodes, int $want): array {
+    if ($want < 1) return [$nodes, 0];
+    [$parent, $members] = self::card_row($nodes);
+    if ($parent === '' || count($members) <= $want) return [$nodes, 0];
+
+    $by = [];
+    foreach ($nodes as $n) if (is_array($n) && !empty($n['id'])) $by[(string) $n['id']] = $n;
+    $weg = [];
+    $mark = function (string $id) use (&$mark, $by, &$weg) {
+      if (isset($weg[$id])) return;
+      $weg[$id] = true;
+      foreach ((array) ($by[$id]['children'] ?? []) as $ch) $mark((string) $ch);
+    };
+    foreach (array_slice($members, $want) as $id) $mark((string) $id);
+
+    $out = [];
+    foreach ($nodes as $n) {
+      $id = is_array($n) ? (string) ($n['id'] ?? '') : '';
+      if ($id !== '' && isset($weg[$id])) continue;
+      if ($id === $parent) {
+        $n['children'] = array_values(array_filter(array_map('strval', (array) ($n['children'] ?? [])), function ($c) use ($weg) { return !isset($weg[$c]); }));
+        $s = isset($n['settings']) && is_array($n['settings']) ? $n['settings'] : [];
+        // Een raster van vier kolommen met drie kaarten laat een gat open, dus de kolommen volgen
+        // het aantal. Staat er geen kolominstelling, dan regelt het sjabloon de opmaak zelf
+        // (flex of auto-fit) en zou een raster erin duwen de opmaak juist breken.
+        if (isset($s['_gridTemplateColumns'])) {
+          $s['_gridTemplateColumns'] = 'repeat(' . $want . ', minmax(0, 1fr))';
+          if (isset($s['_gridTemplateColumns:tablet_portrait'])) {
+            $s['_gridTemplateColumns:tablet_portrait'] = 'repeat(' . min($want, 2) . ', minmax(0, 1fr))';
+          }
+          $n['settings'] = $s;
+        }
+      }
+      $out[] = $n;
+    }
+    return [array_values($out), count($members) - $want];
+  }
+
   /* ───────────────────────── Bewerken ───────────────────────── */
 
   public function ajax_edit(): void {

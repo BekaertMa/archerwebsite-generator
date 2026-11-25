@@ -645,7 +645,13 @@ class AISB_Wireframes {
     // Hergebruik dezelfde header/footer template over alle pagina's
     $shared_templates = $this->find_shared_templates($project_id, $sitemap_version_id, $page_slug);
 
+    // Staan er twee secties van hetzelfde soort op een pagina, dan hoort elk haar eigen aantal
+    // te krijgen. De hoeveelste van haar soort deze is, bepaalt welke sectie uit de sitemap telt;
+    // de volgorde van $types komt uit diezelfde sitemap, dus die twee lopen gelijk.
+    $nde = [];
     foreach ($types as $t) {
+      $nu = (int) ($nde[$t] ?? 0);
+      $nde[$t] = $nu + 1;
       // Header/footer: consistente template hergebruiken als die al bestaat
       if (in_array($t, ['header', 'footer'], true) && !empty($shared_templates[$t])) {
         $shared = $shared_templates[$t];
@@ -666,7 +672,10 @@ class AISB_Wireframes {
         continue;
       }
 
-      $bricks_tpl = $this->bricks->pick_bricks_template($t, $bricks_by_type, $used_bricks_ids);
+      // Wat de sectie opsomt, telt mee bij het kiezen: drie medewerkers horen in een sjabloon met
+      // drie kaarten. Dezelfde context gebruikt de eigen bibliotheek hieronder.
+      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $t, $nu);
+      $bricks_tpl = $this->bricks->pick_bricks_template($t, $bricks_by_type, $used_bricks_ids, (int) ($context['items'] ?? 0));
 
       if ($bricks_tpl) {
         $used_bricks_ids[] = (int) $bricks_tpl['id'];
@@ -689,7 +698,6 @@ class AISB_Wireframes {
       $min_complexity = null;
       if ($pattern === 'homepage' && $t === 'hero') $min_complexity = 40;
 
-      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $t);
       $tpl = $this->tpl_lib->pick_best_match($t, $context, $used_layout_keys, $min_complexity);
 
       $layout_key = $tpl && !empty($tpl['layout_key'])
@@ -833,7 +841,8 @@ class AISB_Wireframes {
       if (!empty($s['locked'])) wp_send_json_error(['message' => 'Section is locked'], 400);
       $type = (string) ($s['type'] ?? 'generic');
 
-      $bricks_tpl = $this->bricks->pick_bricks_template($type, $bricks_by_type, $used_bricks_ids);
+      $ctx = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $type, $this->nth_of_type($model, $uuid, $type));
+      $bricks_tpl = $this->bricks->pick_bricks_template($type, $bricks_by_type, $used_bricks_ids, (int) ($ctx['items'] ?? 0));
       if ($bricks_tpl) {
         $old_ai = isset($s['ai_wireframe_id']) ? (int) $s['ai_wireframe_id'] : 0;
         if ($old_ai > 0) {
@@ -916,7 +925,10 @@ class AISB_Wireframes {
       $model['sections'][$i]['type']            = $new_type;
       $model['sections'][$i]['ai_wireframe_id'] = null;
 
-      $bricks_tpl = $this->bricks->pick_bricks_template($new_type, $bricks_by_type, $used_bricks_ids);
+      // Ook hier telt mee wat de sectie opsomt: een ander soort kiezen hoort hetzelfde sjabloon
+      // op te leveren als wanneer de pagina in een keer gemaakt wordt.
+      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $new_type, $this->nth_of_type($model, $uuid, $new_type));
+      $bricks_tpl = $this->bricks->pick_bricks_template($new_type, $bricks_by_type, $used_bricks_ids, (int) ($context['items'] ?? 0));
       if ($bricks_tpl) {
         $model['sections'][$i]['layout_key']            = 'bricks_' . $bricks_tpl['id'];
         $model['sections'][$i]['bricks_template_id']    = $bricks_tpl['id'];
@@ -929,7 +941,6 @@ class AISB_Wireframes {
         break;
       }
 
-      $context = $this->build_selection_context($project_id, $sitemap_version_id, $page_slug, $new_type);
       $tpl = $this->tpl_lib->pick_best_match($new_type, $context, $used_layout_keys, null);
       $model['sections'][$i]['layout_key']            = $tpl ? (string) $tpl['layout_key'] : ('cf_' . $new_type . '_1');
       $model['sections'][$i]['bricks_template_id']    = null;
@@ -1081,7 +1092,23 @@ class AISB_Wireframes {
     return has_shortcode($post->post_content, $shortcode);
   }
 
-  private function build_selection_context(int $project_id, int $sitemap_version_id, string $page_slug, string $section_type): array {
+  /**
+   * De hoeveelste sectie van dit soort $uuid is op deze pagina (0 = de eerste).
+   *
+   * De volgorde van het model volgt de sitemap, dus dit nummer wijst dezelfde sectie aan als
+   * expected_items() telt. Staat $uuid er niet in, dan komt ze achteraan.
+   */
+  private function nth_of_type(array $model, string $uuid, string $type): int {
+    $n = 0;
+    foreach ((array) ($model['sections'] ?? []) as $s) {
+      if (!is_array($s)) continue;
+      if ((string) ($s['uuid'] ?? '') === $uuid) return $n;
+      if ((string) ($s['type'] ?? '') === $type) $n++;
+    }
+    return $n;
+  }
+
+  private function build_selection_context(int $project_id, int $sitemap_version_id, string $page_slug, string $section_type, int $nde = 0): array {
     $brief = (string) get_post_meta($project_id, 'aisb_project_brief', true);
     $page_title = $this->get_page_title_from_sitemap($sitemap_version_id, $page_slug);
     return [
@@ -1089,7 +1116,63 @@ class AISB_Wireframes {
       'page_title' => $page_title,
       'page_slug' => $page_slug,
       'section_type' => $section_type,
+      // Hoeveel dingen deze sectie moet tonen. Het ontwerp hoort de inhoud te volgen: drie
+      // medewerkers vragen een sjabloon met drie kaarten, geen raster van vier.
+      'items' => $this->expected_items($sitemap_version_id, $page_slug, $section_type, $nde),
     ];
+  }
+
+  /**
+   * Het aantal items dat deze sectie moet tonen, uit key_content van de sitemap.
+   *
+   * De sitemap zet in key_content wat de sectie opsomt: de medewerkers, de genoemde diensten, de
+   * erkenningen. Eén of geen item zegt niets over een raster (dat is dan gewoon een tekst), dus
+   * vanaf twee. Soorten heten in de sitemap voluit ("Team Sections") en hier kort ("team"), daarom
+   * vergelijken we op het eerste woord.
+   */
+  private function expected_items(int $sitemap_id, string $page_slug, string $section_type, int $nde = 0): int {
+    if (!$sitemap_id || $page_slug === '' || $section_type === '') return 0;
+    $json = get_post_meta($sitemap_id, 'aisb_sitemap_json', true);
+    if (!$json) return 0;
+    $data = json_decode((string) $json, true);
+    if (!is_array($data) || !is_array($data['sitemap'] ?? null)) return 0;
+
+    // De bouwer werkt met korte namen in het meervoud ("features"), de sitemap schrijft ze voluit in
+    // het enkelvoud ("Feature Sections"). Zonder die laatste stap komt "features" nooit overeen met
+    // "feature", en dat is net het soort dat het vaakst een kaartenrij heeft.
+    $kern = function (string $s): string {
+      $s = strtolower(trim(preg_replace('/\b(sections?|sectie)\b/i', ' ', $s)));
+      $s = trim(preg_replace('/[^a-z0-9]+/', ' ', $s));
+      $delen = preg_split('/\s+/', $s);
+      $eerste = $delen ? (string) $delen[0] : '';
+      return mb_strlen($eerste) > 4 ? rtrim($eerste, 's') : $eerste;
+    };
+    $want = $kern($section_type);
+    if ($want === '') return 0;
+    // Niet elke sectie is een rij items. Een hero heeft ook key_content (de belofte, de knop, het
+    // beeld), maar dat zijn geen kaarten: daar zou het aantal het sjabloon de verkeerde kant op
+    // sturen. Deze soorten tellen dus niet mee.
+    if (class_exists('AISB_Archer_Section_Edit') && !AISB_Archer_Section_Edit::counts_as_cards($section_type)) return 0;
+
+    $needle = $this->normalize_slug($page_slug);
+    foreach ($data['sitemap'] as $p) {
+      if (!is_array($p)) continue;
+      if ($this->normalize_slug((string) ($p['slug'] ?? '')) !== $needle) continue;
+      // In dezelfde volgorde als de bouwer ze afgaat (zie AISB_Archer_Generate::wireframe_types),
+      // anders wijst $nde een andere sectie aan dan bedoeld.
+      $secties = (array) ($p['sections'] ?? []);
+      if (class_exists('AISB_Archer_Sitemap_Rules')) $secties = AISB_Archer_Sitemap_Rules::order_sections($secties);
+      $zelfde = 0;
+      foreach ($secties as $s) {
+        if (!is_array($s)) continue;
+        if ($kern((string) ($s['section_type'] ?? '')) !== $want) continue;
+        if ($zelfde++ < $nde) continue;
+        $n = count(array_filter((array) ($s['key_content'] ?? []), 'is_string'));
+        return $n >= 2 ? min($n, 12) : 0;
+      }
+      return 0;
+    }
+    return 0;
   }
 
   private function get_page_title_from_sitemap(int $sitemap_id, string $page_slug): string {

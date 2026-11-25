@@ -18,6 +18,7 @@ class AISB_Archer_Generate {
   public function init(): void {
     add_action('wp_ajax_aisb_archer_plan', [$this, 'ajax_plan']);
     add_action('wp_ajax_aisb_archer_sections', [$this, 'ajax_sections']);
+    add_action('wp_ajax_aisb_archer_review', [$this, 'ajax_review']);
     add_action('wp_ajax_aisb_archer_menu', [$this, 'ajax_menu']);
     add_filter('aisb_wireframe_section_types', [$this, 'wireframe_types'], 10, 4);
     // Elke opgeslagen wireframe-sectie: geen kleuren, spans of style-attributen in de teksten.
@@ -40,11 +41,36 @@ class AISB_Archer_Generate {
       }
     }
     unset($n);
+    $weg = [];
     // Huisregels van tasteskill: geen labels boven titels, dunne lijnen, iconen bovenaan kaarten, 01/02.
-    if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes));
+    if (class_exists('AISB_Archer_Taste')) $nodes = AISB_Archer_Taste::house_nodes(array_values($nodes), $weg);
     // Iconen die bij de tekst passen in plaats van de standaardkubus; geen verzonnen cijfers (tellers).
-    if (class_exists('AISB_Archer_Site')) $nodes = AISB_Archer_Site::iconoir(AISB_Archer_Site::proof(AISB_Archer_Site::icons(array_values($nodes))));
+    if (class_exists('AISB_Archer_Site')) {
+      $nodes = AISB_Archer_Site::proof(array_values($nodes), $weg);
+      $nodes = AISB_Archer_Site::iconoir(AISB_Archer_Site::icons(array_values($nodes)));
+    }
+    // Deze regels draaien bij het opslaan, dus onzichtbaar: een sectie komt dunner uit dan haar
+    // sjabloon en niets zegt waarom. Daarom hier bijhouden wat weggaat en door welke regel.
+    // WordPress draait deze opschoonfilter twee keer per update_post_meta (een keer om te kuisen,
+    // een keer bij de vergelijking met de oude waarde). Op sleutel bijhouden, anders staat elk
+    // weggehaald element dubbel in het spoor.
+    foreach ($weg as $w) {
+      $sleutel = $w['id'] . '|' . $w['regel'];
+      if (isset(self::$weggehaald[$sleutel])) continue;
+      self::$weggehaald[$sleutel] = $w;
+      error_log('[AISB] Huisregel haalde ' . ($w['name'] ?: '?') . ' ' . $w['id']
+        . ($w['label'] !== '' ? ' ("' . $w['label'] . '")' : '') . ' weg: ' . $w['regel'] . '.');
+    }
     return $nodes;
+  }
+
+  /** Wat de huisregels bij het laatste opslaan weghaalden; leegt de lijst meteen. */
+  public static $weggehaald = [];
+
+  public static function take_removals(): array {
+    $weg = array_values(self::$weggehaald);
+    self::$weggehaald = [];
+    return $weg;
   }
 
   /** Taal van de teksten in een sectie (nl, fr, en of ''), voor wat de AI niet vertaalde. */
@@ -1143,7 +1169,11 @@ class AISB_Archer_Generate {
     return <<<'PROMPT'
 You are a senior information architect for small-business websites. Return ONLY valid JSON.
 Create the page structure (no sections) from the brief.
-JSON: {"website_name":"","website_goal":"","primary_audiences":[""],"sitemap":[{"page_title":"","nav_label":"","slug":"","page_type":"Home|Service|About|Contact|Blog|Landing|Legal|Listing|Detail|Other","priority":"Core|Support|Optional","parent_slug":"string|null","page_purpose":"one sentence"}]}
+JSON: {"website_name":"","website_goal":"","primary_audiences":[""],"sitemap":[{"page_title":"","nav_label":"","slug":"","page_type":"Home|Service|About|Contact|Blog|Landing|Legal|Listing|Detail|Other","priority":"Core|Support|Optional","parent_slug":"string|null","page_purpose":"the storyline of this page, as one objective"}]}
+
+The storyline of each page:
+- page_purpose is the ONE storyline the page carries, written as an objective: "show all the services", "explain the webdesign workflow and its benefits in detail", "tell what the company stands for and who works there". Never a description of the design, never a sentence about how the visitor feels. Two pages never carry the same storyline.
+- The pages together tell the whole story of the business. Walk the brief and check that every part of it is carried by a page: what the business does (each service or product line it names), for whom, how it works (the way of working, the steps, what the customer can expect), why it can be trusted (experience, team, references, recognitions, guarantees) and how to reach it. A part the brief NAMES that no page carries gets a page of its own. A part the brief does not mention gets no page: this rule adds pages for what is there, it never invents subjects.
 
 How to structure:
 - The brief outranks every rule below. When it lists the pages to make ("Pagina's die zeker moeten", "maak precies deze pagina's"), make exactly those, plus Home, Contact and the detail template pages these rules require. When it records an agreement per page ("Afspraken per pagina"), follow it to the letter: "Behandelingen: samen op één overzichtspagina" means ONE overview page with no child page per item, and "Sportrevalidatie: eigen pagina" means that one does get its own page.
@@ -1251,14 +1281,16 @@ PROMPT;
       . "- Order the sections the way a visitor reads the page: hero or intro right after the header, the main content next, proof and the call to action near the end.\n"
       . "- section_type MUST be one of: " . implode(' | ', $types) . " (for properties use Property or Single Property sections, for cars and products the product sections).\n"
       . "- section_name: short and specific to this business (2–5 words). Name and describe what this section type shows; never promise something the type does not have, such as a configurator, a calculator or a booking widget (a hero is a title, a text, a button and an image). Search and filters only exist as a Category Filters section, and only on a page that lists items with a detail page.\n"
+      . "- section_goal: the one thing this section has to get across, as an objective in the words of the content: \"explain the history\", \"introduce the team\", \"show what it is like to work here\", \"highlight the open vacancies with a button to the vacancies page\". Never what it looks like. Every section on the page has a different goal, and the goals in order tell the storyline of this page from start to finish. The header and the footer get an empty goal.\n"
       . "- purpose: 1–2 short sentences: what to design and what the visitor gets.\n"
-      . "- key_content: 2–4 concrete items from the brief.\n"
+      . "- key_content: 2–4 concrete items from the brief. When the section shows a set of things the brief counts (the team members, the named services, the recognitions), key_content lists them one by one, so the design can follow that number.\n"
       . "- Every section has its own job. No two sections on a page cover the same topic, list the same services or make the same claim; a key_content item appears in only one section of the page. Plan the page as one story: hook, explanation, proof, next step.\n"
+      . "- Together the sections have to carry the whole storyline of this page. Is a piece of it missing, then add the section for it; does a section carry nothing of it, then leave it out.\n"
       . (class_exists('AISB_Archer_Marketing') ? AISB_Archer_Marketing::plan_rules() : '')
       . (class_exists('AISB_Archer_Copy_Coach') && AISB_Archer_Copy_Coach::on() ? AISB_Archer_Copy_Coach::plan_rules() : '')
       // De vaste vorm van een verkooppagina, met de opening (probleem of resultaat) naar de sector.
       . (class_exists('AISB_Archer_Composition') && AISB_Archer_Composition::on() ? AISB_Archer_Composition::rules($sector_key, $region !== '') : '')
-      . "JSON: {\"page_purpose\":\"one sentence\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
+      . "JSON: {\"page_purpose\":\"the storyline of this page as one objective\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"section_goal\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}],\"seo\":{\"primary_keyword\":\"\",\"secondary_keywords\":[\"\"],\"meta_title\":\"\",\"meta_description\":\"\"}}";
     $context = "Website: " . sanitize_text_field((string) ($site['name'] ?? '')) . "\n"
       . (!empty($site['goal']) ? "Goal: " . sanitize_text_field((string) $site['goal']) . "\n" : '')
       . "\nAll pages of the site:\n" . implode("\n", array_slice($outline_lines, 0, 70))
@@ -1311,6 +1343,113 @@ PROMPT;
     wp_send_json_success(['pages' => $out, 'errors' => $errors]);
   }
 
+  /* ───────────────────────── 3. De nalezing van het plan ───────────────────────── */
+
+  /**
+   * De controle vóór de teksten: één vraag over de hele outline.
+   *
+   * De secties worden pagina per pagina gepland, vier pagina's tegelijk, dus geen enkele vraag ziet
+   * het geheel. Deze ronde wel: ze krijgt elke pagina met haar verhaallijn en elke sectie met haar
+   * doelstelling, zonder één regel tekst, en kijkt na of het klopt voor de copywriter begint.
+   *
+   * Ze mag secties bijzetten, weglaten, herordenen en doelstellingen herschrijven; pagina's bijmaken
+   * mag ze niet - dat hoort in stap 1 - en wat er aan pagina's ontbreekt meldt ze in missing_pages.
+   * Eén vraag voor de hele site, niet één per pagina: dat is vijf tot acht seconden, en die hoeven
+   * niet van het wachten per pagina afgetrokken te worden.
+   */
+  public function ajax_review(): void {
+    $this->check();
+    @set_time_limit(120);
+    $project_id = isset($_POST['project_id']) ? (int) $_POST['project_id'] : 0;
+    if (!$project_id || !$this->can_access($project_id)) wp_send_json_error(['message' => 'Geen toegang tot dit project.'], 403);
+
+    $data = json_decode((string) wp_unslash($_POST['sitemap'] ?? ''), true);
+    $pages = is_array($data) ? (array) ($data['sitemap'] ?? []) : [];
+    if (!$pages) wp_send_json_error(['message' => 'Ongeldige sitemap.'], 400);
+    // Boven de dertig pagina's wordt de outline te groot voor één vraag; dan liever niets dan half.
+    if (count($pages) > 30) wp_send_json_success(['pages' => [], 'changes' => [], 'missing_pages' => [], 'skipped' => 'te veel pagina\'s']);
+
+    $languages = json_decode((string) get_post_meta($project_id, 'aisb_project_languages', true), true);
+    $lang = self::lang_name(is_array($languages) ? $languages : ['Dutch']);
+    $lang_code = strtolower(substr((string) (is_array($languages) ? ($languages[0] ?? 'Dutch') : 'Dutch'), 0, 2));
+    $types = $this->section_types();
+    $brief = mb_substr((string) get_post_meta($project_id, 'aisb_project_brief', true), 0, 3000);
+    $sector_key = class_exists('AISB_Archer_Sector') ? AISB_Archer_Sector::for_project($project_id) : '';
+
+    // De outline: alleen wat de nalezing nodig heeft. Geen teksten, geen sjablonen, geen foto's.
+    $outline = [];
+    $page_types = [];
+    foreach ($pages as $p) {
+      if (!is_array($p) || empty($p['slug'])) continue;
+      $slug = sanitize_title((string) $p['slug']);
+      $page_types[$slug] = (string) ($p['page_type'] ?? 'Other');
+      $secs = [];
+      foreach ((array) ($p['sections'] ?? []) as $s) {
+        if (!is_array($s)) continue;
+        $secs[] = [
+          'section_name' => (string) ($s['section_name'] ?? ''),
+          'section_type' => (string) ($s['section_type'] ?? ''),
+          'section_goal' => (string) ($s['section_goal'] ?? ''),
+          'key_content' => array_values(array_filter((array) ($s['key_content'] ?? []), 'is_string')),
+        ];
+      }
+      $outline[] = [
+        'slug' => $slug,
+        'page_title' => (string) ($p['page_title'] ?? ''),
+        'page_type' => $page_types[$slug],
+        'parent_slug' => (string) ($p['parent_slug'] ?? ''),
+        'page_purpose' => (string) ($p['page_purpose'] ?? ''),
+        'sections' => $secs,
+      ];
+    }
+    if (!$outline) wp_send_json_success(['pages' => [], 'changes' => [], 'missing_pages' => []]);
+
+    $system = "You review the plan of a website before a single word of copy is written. Return ONLY valid JSON.\n"
+      . "You get every page with the storyline it carries (page_purpose) and its sections, each with the goal it has to get across (section_goal) and the concrete items it shows (key_content). There is no copy yet and you write none.\n"
+      . "Check, in this order:\n"
+      . "1. Is every page's storyline carried by its sections? A piece of the storyline that no section carries gets a section, in the place a visitor reads it.\n"
+      . "2. Does every section between the header and the footer have a goal, and is it a goal in the words of the content (\"introduce the team\") and not a description of the design (\"a grid of four cards\")? Rewrite the ones that are not.\n"
+      . "3. Do two sections on the same page carry the same goal, the same subject or the same key_content item? Give one of them its own job, or leave it out.\n"
+      . "4. Is a page too thin to tell its storyline (fewer than 3 sections between the header and the footer, except legal and contact pages)? Add what it is missing.\n"
+      . "5. Do the pages together still tell the whole story of the business? What no page carries goes in missing_pages - do NOT add pages yourself.\n"
+      . "Rules:\n"
+      . "- The first section of a page stays section_type \"Headers\", the last stays \"Footers\".\n"
+      . "- section_type MUST be one of: " . implode(' | ', $types) . "\n"
+      . "- Write everything in {$lang}. Never invent facts (names, numbers, prices, addresses) that are not already in the plan or the brief.\n"
+      . "- Return ONLY the pages you really changed. A page you leave alone does not appear in the output. Change nothing just to change something.\n"
+      . "JSON: {\"pages\":[{\"slug\":\"\",\"page_purpose\":\"\",\"sections\":[{\"section_name\":\"\",\"section_type\":\"\",\"section_goal\":\"\",\"purpose\":\"\",\"key_content\":[\"\"]}]}],"
+      . "\"changes\":[\"one short line per change, in {$lang}\"],\"missing_pages\":[\"in {$lang}\"]}";
+
+    $user = "Brief:\n" . $brief . "\n\nPlan:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $res = $this->ai_multi(['r' => ['system' => $system, 'user' => $user]], 'plan', 75)['r'] ?? null;
+    // Mislukt de nalezing, dan gaat de run gewoon door met het plan dat er al staat.
+    if (!is_array($res)) wp_send_json_success(['pages' => [], 'changes' => [], 'missing_pages' => [], 'skipped' => 'de nalezing antwoordde niet']);
+
+    $known = [];
+    foreach ($outline as $o) $known[$o['slug']] = true;
+    $out = [];
+    foreach ((array) ($res['pages'] ?? []) as $p) {
+      if (!is_array($p)) continue;
+      $slug = sanitize_title((string) ($p['slug'] ?? ''));
+      if ($slug === '' || empty($known[$slug])) continue;
+      $secs = $this->clean_sections((array) ($p['sections'] ?? []), $types, $lang_code, [
+        'page_type' => (string) ($page_types[$slug] ?? 'Other'),
+        'lang' => $lang_code,
+        'sector' => $sector_key,
+        'slug' => $slug,
+      ]);
+      // Een pagina zonder bruikbare secties terugkrijgen is erger dan ze laten staan.
+      if (count($secs) < 3) continue;
+      $out[$slug] = ['page_purpose' => sanitize_text_field((string) ($p['page_purpose'] ?? '')), 'sections' => $secs];
+    }
+    $txt = function ($v) { return array_values(array_filter(array_map(function ($x) { return sanitize_text_field((string) $x); }, array_filter((array) $v, 'is_string')), 'strlen')); };
+    wp_send_json_success([
+      'pages' => $out,
+      'changes' => array_slice($txt($res['changes'] ?? []), 0, 20),
+      'missing_pages' => array_slice($txt($res['missing_pages'] ?? []), 0, 6),
+    ]);
+  }
+
   private function clean_sections(array $sections, array $types, string $lang, array $ctx = []): array {
     $clean = [];
     foreach ($sections as $s) {
@@ -1325,6 +1464,9 @@ PROMPT;
       $clean[] = [
         'section_name' => sanitize_text_field((string) ($s['section_name'] ?? '')),
         'section_type' => $type,
+        // De doelstelling van de sectie in inhoudstermen ("het team voorstellen"); purpose blijft
+        // wat de ontwerper moet maken. Twee verschillende dingen, dus twee velden.
+        'section_goal' => sanitize_text_field((string) ($s['section_goal'] ?? '')),
         'purpose' => sanitize_textarea_field((string) ($s['purpose'] ?? '')),
         'key_content' => array_values(array_map('sanitize_text_field', array_filter((array) ($s['key_content'] ?? []), 'is_string'))),
       ];
@@ -1333,8 +1475,8 @@ PROMPT;
     $foot = ['nl' => 'Footer', 'fr' => 'Pied de page', 'en' => 'Footer', 'ge' => 'Fußzeile'][$lang] ?? 'Footer';
     $has_head = false; $has_foot = false;
     foreach ($clean as $s) { if ($s['section_type'] === 'Headers') $has_head = true; if ($s['section_type'] === 'Footers') $has_foot = true; }
-    if (!$has_head) array_unshift($clean, ['section_name' => $nav, 'section_type' => 'Headers', 'purpose' => '', 'key_content' => []]);
-    if (!$has_foot) $clean[] = ['section_name' => $foot, 'section_type' => 'Footers', 'purpose' => '', 'key_content' => []];
+    if (!$has_head) array_unshift($clean, ['section_name' => $nav, 'section_type' => 'Headers', 'section_goal' => '', 'purpose' => '', 'key_content' => []]);
+    if (!$has_foot) $clean[] = ['section_name' => $foot, 'section_type' => 'Footers', 'section_goal' => '', 'purpose' => '', 'key_content' => []];
     $clean = AISB_Archer_Sitemap_Rules::order_sections($clean);
     // De vaste vorm van een verkooppagina vastleggen: opening vooraan, bewijs bij de beslissing,
     // een FAQ voor de laatste oproep als er twijfels zijn, en een afsluiter. In de prompt staat

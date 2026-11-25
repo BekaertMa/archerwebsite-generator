@@ -1,0 +1,150 @@
+/**
+ * Het uitgewerkte ontwerp van een stijl: een volledige pagina, niet een schets ervan.
+ *
+ * De maten, letters, kleuren, hoeken en het vakmanschap komen uit dezelfde variabelen als de
+ * gepubliceerde site (AISB_Archer_Styles::preview_vars, met de formules van tokens()). Wat hier
+ * staat is dus geen eigen ontwerptaal, maar het stylesheet van de site in het klein: wie in de
+ * chatbot een stijl bekijkt, ziet wat Archer er straks mee bouwt.
+ *
+ * De pagina is altijd 1280px breed en wordt daarna geschaald (--apv-k). Daarom staan er geen
+ * media queries in: een kader, drie formaten (tegel, zijpaneel, groot scherm).
+ *
+ * Huisregels van AISB_Archer_Taste: geen labels boven titels, geen dunne lijnen als versiering,
+ * geen icoon bovenaan een kaart, geen 01/02/03. Zo bouwt de generator ook.
+ */
+
+/* Kader (in de bouwer) en de lei binnenin (in het iframe) */
+
+.apv-stage { position: relative; overflow: hidden; background: #fff; }
+/* min-width en max-width horen erbij: de bouwer zet max-width:100% op iframes, en dan zou het
+   kader meekrimpen met de tegel in plaats van een pagina van 1280px te tonen. */
+.apv-frame {
+  display: block; width: 1280px; min-width: 1280px; max-width: none; border: 0; background: #fff;
+  transform-origin: top left;
+}
+html.apv-doc, html.apv-doc body { margin: 0; padding: 0; }
+
+/* De pagina */
+
+.apv {
+  position: relative; width: 1280px; box-sizing: border-box;
+  background: var(--a-base); color: var(--a-ink);
+  font-family: var(--a-font-body); font-size: var(--a-body); line-height: var(--a-body-lh);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+/* De korrel van het thema, over alles heen, zoals craft_css ze op de site legt. */
+.apv::after {
+  content: ""; position: absolute; inset: 0; z-index: 6; pointer-events: none;
+  background-image: var(--a-grain); background-size: var(--a-grain-size);
+  opacity: var(--a-grain-op); mix-blend-mode: var(--a-grain-blend);
+}
+.apv :is(h1, h2, h3) {
+  margin: 0; color: var(--a-ink); font-family: var(--a-font-heading); font-weight: var(--a-heading-weight);
+  letter-spacing: var(--a-heading-tracking); line-height: var(--a-heading-lh); text-transform: var(--a-heading-case);
+  /* break-word, niet anywhere: met anywhere mag de browser elk woord knippen, en dan wordt de
+     min-content van de kolom zo klein dat "Desembrood" over twee regels gaat staan. */
+  overflow-wrap: break-word;
+}
+.apv h1 { font-size: var(--a-display); }
+.apv h2 { font-size: var(--a-h2); line-height: 1.08; }
+.apv h3 { font-size: var(--a-h3); line-height: 1.2; letter-spacing: var(--a-heading-tracking-sm); }
+.apv p { margin: 0; max-width: 68ch; color: var(--a-muted); }
+.apv ul { margin: 0; padding: 0; list-style: none; }
+.apv img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.apv-wrap { width: 100%; max-width: var(--a-container); margin: 0 auto; padding: 0 var(--a-pad-x); box-sizing: border-box; }
+.apv-sec { padding: var(--a-sec) 0; background: var(--a-base); position: relative; }
+.apv-head { display: grid; gap: var(--a-gap-content); margin-bottom: var(--a-gap-head); max-width: 42em; }
+
+/* Knoppen: dezelfde regel als base_css (de tweede knop is de rustige, omlijnde). */
+.apv-btn {
+  display: inline-block; background: var(--a-accent); color: var(--a-accent-ink);
+  border: 1px solid var(--a-accent); border-radius: var(--a-radius-button);
+  font-family: var(--a-font-body); font-size: var(--a-btn-size); font-weight: var(--a-btn-weight);
+  letter-spacing: var(--a-btn-tracking); text-transform: var(--a-btn-case);
+  padding: 1em 1.6em; line-height: 1.1; white-space: nowrap;
+}
+.apv-btn.is-ghost { background: transparent; color: var(--a-ink); border-color: var(--a-ink); }
+.apv-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+/* Beeld: de hoek van de stijl, en een ruit zolang er nog geen foto is. */
+.apv-img { overflow: hidden; border-radius: var(--a-radius-image); background: var(--a-surface); }
+.apv-ph {
+  display: block; width: 100%; height: 100%;
+  background: linear-gradient(135deg, var(--a-surface) 25%, var(--a-surface2) 25% 50%, var(--a-surface) 50% 75%, var(--a-surface2) 75%) 0 0 / 56px 56px;
+}
+
+/* Hoofding */
+
+.apv-nav { position: relative; z-index: 2; background: var(--a-base); }
+.apv-nav .apv-wrap { display: flex; align-items: center; gap: 32px; padding-top: 22px; padding-bottom: 22px; }
+.apv-logo {
+  font-family: var(--a-font-heading); font-weight: var(--a-heading-weight); font-size: calc(var(--a-h3) * 0.92);
+  letter-spacing: var(--a-heading-tracking); white-space: nowrap; max-width: 32%; overflow: hidden; text-overflow: ellipsis;
+}
+.apv-logo img { width: auto; height: auto; max-height: 40px; max-width: 220px; object-fit: contain; }
+.apv-nav nav { flex: 1; display: flex; gap: 28px; color: var(--a-ink); font-size: var(--a-small); white-space: nowrap; overflow: hidden; }
+.apv-nav .apv-btn { padding: 0.75em 1.3em; font-size: calc(var(--a-btn-size) * 0.92); }
+
+/* Hero */
+
+.apv-hero { padding: calc(var(--a-sec) * 0.55) 0 var(--a-sec); }
+.apv-hero .apv-wrap { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--a-gap-grid); align-items: center; }
+.apv-hero-text { display: grid; gap: var(--a-gap-content); }
+.apv-hero p { font-size: var(--a-lead); }
+.apv-hero .apv-img { aspect-ratio: 4 / 3.3; }
+.apv-trust { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--a-small); }
+.apv-trust li { padding: 0.5em 0.9em; background: var(--a-surface); color: var(--a-ink); border-radius: var(--a-radius-button); }
+
+/* Kaarten */
+
+.apv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--a-gap-grid); }
+.apv-card {
+  display: grid; gap: calc(var(--a-gap-content) * 0.5); align-content: start;
+  background-color: var(--a-card-bg); background-image: var(--a-card-image);
+  border: var(--a-card-border); border-radius: var(--a-card-radius); box-shadow: var(--a-card-shadow);
+  padding: calc(var(--a-gap-content) * 1.25);
+}
+.apv-card p { font-size: var(--a-body); }
+.apv-card .apv-img { aspect-ratio: 3 / 2; margin-bottom: calc(var(--a-gap-content) * 0.25); }
+.apv-link { color: var(--a-link); font-size: var(--a-small); }
+
+/* Tekst naast beeld */
+
+.apv-split .apv-wrap { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: var(--a-gap-grid); align-items: center; }
+.apv-split .apv-img { aspect-ratio: 1 / 1; }
+.apv-split-text { display: grid; gap: var(--a-gap-content); }
+.apv-checks { display: grid; gap: calc(var(--a-gap-content) * 0.5); }
+.apv-checks li { display: flex; gap: 12px; align-items: baseline; color: var(--a-ink); }
+.apv-checks li::before { content: ""; flex: 0 0 auto; width: 0.6em; height: 0.6em; background: var(--a-accent); border-radius: 50%; }
+
+/* Cijfers of stappen */
+
+.apv-figures { background: var(--a-cta-bg); }
+.apv-figures .apv-wrap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--a-gap-grid); }
+.apv-fig { display: grid; gap: 8px; }
+.apv-fig b { font-family: var(--a-font-heading); font-weight: var(--a-heading-weight); font-size: var(--a-h2); line-height: 1; letter-spacing: var(--a-heading-tracking); font-variant-numeric: tabular-nums; }
+.apv-fig span { color: var(--a-muted); font-size: var(--a-small); }
+
+/* Woord van een klant */
+
+.apv-quote .apv-wrap { max-width: calc(var(--a-container) * 0.76); }
+.apv-quote blockquote { margin: 0; font-family: var(--a-font-heading); font-weight: var(--a-heading-weight); font-size: calc(var(--a-h2) * 0.82); line-height: 1.15; letter-spacing: var(--a-heading-tracking); color: var(--a-ink); }
+.apv-quote cite { display: block; margin-top: var(--a-gap-content); font-style: normal; font-size: var(--a-small); color: var(--a-muted); }
+
+/* Oproep */
+
+.apv-cta { background: var(--a-cta-bg); }
+.apv-cta .apv-wrap { display: flex; align-items: center; justify-content: space-between; gap: var(--a-gap-grid); }
+.apv-cta-text { display: grid; gap: calc(var(--a-gap-content) * 0.5); }
+
+/* Voet */
+
+.apv-foot { background: var(--a-footer-bg); color: var(--a-footer-ink); padding: calc(var(--a-sec) * 0.6) 0 calc(var(--a-sec) * 0.35); }
+.apv-foot .apv-wrap { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: var(--a-gap-grid); }
+.apv-foot :is(h3, strong, p, li, span, b) { color: var(--a-footer-ink); }
+.apv-foot strong { font-family: var(--a-font-heading); font-weight: var(--a-heading-weight); font-size: var(--a-h3); letter-spacing: var(--a-heading-tracking); }
+.apv-foot-col { display: grid; gap: 10px; align-content: start; font-size: var(--a-small); }
+.apv-foot-col b { font-size: var(--a-small); opacity: 0.65; font-weight: var(--a-btn-weight); }
+.apv-foot-col ul { display: grid; gap: 8px; }
+.apv-foot-rule { margin-top: var(--a-gap-head); padding-top: 18px; border-top: var(--a-rule-hair) solid currentColor; opacity: 0.45; font-size: var(--a-small); }
